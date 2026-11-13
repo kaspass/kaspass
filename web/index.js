@@ -570,6 +570,9 @@ function signinLayout() {
     : address ? "" : `No wallet yet? <a href="${KASPIRE_SITE}" target="_blank" rel="noopener">Get Kaspire for your browser</a> (free), add some KAS, then reload this page.`;
 }
 signinLayout();
+// Inside the Kaspire app's own browser the wallet can arrive a moment after the page loads: as soon
+// as it does, sign-in goes through it directly (one tap), like the extension on a computer.
+window.addEventListener("kaspire#initialized", () => { show("signin", !session && !(isPhone && !window.kaspire)); show("wcGo", !session && !noApp()); signinLayout(); });
 
 // Point holders to the club page, if this site runs one.
 fetch("/v1/club?for=page").then((r) => r.json()).then((c) => { if (c.enabled) { $("clubLinkA").textContent = "Join " + c.club; show("clubLink"); show("navClub"); } }).catch(() => {});
@@ -1232,10 +1235,17 @@ function renderPassActions(p) {
 }
 
 // After paying: the result, big and first, with the way back and anything left to tidy up.
+// After a payment, the way back tells the partner site so (`paid=1`), so it can say "confirming your
+// payment" instead of "welcome back". Only a hint: the partner still checks the pass itself.
+function markPaidReturn() {
+  if (!RETURN) return;
+  try { const u = new URL(RETURN); u.searchParams.set("paid", "1"); $("returnGo").href = u.href; $("returnLink").href = u.href; } catch {}
+}
 function showDone(j, txid, lv, action) {
   const ps = (j.passes || []);
   const p = ps.find((x) => x.txid === txid) || ps.filter((x) => x.active).sort((a, b) => b.expiry_ms - a.expiry_ms)[0];
   if (!p) return;
+  markPaidReturn();
   const name = levelName(lv) || (offer && offer.name) || pw({ cap: true });
   const m = pw();
   $("doneTitle").textContent = p.lifetime ? `You're in. You have ${name} for life.`
