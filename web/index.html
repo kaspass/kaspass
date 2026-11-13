@@ -1,0 +1,589 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Membership</title>
+<script src="/assets/theme-boot.js"></script>
+<link rel="stylesheet" href="/assets/fonts.css">
+<style>
+  :root {
+    --bg: #050808;
+    --panel: #0d1414;
+    --line: #1c2a29;
+    --text: #e8f1f0;
+    --muted: #8aa09d;
+    --teal: #49d9c8;
+    --teal-dim: #1f5f58;
+    --bad: #ff8a7a;
+    /* A creator's own look (/brand/theme.css) overrides these. */
+    --font-head: Montserrat, sans-serif;
+    --font-body: Inter, system-ui, sans-serif;
+    --accent-ink: #031312;
+    --strip: #0a1110;
+    --r-card: 16px;
+    --r-btn: 10px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.55 var(--font-body);
+  }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 32px 16px 64px; }
+  header { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+  header svg { width: 44px; height: 44px; }
+  .word { font: 800 30px/1 var(--font-head); letter-spacing: -0.5px; }
+  .word .k { color: var(--teal); }
+  .tag { color: var(--muted); margin: 0 0 28px; }
+  .net { display: inline-block; font-size: 12px; padding: 2px 8px; border: 1px solid var(--teal-dim); color: var(--teal); border-radius: 999px; margin-left: auto; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-card); padding: 22px; margin-bottom: 16px; }
+  h2 { font: 600 18px/1.3 var(--font-head); margin: 0 0 12px; }
+  .muted { color: var(--muted); }
+  .small { font-size: 13px; }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; word-break: break-all; }
+  button {
+    font: 600 15px var(--font-body);
+    background: var(--teal); color: var(--accent-ink);
+    border: 0; border-radius: var(--r-btn); padding: 12px 18px; cursor: pointer;
+  }
+  button.ghost { background: transparent; color: var(--teal); border: 1px solid var(--teal-dim); }
+  button:disabled { opacity: .45; cursor: default; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .badge { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; padding: 6px 12px; border-radius: 999px; }
+  .badge.ok { background: color-mix(in srgb, var(--teal) 12%, transparent); color: var(--teal); }
+  .badge.no { background: rgba(255,138,122,.1); color: var(--bad); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+  .err { color: var(--bad); margin-top: 12px; }
+  dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 0; }
+  dt { color: var(--muted); }
+  dd { margin: 0; }
+  .members { border-color: var(--teal-dim); }
+  input { width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 11px 12px; font: 14px ui-monospace, monospace; }
+  .hidden { display: none !important; }
+  .outs { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 6px; }
+  .outs li { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; }
+  .outs .n { color: var(--muted); font-size: 12px; grid-row: span 2; align-self: center; }
+  .outs .what { font-weight: 600; }
+  .outs .what.fee { color: var(--teal); }
+  .outs .addr { color: var(--muted); font: 12px ui-monospace, monospace; word-break: break-all; }
+  .salebanner { border: 1px solid rgba(242,200,107,.45); background: rgba(242,200,107,.09); color: #f2c86b; border-radius: 12px; padding: 10px 14px; margin-bottom: 14px; font-weight: 600; }
+  .salebanner .sub { color: var(--muted); font-weight: 400; font-size: 13px; }
+  button s, dd s { opacity: .6; font-weight: 400; margin-right: 4px; }
+  .off { display: inline-block; font-size: 11px; font-weight: 700; padding: 1px 6px; border-radius: 999px; background: #f2c86b; color: #1a1405; margin-left: 6px; vertical-align: 1px; }
+  .opts { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; }
+  .opt { border: 1px solid var(--line); border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 6px; }
+  .opt.pick { border-color: var(--teal-dim); }
+  .opt .ot { font-weight: 600; }
+  .opt .op { font-size: 20px; font-weight: 700; }
+  .opt .op span { color: var(--muted); font-size: 13px; font-weight: 400; }
+  .opt .od { color: var(--muted); font-size: 13px; flex: 1; }
+  .opt .save { color: var(--teal); font-size: 13px; font-weight: 600; }
+  .opt button { margin-top: 6px; }
+  /* Several paid levels, side by side. */
+  .levels { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; }
+  .lvl { border: 1px solid var(--line); border-radius: var(--r-card); padding: 16px; display: flex; flex-direction: column; gap: 6px; background: var(--bg); }
+  .lvl.sel { border-color: var(--teal); box-shadow: 0 0 0 1px var(--teal) inset; }
+  .trialbox { border-color: var(--teal); }
+  .trialbox h2 { margin-bottom: 8px; }
+  .trialbox button.warn { margin-top: 6px; }
+  .lvl .trialnote { color: var(--muted); margin-top: 4px; }
+  .lvl .trialno { color: var(--muted); margin-top: 4px; }
+  /* Folded details: what a plan includes opens on demand. */
+  .lvl .det[hidden] { display: none; }
+  .lvl .det { display: flex; flex-direction: column; gap: 6px; padding-top: 4px; }
+  .lvl .det .about { color: var(--muted); font-size: 14px; }
+  .lvl .det .about p { margin: 0 0 6px; }
+  .more-t { background: none; border: 0; padding: 4px 0; min-height: 0; color: var(--teal); font-weight: 600; font-size: 14px; cursor: pointer; text-align: left; align-self: flex-start; box-shadow: none; }
+  .more-t:hover { text-decoration: underline; background: none; }
+  .lvl:has(.det) { cursor: pointer; }
+  .welcome.folded .lead, .welcome.folded .steps, .welcome.folded .foot { display: none; }
+  .hero { display: flex; gap: 12px 16px; align-items: center; flex-wrap: wrap; margin: 0 0 14px; font-weight: 600; }
+  .getwallet { margin: 10px 0 0; color: var(--muted); }
+  .getwallet:empty { display: none; }
+  .lookupbox { margin-top: 14px; }
+  #seeOther { margin-top: 4px; }
+  #doneNext:empty { display: none; }
+  #doneNext > div { margin-top: 12px !important; }
+  .meta .follow { color: var(--muted); font-size: 13px; margin-right: 2px; }
+  .errdet { margin-top: 6px; font-size: 12px; color: var(--muted); }
+  .errdet summary { cursor: pointer; }
+  .menu .lead { padding: 12px 14px; font-size: 14px; border-bottom: 1px solid var(--line); background: color-mix(in srgb, var(--teal) 6%, transparent); }
+  @media (max-width: 700px) { .viewsw { display: none !important; } }
+  .tierfold > summary { cursor: pointer; font-weight: 600; color: var(--teal); padding: 4px 0; }
+  .tierfold[open] > summary { margin-bottom: 10px; }
+  @media (max-width: 700px) {
+    .levels { gap: 12px; }
+    .lvl { padding: 14px 16px; }
+    .lvl .ln { font-size: 17px; }
+  }
+  .lvl .ln { font: 700 18px/1.2 var(--font-head); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .lvl .lp { font-size: 20px; font-weight: 700; }
+  /* A transaction in progress. */
+  .busy { display: flex; gap: 12px; align-items: center; padding: 12px 14px; border: 1px solid var(--teal-dim); border-radius: 12px; background: color-mix(in srgb, var(--teal) 8%, transparent); color: var(--text); font-size: 15px; }
+  .busy .bsub { font: 400 13px/1.45 var(--font-body); color: var(--muted); font-size: 13px; margin-top: 2px; }
+  .hg { flex: 0 0 auto; width: 26px; height: 26px; color: var(--teal); animation: hgflip 1.8s ease-in-out infinite; }
+  .hg .top { animation: hgtop 1.8s linear infinite; transform-origin: 12px 11px; }
+  .hg .bot { animation: hgbot 1.8s linear infinite; transform-origin: 12px 19px; }
+  @keyframes hgflip { 0%, 78% { transform: rotate(0); } 100% { transform: rotate(180deg); } }
+  @keyframes hgtop { 0% { transform: scaleY(1); } 78%, 100% { transform: scaleY(0); } }
+  @keyframes hgbot { 0% { transform: scaleY(0); } 78%, 100% { transform: scaleY(1); } }
+  @media (prefers-reduced-motion: reduce) { .hg, .hg .top, .hg .bot { animation: none; } }
+  .lvl .lp .per { color: var(--muted); font-size: 13px; font-weight: 400; }
+  .lvl .lp .was { display: flex; align-items: center; gap: 2px; margin-bottom: 2px; }
+  .lvl .lp .was .off { font-size: 12px; margin-left: 4px; }
+  .kasline { font-size: 12px; font-weight: 500; color: var(--muted); margin-top: 3px; }
+  .paykinds { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin: 4px 0 14px; }
+  .paykinds button { text-align: left; background: transparent; color: var(--text); border: 1px solid var(--line); border-radius: var(--r-btn); padding: 10px 12px; min-height: 44px; font-weight: 500; }
+  .paykinds button[aria-pressed="true"] { border-color: var(--teal); box-shadow: inset 0 0 0 1px var(--teal); }
+  .paykinds .k { display: block; font-weight: 700; }
+  .paykinds .a { display: block; font-size: 13px; color: var(--muted); }
+  .lvl .also { font-size: 12px; color: var(--muted); margin: -4px 0 10px; }
+  .exbar { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; justify-content: center; padding: 10px 16px; font-size: 13px; background: #0b1111; color: #cfe3e0; border-bottom: 1px solid #1c2a29; text-align: center; }
+  .exbar .exlinks { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+  .exbar a { color: #e8f1f0; text-decoration: none; border: 1px solid #2c4442; border-radius: 999px; padding: 4px 12px; }
+  .exbar a.exabout { border: 0; text-decoration: underline; color: #cfe3e0; padding: 4px 0; }
+  .exbar a[aria-current="page"] { background: #49d9c8; color: #031312; border-color: #49d9c8; font-weight: 600; }
+  .lvl .promo { border: 1px dashed var(--teal, #49d9c8); border-radius: 12px; padding: 10px 12px; margin: 0 0 12px; text-align: left; }
+  .lvl .promo .pl { font-weight: 600; }
+  .lvl .promo .pr, .lvl .promo .pn { font-size: 13px; color: var(--muted); margin-top: 4px; }
+  .lvl .promo button.claim { width: 100%; margin-top: 10px; }
+  .lvl .lp s { color: var(--muted); font-weight: 400; font-size: 14px; margin-right: 6px; }
+  .lvl .inc { color: var(--muted); font-size: 13px; }
+  .lvl ul { margin: 2px 0 0; padding-left: 18px; font-size: 14px; flex: 1; }
+  .lvl ul li { margin: 2px 0; }
+  .lvl .yours { font: 600 11px var(--font-body); letter-spacing: .04em; text-transform: uppercase; color: var(--accent-ink); background: var(--teal); border-radius: 999px; padding: 2px 8px; }
+  .lvl button { margin-top: 8px; }
+  .switchbox { border: 1px solid var(--teal-dim); border-radius: 12px; padding: 14px; margin-top: 14px; }
+  .switchbox p { margin: 0 0 8px; }
+  .testnote { border: 1px dashed var(--teal-dim); border-radius: 12px; padding: 10px 14px; margin-bottom: 14px; font-size: 13px; color: var(--muted); }
+  .testnote b { color: var(--text); }
+  .nofee { border: 1px solid var(--teal-dim); border-radius: 12px; padding: 10px 14px; margin-bottom: 14px; font-size: 13px; font-weight: 600; color: var(--teal); }
+  details.tech { margin-top: 14px; font-size: 13px; color: var(--muted); }
+  details.tech summary { cursor: pointer; }
+  details.tech dl { margin-top: 10px; }
+  .autobox { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin-top: 14px; }
+  .check { display: flex; gap: 10px; align-items: center; font-weight: 600; cursor: pointer; }
+  .check input { width: 18px; height: 18px; accent-color: var(--teal); margin: 0; }
+  select { background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; font: 14px var(--font-body); }
+  .holderbanner { border: 1px solid var(--teal-dim); background: color-mix(in srgb, var(--teal) 8%, transparent); color: var(--teal); border-radius: 12px; padding: 10px 14px; margin-bottom: 14px; font-weight: 600; }
+  .holderbanner .sub { color: var(--muted); font-weight: 400; font-size: 13px; }
+  .menu { border: 1px solid var(--line); border-radius: 12px; margin-top: 12px; overflow: hidden; }
+  .menu .item { display: flex; gap: 14px; align-items: center; justify-content: space-between; padding: 12px 14px; }
+  .menu .item + .item { border-top: 1px solid var(--line); }
+  .menu .item .t { font-weight: 600; font-size: 14px; }
+  .menu .item .d { color: var(--muted); font-size: 13px; }
+  .menu .item button { padding: 8px 14px; font-size: 14px; white-space: nowrap; flex-shrink: 0; }
+  .menu .item button.warn { color: var(--bad); border-color: rgba(255,138,122,.35); }
+  @media (max-width: 520px) { .menu .item { flex-direction: column; align-items: stretch; } }
+  .bal { font-weight: 600; }
+  .bal.on { color: var(--teal); }
+  .welcome { border-color: var(--teal-dim); }
+  .welcome h2 { margin-bottom: 6px; }
+  .welcome .lead { margin: 0 0 16px; }
+  .steps { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; counter-reset: s; }
+  .steps li { display: grid; grid-template-columns: 30px 1fr; gap: 10px; align-items: start; }
+  .steps li::before { counter-increment: s; content: counter(s); width: 26px; height: 26px; border-radius: 50%; background: color-mix(in srgb, var(--teal) 14%, transparent); color: var(--teal); font-weight: 700; font-size: 14px; display: grid; place-items: center; }
+  .steps b.t { display: block; }
+  .steps span { color: var(--muted); font-size: 14px; }
+  .welcome .foot { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; margin-top: 16px; }
+  .welcome .close { background: none; border: 0; color: var(--muted); padding: 4px 0; font-weight: 500; font-size: 13px; text-decoration: underline; }
+  footer { color: var(--muted); font-size: 13px; text-align: center; margin-top: 28px; }
+  /* Which page am I on: a bar linking the site's pages, each with its own color. */
+  .kpstrip { background: var(--strip); border-bottom: 1px solid var(--line); color: var(--muted); font-size: 12.5px; }
+  .kpstrip .in { max-width: 720px; margin: 0 auto; padding: 7px 16px; display: flex; gap: 8px 16px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+  .kpstrip .kpmark { display: inline-flex; gap: 7px; align-items: center; color: var(--muted); text-decoration: none; }
+  .kpstrip .kpmark b { color: var(--text); font-weight: 600; }
+  .kpstrip svg { width: 15px; height: 15px; }
+  .kpstrip .net { margin-left: 0; }
+  .brandbar { display: flex; gap: 12px; align-items: center; justify-content: space-between; margin: 0 0 22px; }
+  .brandname { display: inline-flex; gap: 10px; align-items: center; color: var(--text); text-decoration: none; font: 700 19px/1.2 var(--font-head); min-width: 0; }
+  .brandname img { height: 34px; width: auto; max-width: 180px; object-fit: contain; }
+  .brandnav { display: flex; gap: 6px 16px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+  .brandnav > a { color: var(--text); text-decoration: none; font-size: 14px; }
+  .brandnav > a:hover { color: var(--teal); }
+  .themetoggle { width: 42px; height: 42px; padding: 0; border-radius: var(--r-btn); border: 1px solid var(--line); background: var(--panel); color: var(--text); display: inline-flex; align-items: center; justify-content: center; }
+  .themetoggle.hidden { display: none; }
+  .themetoggle svg { width: 18px; height: 18px; }
+  .themetoggle .sun { display: none; }
+  .themetoggle.isdark .sun { display: block; }
+  .themetoggle.isdark .moon { display: none; }
+  .brandmenu { position: relative; }
+  .brandmenu summary { list-style: none; cursor: pointer; width: 42px; height: 42px; border-radius: var(--r-btn); border: 1px solid var(--line); background: var(--panel); display: flex; align-items: center; justify-content: center; color: var(--text); }
+  .brandmenu summary::-webkit-details-marker { display: none; }
+  .brandmenu summary svg { width: 18px; height: 18px; }
+  .brandmenu .pop { position: absolute; right: 0; top: 50px; z-index: 40; min-width: 230px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-card); padding: 8px; box-shadow: 0 12px 32px rgba(0,0,0,.25); display: flex; flex-direction: column; }
+  .brandmenu .pop a { padding: 10px 12px; border-radius: 10px; color: var(--text); text-decoration: none; font-weight: 600; }
+  .brandmenu .pop a:hover, .brandmenu .pop a[aria-current] { background: color-mix(in srgb, var(--teal) 12%, transparent); color: var(--teal); }
+  .brandmenu .forcreators { margin-top: 6px; padding: 10px 12px 4px; border-top: 1px solid var(--line); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  .brandmenu .forcreators + a { font-weight: 500; font-size: 14px; }
+  .brandbanner { margin: 0 0 18px; border-radius: var(--r-card); overflow: hidden; border: 1px solid var(--line); }
+  .brandbanner img { display: block; width: 100%; aspect-ratio: 4 / 1; object-fit: cover; }
+  .titlerow { display: flex; gap: 14px; align-items: center; }
+  .titlerow .avatar { width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 2px solid var(--line); flex: 0 0 auto; }
+  .titlerow > div { min-width: 0; }
+
+  .kind { font: 700 12px/1 var(--font-body); letter-spacing: .12em; text-transform: uppercase; color: var(--teal); margin: 0 0 8px; }
+  .by { margin: -4px 0 10px; color: var(--muted); font-weight: 600; }
+  h1.page { font: 800 clamp(26px, 5.5vw, 40px)/1.12 var(--font-head); letter-spacing: -0.6px; margin: 0 0 8px; min-height: 1.15em; }
+  .powered { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); text-decoration: none; }
+  .powered svg { width: 16px; height: 16px; }
+
+  a { color: var(--teal); }
+  /* Wallet line at the top: who is signed in, and their plan. */
+  .walletrow { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+  .walletrow .who { min-width: 0; flex: 1 1 260px; }
+  .walletrow .who p { margin: 0; }
+  #addr { font-weight: 600; overflow-wrap: anywhere; }
+  #addr .a { font: 13px ui-monospace, monospace; color: var(--muted); font-weight: 400; }
+  .yourplan { color: var(--teal); font-weight: 600; margin-top: 4px !important; }
+  .yourplan .muted { font-weight: 400; }
+  /* The result of a payment, first and big. */
+  .done { border-color: var(--teal); background: color-mix(in srgb, var(--teal) 7%, transparent); }
+  .donetitle { font: 800 clamp(22px, 5vw, 28px)/1.25 var(--font-head); color: var(--teal); margin: 0 0 12px; outline: none; }
+  .done .returndone { margin: 0 0 12px; }
+  .done .switchbox { margin-top: 10px; }
+  /* Plan cards: this wallet's price and what the button does. */
+  .lvl .credit { font-size: 13px; color: var(--teal); }
+  .lvl .until { font-size: 13px; color: var(--muted); }
+  .lvl .inc2 { font-size: 13px; color: var(--muted); }
+  .lvl .noact { margin-top: 8px; font-size: 13px; color: var(--muted); }
+  .lvl .lp .have { color: var(--teal); font-size: 18px; }
+  .lvl.owned .lp { font-size: 18px; }
+  /* The pay box, right under the card that was pressed. */
+  #levelCards > #join { grid-column: 1 / -1; margin: 4px 0 6px; border-color: var(--teal-dim); }
+  .payinfo { margin: 6px 0 4px; }
+  .payinfo dd b { color: var(--text); }
+  .payinfo .sub { color: var(--muted); font-size: 13px; }
+  .paygo { margin-top: 16px; }
+  @media (max-width: 520px) { .payinfo { grid-template-columns: 1fr; gap: 2px; } .payinfo dt { margin-top: 8px; } }
+  .paygo button { font-size: 17px; padding: 14px 22px; }
+  .paygo .small { margin-top: 8px; }
+  .paygo button.qrgo { font-size: 15px; padding: 10px 18px; margin-top: 12px; }
+  .qrbox { margin-top: 16px; padding: 16px; border: 1px solid var(--line); border-radius: 14px; background: var(--card2, color-mix(in srgb, var(--text) 3%, transparent)); }
+  .qrbox .qrtitle, .wcbox .qrtitle { font-weight: 700; font-size: 17px; margin-bottom: 12px; }
+  .qrbox .qrwho { margin: 0 0 14px; padding: 10px 12px; border-radius: 10px; background: color-mix(in srgb, var(--teal) 10%, transparent); border: 1px solid var(--teal-dim); font-size: 14px; }
+  .qrbox .qrwho b { color: var(--text); }
+  .wcbox { margin-top: 16px; padding: 16px; border: 1px solid var(--line); border-radius: 14px; }
+  .wcbox ol { margin: 0 0 10px; padding-left: 18px; }
+  .wcbox a.btn, .wcwake a.btn { display: inline-block; margin: 6px 0 10px; background: var(--teal); color: var(--accent-ink); text-decoration: none; font-weight: 700; font-size: 16px; padding: 12px 22px; border-radius: var(--r-btn); }
+  .wcwake { position: fixed; left: 12px; right: 12px; bottom: 12px; z-index: 50; padding: 12px 14px; border-radius: 14px; background: var(--card, #0d1716); border: 1px solid var(--teal); box-shadow: 0 6px 24px rgba(0,0,0,.45); font-size: 15px; }
+  .wcwake a.btn { margin: 0 0 0 10px; padding: 8px 14px; }
+  .wcbox ol li { margin-bottom: 6px; }
+  #wcImg { width: 220px; max-width: 100%; background: #fff; border-radius: 10px; padding: 6px; box-sizing: border-box; }
+  #wcImg svg { display: block; width: 100%; height: auto; }
+  .qrwrap { display: flex; gap: 18px; flex-wrap: wrap; align-items: flex-start; }
+  #qrImg { width: 220px; max-width: 100%; background: #fff; border-radius: 10px; padding: 6px; box-sizing: border-box; }
+  #qrImg svg { display: block; width: 100%; height: auto; }
+  .qrinfo { flex: 1 1 220px; min-width: 0; }
+  .qrinfo .qramt { font-size: 22px; font-weight: 700; color: var(--text); margin: 2px 0 10px; }
+  .qrinfo .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; word-break: break-all; margin: 2px 0 6px; }
+  .qrinfo button { font-size: 13px; padding: 6px 12px; margin: 0 6px 6px 0; }
+  #qrStatus { margin-top: 14px; }
+  #qrNote { margin-top: 10px; }
+  button.linkish { background: none; border: none; color: var(--muted); text-decoration: underline; padding: 0; margin-top: 10px; font-size: 13px; cursor: pointer; }
+  details.passdetails { margin-top: 12px; }
+  details.passdetails summary { cursor: pointer; color: var(--text); font-size: 15px; font-weight: 600; padding: 6px 0; }
+  .members a.btn { display: inline-block; background: var(--teal); color: var(--accent-ink); text-decoration: none; font-weight: 700; font-size: 16px; padding: 12px 22px; border-radius: var(--r-btn); }
+  /* Sent here from a partner site: a way back. */
+  .returnbar { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; margin: -10px 0 18px; padding: 10px 14px; border: 1px solid var(--line); border-radius: 12px; font-size: 14px; color: var(--muted); }
+  .returnbar b { color: var(--text); }
+  .returnbar a { color: var(--teal); font-weight: 600; white-space: nowrap; }
+  .returndone { display: flex; gap: 14px; align-items: center; justify-content: space-between; flex-wrap: wrap; margin: 14px 0 4px; padding: 14px 16px; border: 1px solid var(--teal-dim); border-radius: 12px; background: color-mix(in srgb, var(--teal) 8%, transparent); }
+  .returndone a.btn { display: inline-block; background: var(--teal); color: var(--accent-ink); text-decoration: none; font-weight: 700; font-size: 17px; padding: 14px 24px; border-radius: var(--r-btn); white-space: nowrap; box-shadow: 0 0 0 4px color-mix(in srgb, var(--teal) 15%, transparent); }
+  .returning #passActions button:not(.ghost) { background: transparent; color: var(--teal); border: 1px solid var(--teal-dim); }
+  /* The creator's profile: tagline, links, intro. */
+  .tagline { margin: 0 0 10px; font-size: 18px; color: var(--text); }
+  .meta { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 0 14px; }
+  .meta a { display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; border: 1px solid var(--line); border-radius: 999px; color: var(--text); text-decoration: none; font-size: 14px; }
+  .meta a:hover { border-color: var(--teal-dim); }
+  .meta a svg { width: 13px; height: 13px; color: var(--muted); }
+  .meta .count { color: var(--muted); font-size: 14px; margin-left: 4px; }
+  .meta .count b { color: var(--text); }
+  .intro { margin: 0 0 18px; }
+  .rich { font-size: 15px; line-height: 1.65; overflow-wrap: anywhere; }
+  .rich h3 { font: 700 19px/1.3 var(--font-head); margin: 16px 0 6px; }
+  .rich h4 { font: 700 15px/1.4 var(--font-body); margin: 14px 0 4px; }
+  .rich p { margin: 0 0 10px; }
+  .rich ul, .rich ol { margin: 0 0 10px; padding-left: 22px; }
+  .rich li { margin: 3px 0; }
+  .rich blockquote { margin: 0 0 10px; padding: 4px 14px; border-left: 3px solid var(--teal-dim); color: var(--muted); }
+  .rich > :first-child { margin-top: 0; }
+  .rich > :last-child { margin-bottom: 0; }
+  .rich.clamp { max-height: 8.4em; overflow: hidden; -webkit-mask-image: linear-gradient(#000 60%, transparent); mask-image: linear-gradient(#000 60%, transparent); }
+  .more { background: none; border: 0; padding: 6px 0 0; color: var(--teal); font: 600 14px var(--font-body); cursor: pointer; }
+  .about { margin: 0 0 16px; padding: 0 0 16px; border-bottom: 1px solid var(--line); }
+  /* Levels as cards or a comparison table. */
+  .lvhead { display: flex; gap: 12px; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; margin-bottom: 14px; }
+  .lvhead h2 { margin-bottom: 4px; }
+  .viewsw { display: inline-flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; flex: 0 0 auto; }
+  .viewsw button { display: inline-flex; align-items: center; gap: 6px; background: none; color: var(--muted); border: 0; border-radius: 0; padding: 7px 12px; font: 600 13px var(--font-body); }
+  .viewsw button + button { border-left: 1px solid var(--line); }
+  .viewsw button svg { width: 14px; height: 14px; fill: currentColor; }
+  .viewsw button[aria-pressed="true"] { background: color-mix(in srgb, var(--teal) 14%, transparent); color: var(--teal); }
+  .cmpwrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 14px; }
+  table.cmp { border-collapse: separate; border-spacing: 0; width: 100%; min-width: 520px; font-size: 14px; }
+  .cmp th, .cmp td { padding: 12px 14px; border-bottom: 1px solid var(--line); text-align: center; vertical-align: middle; }
+  .cmp th:first-child, .cmp td:first-child { text-align: left; position: sticky; left: 0; background: var(--panel); min-width: 180px; }
+  .cmp thead th { background: var(--bg); vertical-align: bottom; }
+  .cmp thead th:first-child { background: var(--bg); color: var(--muted); font-weight: 500; }
+  .cmp .cn { font: 700 15px/1.25 var(--font-head); }
+  .cmp .cp { display: inline-block; margin-top: 6px; padding: 3px 9px; border-radius: 999px; background: color-mix(in srgb, var(--text) 6%, transparent); font-weight: 600; font-size: 13px; white-space: nowrap; }
+  .cmp .cp s { color: var(--muted); font-weight: 400; margin-right: 4px; }
+  .cmp .cp .off { font-size: 11px; }
+  .cmp .from { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .cmp .yes { width: 20px; height: 20px; color: var(--good, #5fd6a0); }
+  .cmp .no { color: var(--muted); }
+  .cmp th.sel, .cmp td.sel { background: color-mix(in srgb, var(--teal) 6%, transparent); }
+  .cmp tfoot td { border-bottom: 0; }
+  .cmp tfoot button { padding: 9px 14px; font-size: 14px; white-space: nowrap; }
+</style>
+<link rel="stylesheet" href="/brand/fonts.css?v=0">
+<link rel="stylesheet" href="/brand/theme.css?v=0">
+</head>
+<body>
+<div class="kpstrip"><div class="in"><a class="kpmark" href="https://github.com/kaspass/kaspass" target="_blank" rel="noopener"><svg viewBox="0 0 512 512" aria-hidden="true"><rect width="512" height="512" rx="112" fill="currentColor" opacity=".9"/><path transform="translate(-16 0)" fill-rule="evenodd" fill="var(--strip)" d="M150 110 H290 A104 104 0 0 1 290 318 H240 V402 H150 Z M150 194 H278 V160 L340 214 L278 268 V234 H150 Z"/></svg><span>Memberships by <b>KasPass</b></span></a><span class="net" id="net">Testnet-10</span></div></div>
+<div class="wrap">
+  <header class="brandbar">
+    <a class="brandname" href="/"><img id="brandLogo" class="hidden" alt=""><span id="brandName"></span></a>
+    <nav class="brandnav" aria-label="Pages on this site">
+      <a href="#" id="brandBack" class="hidden">← Back to <span class="bh"></span></a>
+      <button id="themeToggle" class="themetoggle hidden" type="button" aria-label="Switch between light and dark"><svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg><svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button>
+      <details class="brandmenu"><summary aria-label="Menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></summary>
+        <div class="pop">
+          <a href="/" aria-current="page">Membership</a>
+          <a href="/club" class="hidden" id="navClub">Holder club</a>
+          <a href="/help">Help</a>
+          <a href="#" id="menuBack" class="hidden">Back to <span class="bh"></span></a>
+          <div class="forcreators">For creators</div>
+          <a href="/dashboard">Creator dashboard →</a>
+        </div>
+      </details>
+    </nav>
+  </header>
+  <div class="brandbanner hidden" id="brandBanner"><img id="brandBannerImg" alt=""></div>
+  <div class="returnbar hidden" id="returnBar"><span>You came from <b id="returnHost"></b>. Once you've joined, a button takes you back.</span><a id="returnLink" href="#">Back to <span class="rh"></span></a></div>
+  <div class="titlerow"><img id="brandPhoto" class="avatar hidden" alt=""><div>
+  <p class="kind">Membership page</p>
+  <h1 class="page" id="pageTitle">Membership</h1>
+  </div></div>
+  <p class="by hidden" id="pageBy"></p>
+  <p class="tagline hidden" id="pageTag"></p>
+  <div class="meta hidden" id="pageMeta"></div>
+  <div class="intro hidden" id="introBox"><div class="rich clamp" id="introText"></div><button class="more hidden" id="introMore" aria-expanded="false">See more</button></div>
+  <div class="hero hidden" id="hero"><span id="heroFrom"></span><button id="heroGo">See plans and prices</button></div>
+  <p class="tag">You pay from your own Kaspa wallet. No card, no account, no password.</p>
+
+  <section class="panel hidden" id="comingSoon"><h2>Coming soon</h2><p class="muted">Nothing is on sale here yet. Check back soon.</p></section>
+  <section class="panel welcome hidden" id="welcome">
+    <h2>New to Kaspa? Setting up takes about five minutes</h2>
+    <p class="muted lead" id="wLead">When you join, your <span data-pw="">membership</span> lives in your own Kaspa wallet: nobody can take it away, and there's no card to enter.</p>
+    <ol class="steps">
+      <li><div><b class="t">Get the Kaspire wallet</b><span id="wStep1"></span></div></li>
+      <li><div><b class="t">Put some KAS in it</b><span id="wStep2"></span></div></li>
+      <li><div><b class="t">Sign in and pick a <span class="lw1">plan</span></b><span id="wStep3">Signing in is free. Kaspire shows every amount before you approve.</span></div></li>
+    </ol>
+    <div class="foot">
+      <a href="/help">More help</a>
+      <button class="close" id="wClose">Got it, hide this</button>
+    </div>
+  </section>
+
+  <section class="panel" id="wallet">
+    <h2 id="walletTitle">Sign in with your wallet</h2>
+    <p class="muted small" id="walletHint">Signing in is free. Kaspire asks you to approve a short message. Nothing is paid.</p>
+    <div class="walletrow">
+      <div class="who">
+        <p class="hidden" id="addr"></p>
+        <p class="yourplan hidden" id="yourPlan"></p>
+      </div>
+      <div class="row">
+        <button id="signin">Sign in with Kaspire</button>
+        <button id="wcGo" class="ghost">Use the Kaspire app on my phone</button>
+        <button id="logout" class="ghost hidden">Sign out</button>
+      </div>
+    </div>
+    <p class="small getwallet" id="getWallet"></p>
+    <div class="wcbox hidden" id="wcBox">
+      <div class="qrtitle">Connect the Kaspire app</div>
+      <div class="hidden" id="wcPhone">
+        <p class="small">Switch the Kaspire app to <b class="wcNet2">mainnet</b> first. Then:</p>
+        <a class="btn" id="wcOpenBig" href="#" target="_blank" rel="noopener">Open Kaspire app</a>
+        <p class="muted small">Approve the connection and then the sign-in message in the app, then come back to this tab. If a Kaspire page opens instead, switch back to this tab.</p>
+      </div>
+      <div class="qrwrap" id="wcDesk">
+        <div id="wcImg" role="img" aria-label="QR code to connect the Kaspire app"></div>
+        <div class="qrinfo">
+          <ol class="small">
+            <li>Open the Kaspire app on your phone and switch it to <b id="wcNet">mainnet</b>.</li>
+            <li>Tap the scan button in the app and point it at this code. Or scan it with your phone's camera.</li>
+            <li>Approve the connection, then the sign-in message.</li>
+          </ol>
+          <div class="small"><a id="wcOpen" href="#" target="_blank" rel="noopener">On this phone? Open the Kaspire app</a></div>
+        </div>
+      </div>
+      <div class="small" id="wcStatus"></div>
+      <button class="linkish" id="wcCancel">Cancel</button>
+    </div>
+    <p class="muted hidden" id="walletNote"></p>
+    <div class="wcwake hidden" id="wcWake" role="status">Approve this in the Kaspire app, then press Back (or switch to this tab). Don't reload this page. <a class="btn" id="wcWakeGo" href="#" target="_blank" rel="noopener">Open Kaspire</a> <button class="linkish" id="wcWakeCheck">Approved? Check again</button></div>
+    <div class="err hidden" id="walletErr"></div>
+  </section>
+
+  <section class="panel done hidden" id="doneBox" aria-live="polite">
+    <h2 class="donetitle hidden" id="doneTitle" tabindex="-1"></h2>
+    <div class="returndone hidden" id="returnDone"><div><b>You're all set.</b> Your access is active, so you can go back now.</div><a class="btn" id="returnGo" href="#">Back to <span class="rh"></span></a></div>
+    <div id="doneNext"></div>
+    <p class="small hidden" id="doneLine"></p>
+    <div id="switchSlot"></div>
+  </section>
+
+  <section class="panel trialbox hidden" id="trialBox" aria-live="polite"></section>
+
+  <section class="panel hidden" id="levelsBox">
+    <div class="lvhead">
+      <div><h2 id="levelsTitle">Choose your level</h2>
+      <p class="muted small" id="levelsLead" style="margin:0">Each plan includes everything in the cheaper plans.</p>
+      <p class="muted small hidden" id="levelsKas" style="margin:4px 0 0"></p></div>
+      <div class="viewsw hidden" id="viewSw" role="group" aria-label="Show as">
+        <button type="button" id="vCards" aria-pressed="true"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1" y="2" width="4" height="12" rx="1.2"/><rect x="6" y="2" width="4" height="12" rx="1.2"/><rect x="11" y="2" width="4" height="12" rx="1.2"/></svg>Cards</button>
+        <button type="button" id="vCompare" aria-pressed="false"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1" y="2" width="14" height="2.4" rx="1"/><rect x="1" y="6.8" width="14" height="2.4" rx="1"/><rect x="1" y="11.6" width="14" height="2.4" rx="1"/></svg>Compare</button>
+      </div>
+    </div>
+    <div class="levels" id="levelCards"></div>
+    <div class="cmpwrap hidden" id="levelCompare"></div>
+    <button class="ghost hidden" id="seeOther" type="button">See other plans</button>
+  </section>
+
+
+
+  <section class="panel hidden" id="result">
+    <h2 id="resultTitle">Your <span data-pw="">membership</span></h2>
+    <div id="statusBadge"></div>
+    <details class="passdetails" id="passDetails" open><summary><span data-pw="C">Membership</span> details</summary><dl id="passInfo" style="margin-top:10px"></dl></details>
+    <div class="row hidden" id="passActions" style="margin-top:16px"></div>
+    <div class="menu hidden" id="passMenu"></div>
+    <div id="switchBox" class="hidden"></div>
+    <div class="hidden" id="topupBox" style="margin-top:12px">
+      <div class="small muted" style="margin-bottom:6px">Pay a few renewals ahead. Your <span data-pw="">membership</span> renews itself from this balance before it runs out; whatever isn't used stays yours, and you can cancel any time to get it back.</div>
+      <div class="row">
+        <select id="topupN"><option value="1">1 renewal</option><option value="3" selected>3 renewals</option><option value="6">6 renewals</option><option value="12">12 renewals</option></select>
+        <button id="topupGo">Add to balance</button>
+      </div>
+    </div>
+    <div class="hidden" id="transferBox" style="margin-top:12px">
+      <p class="small" style="margin:0 0 8px" id="transferText">Give this <span data-pw="">membership</span> to someone else. They get the rest of your time and you lose access. This can't be undone.</p>
+      <div class="row" style="flex-wrap:nowrap">
+        <input id="transferTo" placeholder="kaspatest:… address, or a name like alice.kas or alice.k" autocomplete="off">
+        <button id="transferGo">Give it</button>
+      </div>
+    </div>
+    <p class="muted small hidden" id="passNote" style="margin-bottom:0"></p>
+    <div id="passStatus" class="small hidden" style="margin-top:12px"></div>
+    <div class="err hidden" id="passErr"></div>
+  </section>
+
+  <section class="panel hidden" id="join">
+    <h2 id="joinTitle">Become a member</h2>
+    <p class="muted" id="joinLead">This wallet doesn't have an active <span data-pw="">membership</span> yet.</p>
+    <p class="small hidden" id="renewHint"></p>
+    <div class="paykinds hidden" id="payKinds" role="group" aria-label="How to pay"></div>
+    <dl class="payinfo hidden" id="payInfo"></dl>
+    <div id="buyBox" class="hidden">
+      <div class="salebanner hidden" id="saleBanner"></div>
+      <div class="holderbanner hidden" id="holderBanner"></div>
+      <div class="testnote hidden" id="testNote"></div>
+      <div class="nofee hidden" id="noFee">No KasPass fees: everything you pay goes to the creator.</div>
+      <div class="opts" id="buyButtons"></div>
+      <div class="autobox hidden" id="autoBox">
+        <label class="check"><input type="checkbox" id="autoOn"> Turn on auto-renew (optional)</label>
+        <div class="small muted" style="margin-top:6px">Pay a few renewals ahead and your <span data-pw="">membership</span> renews itself before it runs out, so you never lose access. Cancel any time and get your unused balance back.<span id="autoLifeNote"> Not needed for lifetime.</span></div>
+        <div class="small" id="autoMore" style="margin-top:8px">
+          Pay ahead for <select id="autoN"><option value="1">1 renewal</option><option value="3" selected>3 renewals</option><option value="6">6 renewals</option><option value="12">12 renewals</option></select>
+          <span id="autoAmt"></span>
+        </div>
+      </div>
+      <p class="muted small" id="buyNote" style="margin-bottom:0"></p>
+    </div>
+    <div class="paygo hidden" id="payGoBox"><button id="payGo"></button><div class="muted small" id="payGoNote">Kaspire shows every amount before you approve. Payments go straight to the creator and can't be refunded by KasPass.</div><button class="ghost qrgo hidden" id="qrGo">Pay from another wallet (QR code)</button></div>
+    <div class="qrbox hidden" id="qrBox">
+      <div class="qrtitle">Scan with your phone wallet</div>
+      <div class="qrwho" id="qrWho"></div>
+      <div class="qrwrap">
+        <div id="qrImg" role="img" aria-label="QR code with the address and amount"></div>
+        <div class="qrinfo">
+          <div class="muted small">Send exactly</div>
+          <div class="qramt" id="qrAmt"></div>
+          <button class="ghost" id="qrCopyAmt">Copy amount</button>
+          <div class="muted small" style="margin-top:6px">to this address</div>
+          <div class="mono small" id="qrAddr"></div>
+          <button class="ghost" id="qrCopyAddr">Copy address</button>
+          <div class="small"><a id="qrOpen" href="#">Open in a wallet app on this device</a></div>
+        </div>
+      </div>
+      <div class="small" id="qrStatus"></div>
+      <div class="muted small" id="qrNote"></div>
+      <button class="linkish" id="qrCancel">Cancel and go back</button>
+    </div>
+    <p class="muted small hidden" id="noShop">This website isn't selling <span data-pw="s">memberships</span> right now.</p>
+    <div id="buyStatus" class="small hidden" style="margin-top:12px"></div>
+    <div class="err hidden" id="buyErr"></div>
+  </section>
+
+  <section class="panel hidden" id="access">
+    <h2>Your access</h2>
+    <div id="clubBox" class="hidden">
+      <div class="small" id="clubName"></div>
+      <div id="clubStats" style="margin:10px 0"></div>
+      <div id="clubTiers" style="margin:10px 0"></div>
+      <div class="small" style="margin-top:12px"><b>Your wallets</b> (NFTs in every linked wallet count toward your credits)</div>
+      <div id="walletList" style="margin:6px 0"></div>
+      <button id="addWallet" class="ghost">Add another wallet</button>
+      <div id="linkBox" class="hidden" style="margin-top:10px">
+        <div class="small" id="linkHelp">In Kaspire, switch to the wallet you want to add (switch network too if it's on mainnet), then press the button below. Kaspire will ask that wallet to sign a short message. Nothing is sent and it costs nothing.</div>
+        <div class="small" id="linkSeen" style="margin-top:6px"></div>
+        <button id="linkSign" style="margin-top:8px">Sign with that wallet</button>
+        <button id="linkCancel" class="ghost" style="margin-top:8px">Cancel</button>
+      </div>
+      <div class="err hidden" id="clubErr"></div>
+    </div>
+    <div id="noAccess" class="small hidden">Join a <span class="lw1">plan</span> to unlock the members' groups.</div>
+    <div id="tgBox" class="hidden" style="margin-top:16px">
+      <button id="tgBtn">Join the Telegram group</button>
+      <div class="small" id="tgNote" style="margin-top:8px">Opens Telegram and links your account to this wallet. You'll get a one-time invite, and you'll be removed automatically if your <span data-pw="">membership</span> ends.</div>
+      <div class="err hidden" id="tgErr"></div>
+    </div>
+    <div id="dcBox" class="hidden" style="margin-top:16px">
+      <button id="dcBtn">Connect Discord</button>
+      <div class="small" style="margin-top:8px">Sign in with Discord to get the member role <span id="dcServer"></span>. It's removed automatically if your <span data-pw="">membership</span> ends, and comes back when you renew.</div>
+      <div class="err hidden" id="dcErr"></div>
+    </div>
+  </section>
+
+  <section class="panel members hidden" id="members">
+    <h2>Members area</h2>
+    <div id="membersBody"></div>
+  </section>
+
+  <section class="panel" id="tierBox">
+    <h2 id="tierTitle">This membership</h2>
+    <div class="rich about hidden" id="tierAbout"></div>
+    <dl id="tier"><dt>Loading…</dt><dd></dd></dl>
+    <details class="tech" id="techBox"><summary>Technical details</summary><dl id="techDl"></dl>
+      <div class="lookupbox"><b>Look up any address</b> <span class="muted">(anyone can check whether an address holds <span data-pw="a">a membership</span>)</span>
+      <div class="row" style="flex-wrap:nowrap;margin-top:6px">
+        <input id="lookup" placeholder="kaspatest:..." autocomplete="off">
+        <button id="lookupBtn" class="ghost">Check</button>
+      </div>
+      <div id="lookupOut" class="small" style="margin-top:10px"></div></div></details>
+  </section>
+
+
+  <footer><a class="powered" href="https://github.com/kaspass/kaspass" target="_blank" rel="noopener"><svg viewBox="0 0 512 512" aria-hidden="true"><rect width="512" height="512" rx="112" fill="#49d9c8"/><path transform="translate(-16 0)" fill-rule="evenodd" fill="#050808" d="M150 110 H290 A104 104 0 0 1 290 318 H240 V402 H150 Z M150 194 H278 V160 L340 214 L278 268 V234 H150 Z"/></svg>Powered by KasPass</a><br><span id="clubLink" class="hidden">NFT holder? <a href="/club" id="clubLinkA">Join the holder club</a> · </span><a href="/help">Help</a> · Creator? <a href="/dashboard">Open your dashboard</a> · <span id="netNote">Test network only. New software, not yet reviewed by an outside security firm.</span> <a href="https://github.com/kaspass/kaspass" target="_blank" rel="noopener">github.com/kaspass/kaspass</a></footer>
+</div>
+
+<script src="/assets/qrcode.js?v=31"></script>
+<script src="/assets/index.js?v=63"></script>
+</body>
+</html>

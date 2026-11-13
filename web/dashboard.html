@@ -1,0 +1,745 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Creator dashboard · KasPass</title>
+<link rel="stylesheet" href="/assets/fonts.css">
+<style>
+  :root {
+    --bg: #07060c;
+    --panel: #100e19;
+    --line: #26223a;
+    --text: #e8f1f0;
+    --muted: #8aa09d;
+    --teal: #a99bff;
+    --teal-dim: #48407e;
+    --bad: #ff8a7a;
+    --line2: #3a3552;
+    --good: #5fd6a0;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.55 Inter, system-ui, sans-serif; }
+  .wrap { max-width: 920px; margin: 0 auto; padding: 32px 16px 64px; }
+  header { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; flex-wrap: wrap; }
+  header svg { width: 44px; height: 44px; }
+  .word { font: 800 30px/1 Montserrat, sans-serif; letter-spacing: -0.5px; }
+  .word .k { color: var(--teal); }
+  .sub { font: 600 15px Montserrat, sans-serif; color: var(--muted); }
+  .net { display: inline-block; font-size: 12px; padding: 2px 8px; border: 1px solid var(--teal-dim); color: var(--teal); border-radius: 999px; margin-left: auto; }
+  .tag { color: var(--muted); margin: 0 0 28px; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 22px; margin-bottom: 16px; }
+  h2 { font: 600 18px/1.3 Montserrat, sans-serif; margin: 0 0 12px; }
+  .muted { color: var(--muted); }
+  .small { font-size: 13px; }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; word-break: break-all; }
+  button { font: 600 15px Inter, sans-serif; background: var(--teal); color: #031312; border: 0; border-radius: 10px; padding: 12px 18px; cursor: pointer; }
+  button.ghost { background: transparent; color: var(--text); border: 1px solid var(--line2); }
+  button.ghost:hover:not(:disabled) { border-color: var(--teal-dim); }
+  button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+  button:disabled { opacity: .45; cursor: default; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .err { color: var(--bad); margin-top: 12px; }
+  .hidden, .offtab { display: none !important; }
+  input, select { width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 11px 12px; font: 14px Inter, sans-serif; }
+  input.mono { font: 14px ui-monospace, monospace; }
+  .dur { display: flex; gap: 6px; margin-top: 4px; }
+  .dur input { flex: 1 1 auto; min-width: 64px; width: 0; }
+  .dur select { flex: 0 0 auto; width: 118px; }
+  input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
+  input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+  textarea { background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 11px 12px; font: 14px/1.5 Inter, sans-serif; resize: vertical; }
+  input[type="checkbox"] { accent-color: var(--teal); width: 18px; height: 18px; }
+  label { display: block; font-size: 13px; color: var(--muted); }
+  label > input, label > select { margin-top: 4px; }
+  .grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
+  /* Boxes in a row line up at the bottom, however many lines their labels take. */
+  .grid > label:not(.check) { display: flex; flex-direction: column; justify-content: space-between; }
+  /* "?" tips beside settings. */
+  .tip { display: inline-flex; align-items: center; justify-content: center; width: 17px; height: 17px; margin-left: 5px; padding: 0; border-radius: 50%; border: 1px solid var(--line2); background: transparent; color: var(--muted); font: 700 11px/1 Inter, sans-serif; vertical-align: 1px; cursor: help; }
+  .tip:hover, .tip:focus-visible, .tip[aria-expanded="true"] { color: var(--text); border-color: var(--teal); }
+  #tipBox { position: fixed; z-index: 50; max-width: min(320px, calc(100vw - 32px)); padding: 10px 12px; border-radius: 10px; background: #1b1830; border: 1px solid var(--line2); color: var(--text); font-size: 13px; line-height: 1.5; box-shadow: 0 8px 24px rgba(0,0,0,.45); }
+  /* A transaction in progress. */
+  .busy { display: flex; gap: 12px; align-items: center; padding: 12px 14px; border: 1px solid var(--teal-dim); border-radius: 12px; background: rgba(169,155,255,.08); color: var(--text); font-size: 15px; }
+  .busy .bsub { font: 400 13px/1.45 Inter, sans-serif; color: var(--muted); font-size: 13px; margin-top: 2px; }
+  .hg { flex: 0 0 auto; width: 26px; height: 26px; color: var(--teal); animation: hgflip 1.8s ease-in-out infinite; }
+  .hg .top { animation: hgtop 1.8s linear infinite; transform-origin: 12px 11px; }
+  .hg .bot { animation: hgbot 1.8s linear infinite; transform-origin: 12px 19px; }
+  @keyframes hgflip { 0%, 78% { transform: rotate(0); } 100% { transform: rotate(180deg); } }
+  @keyframes hgtop { 0% { transform: scaleY(1); } 78%, 100% { transform: scaleY(0); } }
+  @keyframes hgbot { 0% { transform: scaleY(0); } 78%, 100% { transform: scaleY(1); } }
+  @media (prefers-reduced-motion: reduce) { .hg, .hg .top, .hg .bot { animation: none; } }
+  /* The formatting editor. */
+  .edlabel { font-size: 13px; color: var(--muted); margin: 0 0 6px; }
+  .h3 { font: 600 15px/1.3 Montserrat, sans-serif; margin: 20px 0 10px; }
+  .rte { border: 1px solid var(--line); border-radius: 10px; background: var(--bg); }
+  .rte:focus-within { border-color: var(--teal-dim); }
+  .rte-bar { display: flex; flex-wrap: wrap; gap: 2px; padding: 6px; border-bottom: 1px solid var(--line); }
+  .rte-bar button { background: none; color: var(--text); border: 1px solid transparent; border-radius: 7px; padding: 5px 9px; font: 500 13px Inter, sans-serif; min-width: 32px; }
+  .rte-bar button:hover { border-color: var(--line2); }
+  .rte-bar button[aria-pressed="true"] { background: rgba(169,155,255,.16); border-color: var(--teal-dim); }
+  .rte-bar .sep { width: 1px; background: var(--line); margin: 3px 4px; }
+  .rte-link { display: flex; gap: 6px; padding: 6px; border-bottom: 1px solid var(--line); }
+  .rte-link input { padding: 7px 10px; }
+  .rte-link button { padding: 7px 12px; font-size: 13px; }
+  .rte-body { min-height: 150px; max-height: 520px; overflow-y: auto; padding: 12px 14px; outline: none; font: 15px/1.6 Inter, sans-serif; color: var(--text); }
+  .rte-body:empty::before { content: attr(data-ph); color: var(--muted); }
+  .rich h3 { font: 700 19px/1.3 Montserrat, sans-serif; margin: 14px 0 6px; }
+  .rich h4 { font: 700 15px/1.4 Inter, sans-serif; margin: 12px 0 4px; }
+  .rich p { margin: 0 0 10px; }
+  .rich ul, .rich ol { margin: 0 0 10px; padding-left: 22px; }
+  .rich blockquote { margin: 0 0 10px; padding: 4px 14px; border-left: 3px solid var(--teal-dim); color: var(--muted); }
+  .rich a { color: var(--teal); }
+  .fixed { margin: 0; display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; font-size: 14px; }
+  .fixed dt { color: var(--muted); }
+  .fixed dd { margin: 0; }
+  .check { display: flex; gap: 8px; align-items: center; color: var(--text); font-size: 14px; }
+  .check input { width: auto; }
+  input[type="radio"] { accent-color: var(--teal); width: 18px; height: 18px; flex: none; }
+  .stats { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+  .stat { background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 14px; min-width: 0; }
+  .stat .v { font: 800 clamp(18px, 2.4vw, 24px)/1.2 Montserrat, sans-serif; color: var(--text); overflow-wrap: anywhere; }
+  .brandgrid { display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start; }
+  .brandform { flex: 999 1 460px; min-width: 0; display: flex; flex-direction: column; gap: 16px; }
+  .bpreview { flex: 1 1 280px; min-width: 0; position: sticky; top: 12px; }
+  .blab { font-weight: 600; margin-bottom: 6px; }
+  .bcolors { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+  .bcolors label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
+  .bcolors label span { display: flex; gap: 6px; align-items: center; }
+  .bcolors input[type=color] { width: 38px; height: 34px; padding: 2px; border-radius: 8px; border: 1px solid var(--line); background: transparent; flex: 0 0 auto; }
+  .bcolors input.hex { font: 13px ui-monospace, monospace; padding: 7px 8px; min-width: 0; }
+  .bpics { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); margin-bottom: 6px; }
+  .bpic { border: 1px solid var(--line); border-radius: 12px; padding: 10px; display: flex; flex-direction: column; gap: 6px; }
+  .bprev { height: 64px; border-radius: 8px; border: 1px dashed var(--line); display: flex; align-items: center; justify-content: center; overflow: hidden; color: var(--muted); }
+  .bprev img { max-width: 100%; max-height: 100%; object-fit: contain; }
+  .bthumb { height: 32px; max-width: 120px; object-fit: contain; border-radius: 6px; background: #fff; padding: 2px; }
+  .ghostbtn { display: inline-flex; align-items: center; cursor: pointer; padding: 7px 12px; border-radius: 8px; border: 1px solid var(--line2); font-size: 13px; font-weight: 600; }
+  .bpv { --pv-bg: #050808; --pv-text: #e8f1f0; --pv-accent: #49d9c8; --pv-card: #0d1414; --pv-ink: #031312; --pv-muted: #8aa09d; --pv-head: Montserrat, sans-serif; --pv-body: Inter, sans-serif; --pv-rc: 14px; --pv-rb: 10px; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: var(--pv-bg); color: var(--pv-text); font-family: var(--pv-body); }
+  .bpv-strip { padding: 5px 12px; font-size: 11px; color: var(--pv-muted); border-bottom: 1px solid color-mix(in srgb, var(--pv-text) 12%, transparent); }
+  .bpv-strip b { color: var(--pv-text); }
+  .bpv-head { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; gap: 8px; }
+  .bpv-name { display: inline-flex; gap: 6px; align-items: center; font: 700 14px var(--pv-head); }
+  .bpv-name img { height: 20px; max-width: 80px; object-fit: contain; }
+  .bpv-back { font-size: 11px; }
+  .bpv-body { padding: 4px 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+  .bpv-h1 { font: 800 22px/1.15 var(--pv-head); }
+  .bpv-card { background: var(--pv-card); border: 1px solid color-mix(in srgb, var(--pv-text) 14%, transparent); border-radius: var(--pv-rc); padding: 10px; display: flex; flex-direction: column; gap: 6px; }
+  .bpv-cn { font: 700 13px var(--pv-head); }
+  .bpv-price { font: 800 19px var(--pv-head); }
+  .bpv-price span { font: 500 11px var(--pv-body); color: var(--pv-muted); }
+  .bpv-btn { align-self: flex-start; font-size: 12px; font-weight: 600; padding: 7px 12px; border-radius: var(--pv-rb); background: var(--pv-accent); color: var(--pv-ink); }
+  .statround { display: inline-flex; gap: 6px; align-items: center; margin-top: 8px; color: var(--muted); }
+  .stat .l { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th { text-align: left; color: var(--muted); font-weight: 500; font-size: 12px; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+  td { padding: 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  .tablewrap { overflow-x: auto; }
+  .name { display: inline-block; font-family: Inter, sans-serif; font-weight: 600; color: var(--text); }
+  .pill { display: inline-block; font-size: 12px; padding: 1px 8px; border-radius: 999px; }
+  .pill.ok { background: rgba(95,214,160,.12); color: var(--good); }
+  .pill.no { background: rgba(255,138,122,.1); color: var(--bad); }
+  .perm { display: inline-block; font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; padding: 1px 6px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); vertical-align: 1px; margin-left: 4px; }
+  details.adv { margin-top: 14px; }
+  details.adv > summary { cursor: pointer; font-weight: 600; color: var(--teal); padding: 4px 0; }
+  .lneed { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin: 10px 0; }
+  .lneed p { margin: 0 0 10px; }
+  .steps3 .s3 { margin: 0; padding-left: 22px; display: grid; gap: 8px; }
+  .steps3 .s3 li.done { color: var(--muted); text-decoration: line-through; }
+  .steps3 .s3 li.now { font-weight: 700; }
+  .pcards { display: grid; gap: 10px; }
+  .pcard { display: grid; grid-template-columns: 1fr auto; grid-template-areas: "info act" "sw act" "warn warn"; gap: 6px 12px; align-items: center; border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+  .pcard > div:nth-child(2) { grid-area: info; }
+  .pcard .sw { grid-area: sw; }
+  .pcard .pa { grid-area: act; }
+  .pcard .pw { grid-area: warn; }
+  .pcard .pill { white-space: nowrap; }
+  .pcard .pn { font-weight: 700; }
+  .pcard .pp { color: var(--muted); font-size: 13px; }
+  .pcard .pa { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+  .pcard .pa button { padding: 6px 12px; }
+
+  .sw { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; }
+  .sw input { width: 18px; height: 18px; accent-color: var(--teal); margin: 0; }
+  .rte-fmt { display: none; background: none; border: 0; color: var(--teal); font-weight: 600; font-size: 13px; padding: 4px 0; cursor: pointer; }
+  @media (max-width: 700px) {
+    .rte-fmt { display: inline-block; }
+    .rte:not(.fmt) .rte-bar { display: none; }
+    table.stack, table.stack tbody, table.stack tr, table.stack td { display: block; width: 100%; }
+    table.stack tr:first-child:has(th) { display: none; }
+    table.stack tr { border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; margin-bottom: 8px; }
+    table.stack td { border: 0 !important; padding: 3px 0 !important; text-align: left !important; }
+    table.stack td[data-l]::before { content: attr(data-l) ": "; color: var(--muted); font-size: 12px; }
+  }
+  .pill.warn { background: rgba(255,196,94,.14); color: #ffc45e; margin-top: 4px; white-space: normal; }
+  .outs { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 6px; }
+  .outs li { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; }
+  .outs .n { color: var(--muted); font-size: 12px; grid-row: span 2; align-self: center; }
+  .outs .what { font-weight: 600; }
+  .outs .what.fee { color: var(--teal); }
+  .outs .addr { color: var(--muted); font: 12px ui-monospace, monospace; word-break: break-all; }
+  .note-item { border-top: 1px solid var(--line); padding: 12px 0; }
+  .note-item:first-child { border-top: 0; padding-top: 4px; }
+  .note-item .who { font-weight: 600; }
+  .note-item .msgtext { white-space: pre-wrap; margin: 6px 0 8px; }
+  .ok-box { border: 1px solid var(--teal-dim); border-radius: 12px; padding: 14px; margin-top: 12px; }
+  code { font: 13px ui-monospace, monospace; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 2px 6px; }
+  footer { color: var(--muted); font-size: 13px; text-align: center; margin-top: 28px; }
+  /* Signed in: the sign-in panel shrinks to one line. */
+  .signrow { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+  .signtext { min-width: 0; flex: 1 1 260px; }
+  .signbar.in { padding: 12px 18px; }
+  .signbar.in #addr { margin: 0; }
+  /* Tabs: one job per screen. */
+  .tabbar { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; margin: 0 0 16px; border-bottom: 1px solid var(--line); }
+  .tabs { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; }
+  .tabs button { background: none; color: var(--muted); border: 0; border-bottom: 2px solid transparent; border-radius: 0; padding: 12px 12px 10px; font-size: 15px; white-space: nowrap; }
+  .tabs button:hover { color: var(--text); }
+  .tabs button.on { color: var(--text); border-bottom-color: var(--teal); }
+  .lvpick { display: flex; gap: 8px; align-items: center; padding-bottom: 8px; }
+  .seg { display: inline-flex; border: 1px solid var(--line2); border-radius: 10px; overflow: hidden; }
+  .seg button { background: none; color: var(--muted); border: 0; border-radius: 0; padding: 7px 12px; font-size: 14px; }
+  .seg button + button { border-left: 1px solid var(--line2); }
+  .seg button.on { background: var(--teal); color: #0f0c1d; }
+  .setup { display: flex; gap: 12px; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--line); }
+  .setup:last-child { border-bottom: 0; }
+  .setup button { padding: 7px 12px; font-size: 14px; }
+  .older { margin-top: 14px; }
+  .changed { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; margin-top: 14px; padding: 12px 14px; border: 1px solid var(--teal-dim); border-radius: 12px; background: rgba(169,155,255,.07); }
+  .warnbox { margin-top: 14px; padding: 12px 14px; border: 1px solid rgba(242,200,107,.4); border-radius: 12px; color: #f2c86b; font-size: 14px; }
+  .older summary { cursor: pointer; color: var(--muted); font-size: 14px; }
+  /* Which page am I on: a bar linking the site's pages, each with its own color. */
+  .sitebar { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; margin: 0 0 22px; padding: 4px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+  .sitebar a { padding: 8px 12px; border-radius: 9px; color: var(--muted); text-decoration: none; font: 600 14px Inter, sans-serif; white-space: nowrap; }
+  .sitebar a:hover { color: var(--text); }
+  .sitebar a::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 7px; background: var(--dot); vertical-align: 1px; }
+  .sitebar a[data-c="m"] { --dot: #49d9c8; }
+  .sitebar a[data-c="c"] { --dot: #f2c86b; }
+  .sitebar a[data-c="d"] { --dot: #a99bff; }
+  .sitebar a.on { background: var(--dot); color: #07100f; }
+  .sitebar a.on::before { background: #07100f; }
+  .sitebar .net { margin-left: auto; margin-right: 6px; }
+  .kind { font: 700 12px/1 Inter, sans-serif; letter-spacing: .12em; text-transform: uppercase; color: var(--teal); margin: 0 0 8px; }
+  h1.page { font: 800 clamp(26px, 5.5vw, 36px)/1.15 Montserrat, sans-serif; letter-spacing: -0.6px; margin: 0 0 8px; }
+  .powered { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); text-decoration: none; }
+  .powered svg { width: 16px; height: 16px; }
+
+  a { color: var(--teal); }
+  .salebox { border: 1px solid rgba(242,200,107,.4); background: rgba(242,200,107,.08); color: #f2c86b; border-radius: 12px; padding: 12px 14px; margin-bottom: 12px; font-weight: 600; }
+  .salebox .sub { color: var(--muted, #8aa09d); font-weight: 400; font-size: 13px; margin-top: 4px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav class="sitebar" aria-label="Pages on this site"><a href="/" data-c="m">Membership</a><a href="/club" data-c="c" class="hidden" id="navClub">Holder club</a><a href="/dashboard" data-c="d" class="on" aria-current="page">Creator dashboard</a><span class="net" id="net">Testnet-10</span></nav>
+  <p class="kind">Creator dashboard · KasPass</p>
+  <h1 class="page">Run your membership</h1>
+  <p class="tag">Only you see this page. Anything that moves money asks for your approval in Kaspire first. To see what members see, open the <a href="/">membership page</a>.</p>
+
+  <section class="panel signbar" id="signPanel">
+    <div class="signrow">
+      <div class="signtext">
+        <h2 id="signTitle">Sign in with your wallet</h2>
+        <p class="muted small" id="signHint">Sign in with the wallet that created this membership to manage it, or with any wallet to launch a membership of your own.</p>
+        <p class="mono muted hidden" id="addr"></p>
+      </div>
+      <div class="row">
+        <button id="signin">Sign in with Kaspire</button>
+        <button id="wcGo" class="ghost">Use the Kaspire app on my phone instead</button>
+        <button id="logout" class="ghost hidden">Sign out</button>
+      </div>
+    </div>
+    <p class="small hidden" id="wcOtherLine"><a href="#" id="wcOther">Not you? Use another wallet</a></p>
+    <div class="err hidden" id="walletErr"></div>
+  </section>
+
+  <section class="panel hidden" id="recoveryArea">
+    <h2>Hand over ownership</h2>
+    <p class="muted small">You're signed in with this site's backup wallet. Name a new owner wallet and a new backup wallet. The old owner loses access to payouts and prices; members keep their memberships, and every payment keeps going to the same vault. <b>This can't be undone.</b></p>
+    <label style="display:block;margin:10px 0">New owner wallet<input id="hoOwner" class="mono" placeholder="kaspa:…" autocomplete="off"></label>
+    <label style="display:block;margin:10px 0">New backup wallet<input id="hoRecovery" class="mono" placeholder="kaspa:…" autocomplete="off"></label>
+    <button id="hoGo">Hand over ownership</button>
+    <div class="muted small" id="hoStatus"></div>
+    <div class="err hidden" id="hoErr"></div>
+  </section>
+  <section class="panel hidden steps3" id="steps3">
+    <h2>Get set up (about 10 minutes)</h2>
+    <ol class="s3" id="s3List"><li data-s="1">Turn on payouts</li><li data-s="2">Create your first plan</li><li data-s="3">Connect your group and share your link</li></ol>
+  </section>
+  <section class="panel hidden" id="notCreator">
+    <h2>This membership belongs to another wallet</h2>
+    <p class="muted">The dashboard for this membership is only for its creator: <span class="mono" id="creatorAddr"></span></p>
+    <p class="muted small">You can launch a membership of your own below. Your wallet becomes its creator, and payments go straight to it.</p>
+  </section>
+
+  <div id="creatorArea" class="hidden">
+    <div class="tabbar">
+      <nav class="tabs" id="tabs" aria-label="Dashboard sections">
+        <button data-tab="overview" class="on">Overview</button>
+        <button data-tab="page">Your page</button>
+        <button data-tab="levels">Levels</button>
+        <button data-tab="members">Members</button>
+        <button data-tab="prices">Prices &amp; sales</button>
+        <button data-tab="promos">Promotions</button>
+        <button data-tab="groups">Groups</button>
+        <button data-tab="payouts" class="hidden" id="tabPayouts">Payouts</button>
+        <button data-tab="settings">Settings</button>
+      </nav>
+      <div class="lvpick hidden" id="levelPick"><span class="muted small">Level</span><div class="seg" id="levelBtns"></div></div>
+    </div>
+
+    <div class="pane" data-pane="overview">
+    <section class="panel">
+      <h2>Overview</h2>
+      <div class="stats" id="stats"></div>
+      <p class="muted small hidden" id="statsNone" style="margin:0">No payments yet. Once someone joins, your earnings and members show here.</p>
+    </section>
+    <section class="panel hidden" id="setupPanel">
+      <h2>Still to set up</h2>
+      <div id="setupList"></div>
+    </section>
+    <section class="panel hidden" id="notesPanel">
+      <h2>Messages from your website</h2>
+      <p class="muted small">Notes sent through "Get your own page". Reply through the contact each person gave.</p>
+      <div id="notesList"></div>
+      <div class="err hidden" id="notesErr"></div>
+    </section>
+    <section class="panel">
+      <h2>Latest activity</h2>
+      <div class="tablewrap"><table id="recent"></table></div>
+      <p class="small" style="margin-bottom:0"><a href="#members" data-go="members">See all activity and members</a></p>
+    </section>
+    </div>
+
+    <div class="pane hidden" data-pane="levels">
+    <section class="panel">
+      <h2>What you sell</h2>
+      <p class="muted small" id="lvIntro">Switch on the <span class="lwN">plans</span> you want to sell. The cheapest goes first, and each <span class="lw1">plan</span> includes everything in the ones before it. If you stop selling a <span class="lw1">plan</span>, people who already bought it keep it.</p>
+      <div class="pcards" id="cardsT"></div>
+      <details class="older hidden" id="olderBox"><summary id="olderSum">Older memberships</summary><p class="muted small">Earlier test memberships, or ones another wallet launched on this site. They can't be sold as levels.</p><div class="tablewrap"><table id="olderT"></table></div></details>
+      <div class="warnbox hidden" id="lvWarn"></div>
+      <div class="changed hidden" id="lvChanged"><span>You changed what's on sale. Saving takes about a minute, and your page doesn't load during that minute, so it's best done when it's quiet.</span><span class="row"><button id="lvSave">Save changes</button><button id="lvUndo" class="ghost">Undo</button></span></div>
+      <div class="row" style="margin-top:12px"><button id="lvAdd" class="ghost">Add a level</button></div>
+      <div id="swStatus" class="small hidden" style="margin-top:12px"></div>
+      <div class="err hidden" id="swErr"></div>
+    </section>
+    <section class="panel">
+      <h2 id="tierTitle">This membership</h2>
+      <label class="hidden" id="lvEditHint" style="max-width:320px;margin:-4px 0 12px">Editing<select id="lvSelect"></select></label>
+      <div class="grid" style="margin-bottom:10px">
+        <label>Name (for example Supporter, or Gold)<input id="tName" maxlength="40" placeholder="This membership"></label>
+        <p class="small hidden" id="taxTip" style="margin:2px 0 8px;color:var(--muted)">Tip: write <code>{tax_year}</code> in the name or what's included to show the tax year on sale (it moves on every November 1, Pacific time), or <code>{next_tax_year}</code> for the one after.</p>
+      </div>
+      <label class="small" style="display:block;margin-bottom:10px">What it includes, one per line (shown on its card; up to 8)
+        <textarea id="perks" rows="4" style="width:100%;margin-top:6px" placeholder="Members-only Telegram group&#10;Weekly market notes&#10;Early access to streams"></textarea></label>
+      <div class="edlabel" id="lvAboutL">About it (shown when someone picks it on your page)</div>
+      <div id="lvAboutEd" style="margin-bottom:12px"></div>
+      <label class="check hidden" id="lvSameBox" style="margin:0 0 12px"><input type="checkbox" id="lvSame"> <span id="lvSameText"></span></label>
+      <button id="lvNameGo">Save</button>
+      <span class="small muted hidden" id="lvNameMsg" style="margin-left:8px"></span>
+    </section>
+    <section class="panel" id="fixedPanel">
+      <h2 id="fixedTitle">Set when it was created</h2>
+      <p class="muted small" id="fixedLead">These can never be changed, not even by you. That's what lets members trust the terms. Prices, the commitment plan, sales and the holder discount can change any time in Prices &amp; sales.</p>
+      <dl class="fixed" id="fixedList"></dl>
+      <p class="muted small" style="margin-bottom:0" id="fixedHow">Want different ones? Add a new level with the settings you want, sell it, and stop selling this one. Current members keep what they bought.</p>
+    </section>
+    <div id="launchSlot"></div>
+    </div>
+
+    <div class="pane hidden" data-pane="members">
+    <section class="panel">
+      <h2>Members</h2>
+      <div class="tablewrap"><table id="members" class="stack"></table></div>
+    </section>
+    <section class="panel">
+      <h2>Activity</h2>
+      <div class="tablewrap"><table id="activity" class="stack"></table></div>
+    </section>
+    <section class="panel">
+      <h2>Give a membership</h2>
+      <p class="muted small" id="gLead">For giveaways, staff, or someone who paid you another way. A free trial costs you only its deposit. A full month is paid from your wallet and comes straight back to your vault, less the KasPass fee, so you need the full price in your wallet to start.</p>
+      <div class="grid">
+        <label style="grid-column: 1 / -1">Who gets it? Paste their Kaspa address<input id="gTo" class="mono" placeholder="kaspatest:… address, or a name like alice.kas or alice.k" autocomplete="off"></label>
+        <label>Type<select id="gKind"></select></label>
+      </div>
+      <div class="row" style="margin-top:12px"><button id="gGo">Give it</button></div>
+      <div id="gStatus" class="small hidden" style="margin-top:12px"></div>
+      <div class="err hidden" id="gErr"></div>
+    </section>
+    </div>
+
+    <div class="pane hidden" data-pane="prices">
+    <p class="muted small panehint" id="pricesHint">Price and sales are set for each plan: pick the plan at the top.</p>
+    <section class="panel hidden" id="v5PriceBox">
+      <h2>Price</h2>
+      <p class="muted small">Buyers pay this in KAS at today's rate. A new price applies to new members straight away, and current members pay it at their next renewal.</p>
+      <div class="grid">
+        <label>Currency<select id="vpCur"><option>CAD</option><option>USD</option><option>EUR</option><option value="KAS">KAS</option></select></label>
+        <label>Price each period<input id="vpAmount" type="number" min="0.5" step="any"></label>
+        <label class="hidden" id="vpLifeBox">Lifetime price<input id="vpLife" type="number" min="0.5" step="any"></label>
+        <label class="hidden" id="vpTermBox">Commitment price<input id="vpTerm" type="number" min="0.5" step="any"></label>
+        <label>Founding price (optional)<input id="vpFound" type="number" min="0" step="any" placeholder="none"></label>
+        <label>Founding price ends (end of day)<input id="vpFoundUntil" type="date"></label>
+      </div>
+      <p class="small" id="vpPreview"></p>
+      <button id="vpGo">Save price</button>
+      <div class="muted small" id="vpMsg"></div>
+      <div class="err hidden" id="vpErr"></div>
+      <details class="adv" id="vcAdv"><summary>Advanced: the most KAS a member can be charged</summary>
+      <p class="muted small">Members never pay more KAS than this ceiling, even if KAS falls a lot. It starts at 3 times the launch day's price. If KAS falls far, raise it; if KAS rises far, you can lower it. Each member keeps the ceiling they joined with. Changing it takes one approval in Kaspire.</p>
+      <p class="small" id="vcNow"></p>
+      <div class="row"><label style="flex:1">New ceiling in KAS<input id="vcKas" type="number" min="1" step="any"></label> <button id="vcGo" class="ghost">Change ceiling</button></div>
+      <div class="small hidden" id="vcStatus" style="margin-top:10px"></div>
+      <div class="err hidden" id="vcErr"></div>
+      </details>
+    </section>
+    <section class="panel" id="salePanel">
+      <h2>Run a sale</h2>
+      <div id="saleOn" class="hidden">
+        <div class="salebox" id="saleNow"></div>
+        <p class="small hidden" id="saleEnded" style="color:#f2c86b"></p>
+        <button id="sEnd">End sale · back to regular prices</button>
+      </div>
+      <div id="saleForm">
+        <p class="muted small">A percent off for new members joining (monthly, commitment and lifetime). Your site shows the regular price crossed out with the discount. Renewals stay at the regular price, and nothing needs approving in Kaspire.</p>
+        <div class="grid">
+          <label id="sPctL">Percent off<input id="sPct" type="number" min="1" max="90" step="1" value="20"></label>
+          <label>Sale name (optional)<input id="sLabel" maxlength="40" placeholder="Launch sale"></label>
+          <label>Ends (optional: the sale stops by itself then)<input id="sEnds" type="datetime-local"></label>
+        </div>
+        <p class="small" id="sPreview"></p>
+        <button id="sGo">Start sale</button>
+      </div>
+      <div id="sStatus" class="small hidden" style="margin-top:12px"></div>
+      <div class="err hidden" id="sErr"></div>
+    </section>
+    </div>
+
+    <div class="pane hidden" data-pane="promos">
+    <p class="muted small panehint">Skip this tab unless your community holds an NFT or token you'd like to reward.</p>
+    <section class="panel hidden" id="promoPanel">
+      <h2>Holder promotion</h2>
+      <p class="muted small">A free month on one plan for people who hold an NFT or token, for example "NACHO holders: your first month is free". The holder presses "Claim" and gets it straight away. Your fees wallet pays for it: the price goes into your own vault (so it comes back to you), plus a 1 KAS deposit and a tiny network fee.</p>
+      <div class="salebox hidden" id="prNow"></div>
+      <div class="grid">
+        <label>Plan<select id="prLevel"></select></label>
+        <label style="grid-column: 1 / -1">Line on the plan's card<input id="prLabel" maxlength="80" placeholder="NACHO holders: your first month is free"></label>
+      </div>
+      <div class="small" style="margin:10px 0 6px"><b>Who qualifies</b>: holders of <select id="prMatch"><option value="all">all of these</option><option value="any">any one of these</option></select></div>
+      <div id="prNeeds"></div>
+      <button class="ghost" id="prAddNeed" style="margin-top:6px">Add something to hold</button>
+      <div class="grid" style="margin-top:12px">
+        <label>Starts<input id="prStart" type="datetime-local"></label>
+        <label>Ends<input id="prEnd" type="datetime-local"></label>
+        <label>Most free months to give<input id="prMax" type="number" min="0" step="1" value="100" placeholder="No limit"></label>
+      </div>
+      <label class="check hidden" id="prNewBox" style="margin-top:10px"><input type="checkbox" id="prNew"> Start a new campaign (NFTs and wallets that claimed before can claim again)</label>
+      <p class="small" id="prCost"></p>
+      <div class="row"><button id="prGo">Start promotion</button><button id="prEndGo" class="ghost hidden">End it now</button></div>
+      <div class="small hidden" id="prStatus" style="margin-top:10px"></div>
+      <div class="err hidden" id="prErr"></div>
+      <div class="small" id="prKeeper" style="margin-top:14px"></div>
+      <div class="tablewrap"><table id="prClaims"></table></div>
+    </section>
+    <section class="panel hidden" id="v4Panel">
+      <h2>Fees wallet and holder discount</h2>
+      <div class="small" id="keeperInfo"></div>
+      <div id="discountBox" style="margin-top:14px">
+        <div class="grid">
+          <label>Holder discount (%, 0 = off)<input id="dPct" type="number" min="0" step="1"></label>
+        </div>
+        <p class="muted small" id="dNote"></p>
+        <button id="dGo">Save discount</button>
+        <div class="small hidden" id="dStatus" style="margin-top:10px"></div>
+        <div class="err hidden" id="dErr"></div>
+      </div>
+    </section>
+    </div>
+
+    <div class="pane hidden" data-pane="groups">
+    <section class="panel">
+      <h2>Connect your Telegram group <span class="pill" id="tgPill"></span></h2>
+      <div class="small" id="tgStatus">Loading…</div>
+      <div class="tablewrap"><table id="tgLinks"></table></div>
+    </section>
+    <section class="panel">
+      <h2>Connect your Discord server <span class="pill" id="dcPill"></span></h2>
+      <div class="small" id="dcStatus">Loading…</div>
+      <div class="tablewrap"><table id="dcLinks"></table></div>
+    </section>
+    <section class="panel">
+      <h2>Holder club</h2>
+      <div class="small" id="clubStatus">Loading…</div>
+      <div class="tablewrap"><table id="clubBands"></table></div>
+      <div class="tablewrap"><table id="clubTiersT"></table></div>
+      <details class="adv" id="clubAdv"><summary>Advanced: upload holder club rules</summary>
+      <div style="margin-top:14px" class="small"><b>Upload rules</b>: the rules file (JSON), and the ranks list if the rules use ranks (JSON: <span class="mono">{"tokenId": rank}</span>, or a list of <span class="mono">{"id", "rank"}</span> rows).</div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:8px">
+        <label class="small">Rules <input type="file" id="clubRules" accept=".json,application/json"></label>
+        <label class="small">Ranks (optional) <input type="file" id="clubRanks" accept=".json,application/json"></label>
+      </div>
+      <button id="clubUpload" style="margin-top:10px">Check and apply</button>
+      <div class="small" id="clubUploadMsg" style="margin-top:8px"></div>
+      <div style="margin-top:16px" class="small"><b>Check a wallet</b>: what it holds and which levels it qualifies for.</div>
+      <div style="display:flex;gap:8px;margin-top:6px"><input id="clubCheckAddr" placeholder="kaspa:…" style="flex:1"><button id="clubCheckBtn" class="ghost">Check</button></div>
+      <div class="small" id="clubCheckOut" style="margin-top:8px"></div>
+      </details>
+    </section>
+    </div>
+
+    <div class="pane hidden" data-pane="page">
+    <section class="panel">
+      <h2>How members see you</h2>
+      <div class="grid" style="margin-bottom:10px">
+        <label>Your name (for example Bitcoin the Turtle)<input id="cName" maxlength="40" placeholder="The name members know you by"></label>
+        <label>Club name (optional, for example Executive Club)<input id="clubName" maxlength="60" placeholder="Shown as your page's title"></label>
+      </div>
+      <details class="adv"><summary>Wording (optional)</summary>
+      <div class="grid" style="margin-top:10px">
+        <label>What members hold, in a word or two (for example membership, pass, subscription)<input id="pWord" maxlength="24" placeholder="membership"></label>
+        <label>What you call your plans (for example plan, tier, level)<input id="lvWord" maxlength="24" placeholder="plan"></label>
+      </div>
+      <p class="muted small" style="margin-top:0">Most creators leave these as they are. The first word replaces "membership" wherever your page talks about what a member holds; the second replaces "plan".</p>
+      </details>
+      <p class="muted small">Your name is shown with your wallet address (and any .kas or .k names) underneath, so members can always check who's really behind it.</p>
+      <span class="small muted hidden" id="tNameMsg"></span>
+    </section>
+    <section class="panel">
+      <h2>Your page</h2>
+      <p class="muted small" style="margin-top:0">What visitors see at the top of your membership page, above your tiers. <a href="/" target="_blank" rel="noopener">Open your page</a></p>
+      <div class="grid" style="margin-bottom:12px">
+        <label style="grid-column: 1 / -1">Tagline (one line under your name)<input id="pgTagline" maxlength="140" placeholder="Cold conviction, no hype."></label>
+      </div>
+      <div class="edlabel" id="pgIntroL">Intro</div>
+      <div id="pgIntroEd"></div>
+      <h3 class="h3">Links</h3>
+      <div class="grid">
+        <label>Website<input id="pgL_website" maxlength="200" placeholder="https://yoursite.com" autocomplete="off" inputmode="url"></label>
+        <label>X<input id="pgL_x" maxlength="200" placeholder="https://x.com/you" autocomplete="off" inputmode="url"></label>
+        <label>TikTok<input id="pgL_tiktok" maxlength="200" placeholder="https://tiktok.com/@you" autocomplete="off" inputmode="url"></label>
+        <label>YouTube<input id="pgL_youtube" maxlength="200" placeholder="https://youtube.com/@you" autocomplete="off" inputmode="url"></label>
+        <label>Instagram<input id="pgL_instagram" maxlength="200" placeholder="https://instagram.com/you" autocomplete="off" inputmode="url"></label>
+        <label>Telegram<input id="pgL_telegram" maxlength="200" placeholder="https://t.me/yourchannel" autocomplete="off" inputmode="url"></label>
+        <label>Discord<input id="pgL_discord" maxlength="200" placeholder="https://discord.gg/invite" autocomplete="off" inputmode="url"></label>
+      </div>
+      <h3 class="h3">Plans on your page</h3>
+      <div class="grid">
+        <label>Show them as<select id="pgView"><option value="cards">Cards, side by side</option><option value="compare">A comparison table</option></select></label>
+          <label>How visitors see prices<select id="pgPriceDisplay"><option value="plan">In my currency</option><option value="viewer">In each visitor's currency (approximate)</option></select></label>
+        <label class="check" style="align-self:end;padding-bottom:12px"><input type="checkbox" id="pgCount"> Show how many members have joined</label>
+        <label class="check" style="align-self:end;padding-bottom:12px"><input type="checkbox" id="pgClub"> Show the NFT holder club on this page</label>
+      </div>
+      <div class="row" style="margin-top:14px"><button id="pgGo">Save page</button><span class="small muted hidden" id="pgMsg"></span></div>
+      <div class="err hidden" id="pgErr"></div>
+    </section>
+    </div>
+
+    <div class="pane hidden" data-pane="payouts">
+    <section class="panel">
+      <h2 id="payTitle">Payouts</h2>
+      <div id="recSetup" class="hidden">
+        <p class="small">Members' payments collect in your payout vault. Only this wallet can take them out. You also need a <b>backup wallet</b>: a second Kaspa wallet of yours, used only if you ever lose this one.</p>
+        <ol class="small">
+          <li>In Kaspire, create a second wallet.</li>
+          <li>Write down its recovery words and keep them somewhere separate from this wallet's.</li>
+          <li>Copy its address and paste it here.</li>
+        </ol>
+        <label style="display:block;margin:10px 0">Backup wallet address<input id="recRecovery" class="mono" placeholder="kaspa:…" autocomplete="off"></label>
+        <button id="recGo">Turn on payouts</button> <span class="muted small">Costs 1 KAS once, plus a tiny network fee. Kaspire will ask you to approve.</span>
+      </div>
+      <div id="recInfo" class="hidden">
+        <div><div class="muted small">Ready to withdraw</div><div id="vaultBal" style="font:700 26px/1.2 var(--font-head, Montserrat, sans-serif);margin:2px 0">…</div><div class="muted small" id="vaultCount"></div></div>
+        <p style="margin-top:12px"><button id="vaultGo">Withdraw to your wallet</button></p>
+        <p class="muted small" style="margin-top:4px">Everything in the vault comes to this wallet. Withdraw as often as you like; each time costs a tiny network fee.</p>
+        <details class="adv"><summary>Show addresses</summary>
+        <div class="grid" style="margin-top:10px">
+          <div><div class="muted small">Owner (this wallet)</div><div class="mono small" id="recOwner"></div></div>
+          <div><div class="muted small">Backup wallet</div><div class="mono small" id="recRec"></div></div>
+          <div><div class="muted small">Payout vault</div><div class="mono small" id="vaultAddr"></div></div>
+        </div>
+        </details>
+        <div class="row" style="margin-top:16px"><select id="payYear"></select> <button id="payCsv" class="ghost">Download payments (CSV)</button></div><p class="muted small" style="margin-top:6px">Every member payment, for your taxes: date, plan, KAS paid and the price quoted. No member addresses.</p>
+        <div class="err hidden" id="payErr"></div>
+        <p class="muted small">To move ownership to a new wallet, sign in here with your backup wallet.</p>
+        <div class="err hidden" id="keyAlert"></div>
+        <details class="adv" id="keyAdv"><summary>Advanced: server key</summary>
+        <div id="keyBox" class="hidden" style="margin-top:12px">
+          <p class="muted small">This server signs today's price for every sale and auto-renewal. If you ever think its key was exposed, replace it: new sales use a new key at once, then you move your plans and existing memberships over with a few approvals in Kaspire. Members don't need to do anything, and their memberships keep working throughout.</p>
+          <p class="small" id="keyState"></p>
+          <button id="keyNew">Replace server key</button> <button id="keyMove" class="hidden">Move to the new key</button>
+          <div class="muted small" id="keyStatus"></div>
+          <div class="err hidden" id="keyErr"></div>
+        </div>
+        </details>
+      </div>
+      <div class="muted small" id="recStatus"></div>
+      <div class="err hidden" id="recErr"></div>
+    </section>
+    </div>
+    <div class="pane hidden" data-pane="settings">
+    <section class="panel hidden" id="visPanel">
+      <h2>Who can see your page</h2>
+      <label class="check"><input type="radio" name="vis" value="public" id="visPublic"> Everyone</label>
+      <label class="check" style="margin-top:8px"><input type="radio" name="vis" value="private" id="visPrivate"> Only people with my private link (for a page that isn't ready, or a demo made for one person). This hides the page itself; your plans and prices can still be looked up.</label>
+      <div class="hidden" id="visLinkBox" style="margin-top:10px">
+        <div class="small">Private link: <span class="mono" id="visLink"></span> <button class="ghost" id="visCopy" style="padding:4px 10px;font-size:12px">Copy</button> <button class="ghost" id="visNew" style="padding:4px 10px;font-size:12px">Make a new link</button></div>
+        <p class="muted small">Anyone without the link sees "This page isn't public". Search engines are asked not to list it. Making a new link stops the old one working for anyone who hasn't opened it yet.</p>
+      </div>
+      <div class="small" id="visSaved" role="status"></div>
+      <div class="err hidden" id="visErr"></div>
+    </section>
+    <section class="panel hidden" id="alertsPanel">
+      <h2>Sale alerts on Telegram</h2>
+      <p class="small">A Telegram message on your phone each time someone joins: from your page, a QR payment, a gift or a free month you're giving away.</p>
+      <div id="alStatus" class="small"></div>
+      <div class="row" style="margin-top:8px"><button id="alLink">Connect my Telegram</button><button class="ghost" id="alTest">Send a test alert</button></div>
+      <label class="check" style="margin-top:12px"><input type="checkbox" id="alNew"> New members (purchases, QR payments, gifts, free trials, free months)</label>
+      <label class="check" style="margin-top:8px"><input type="checkbox" id="alRenew"> Upgrades and renewals (auto-renewals too)</label>
+      <div class="small" id="alSaved" role="status" style="margin-top:6px"></div>
+      <div class="err hidden" id="alErr"></div>
+    </section>
+    <section class="panel" id="brandPanel">
+      <h2>Look and brand</h2>
+      <p class="small">Make your membership page look like your own website. Members still see a slim "Memberships by KasPass" line at the top and bottom. Changes show on your page straight away; no wallet approval needed.</p>
+      <div class="brandgrid">
+        <div class="brandform">
+          <div class="bsec">
+            <div class="blab">Match my website</div>
+            <div class="row" style="flex-wrap:nowrap"><input id="bScanUrl" placeholder="https://your-website.com" autocomplete="off"><button id="bScan" class="ghost">Match my website</button></div>
+            <div class="small" id="bScanNote">Reads your website's colors, fonts and logo and fills them in below. Nothing changes until you press Save.</div>
+            <div class="row hidden" id="bLogoFound" style="margin-top:8px"><span class="small">Logo found on your website: <b id="bLogoFoundName"></b></span><button id="bLogoUse" class="ghost">Use this logo</button></div>
+          </div>
+          <div class="bsec">
+            <label class="check"><input type="checkbox" id="bColorsOn"> Use my own colors</label>
+            <div id="bColors" class="hidden">
+              <div class="small" style="margin:8px 0 4px">Light</div>
+              <div class="bcolors" data-pal="light">
+                <label>Background<span><input type="color" data-k="bg"><input class="hex" data-k="bg" maxlength="7"></span></label>
+                <label>Text<span><input type="color" data-k="text"><input class="hex" data-k="text" maxlength="7"></span></label>
+                <label>Buttons and links<span><input type="color" data-k="accent"><input class="hex" data-k="accent" maxlength="7"></span></label>
+                <label>Cards<span><input type="color" data-k="card"><input class="hex" data-k="card" maxlength="7"></span></label>
+              </div>
+              <label class="check" style="margin-top:10px"><input type="checkbox" id="bDarkOn"> A dark version too (visitors get the one matching their device)</label>
+              <label id="bStartBox" class="hidden" style="display:flex;flex-direction:column;gap:4px;margin:8px 0;max-width:340px;font-size:13px;color:var(--muted)">First-time visitors see<select id="bStart"><option value="light">Light (they can switch with the sun/moon button)</option><option value="dark">Dark (they can switch)</option><option value="device">Whatever their device is set to</option></select></label>
+              <div class="bcolors hidden" data-pal="dark" id="bDark">
+                <label>Background<span><input type="color" data-k="bg"><input class="hex" data-k="bg" maxlength="7"></span></label>
+                <label>Text<span><input type="color" data-k="text"><input class="hex" data-k="text" maxlength="7"></span></label>
+                <label>Buttons and links<span><input type="color" data-k="accent"><input class="hex" data-k="accent" maxlength="7"></span></label>
+                <label>Cards<span><input type="color" data-k="card"><input class="hex" data-k="card" maxlength="7"></span></label>
+              </div>
+              <div class="small" id="bContrast" style="margin-top:8px"></div>
+            </div>
+          </div>
+          <div class="bsec grid">
+            <label>Headings font<input id="bHead" list="bFonts" placeholder="KasPass default (Montserrat)" maxlength="40"></label>
+            <label>Text font<input id="bBody" list="bFonts" placeholder="KasPass default (Inter)" maxlength="40"></label>
+            <label>Corners<select id="bCorners"><option value="">KasPass default</option><option value="round">Round buttons, soft cards</option><option value="soft">Soft</option><option value="square">Square</option></select></label>
+          </div>
+          <datalist id="bFonts"><option>Inter</option><option>Space Grotesk</option><option>Montserrat</option><option>Poppins</option><option>DM Sans</option><option>Manrope</option><option>Outfit</option><option>Sora</option><option>Plus Jakarta Sans</option><option>Roboto</option><option>Open Sans</option><option>Lato</option><option>Nunito</option><option>Raleway</option><option>Work Sans</option><option>Rubik</option><option>Playfair Display</option><option>Merriweather</option><option>Lora</option><option>Archivo</option><option>Bebas Neue</option><option>Oswald</option><option>JetBrains Mono</option><option>Space Mono</option></datalist>
+          <div class="small" style="margin-top:-6px">Any font from fonts.google.com. KasPass downloads it once and serves it from your page, so visitors never contact Google.</div>
+          <div class="bsec">
+            <div class="blab">Pictures</div>
+            <div class="bpics">
+              <div class="bpic" data-kind="logo"><div class="small">Logo (also the browser tab icon)</div><div class="bprev"><img alt="" class="hidden"><span class="small">None</span></div><div class="row"><label class="ghostbtn">Upload<input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" hidden></label><button class="ghost brm hidden" style="padding:7px 12px;font-size:13px">Remove</button></div><div class="small muted">Up to 300 KB</div></div>
+              <div class="bpic" data-kind="photo"><div class="small">Profile photo</div><div class="bprev"><img alt="" class="hidden"><span class="small">None</span></div><div class="row"><label class="ghostbtn">Upload<input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" hidden></label><button class="ghost brm hidden" style="padding:7px 12px;font-size:13px">Remove</button></div><div class="small muted">Square, up to 400 KB</div></div>
+              <div class="bpic" data-kind="banner"><div class="small">Banner</div><div class="bprev"><img alt="" class="hidden"><span class="small">None</span></div><div class="row"><label class="ghostbtn">Upload<input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" hidden></label><button class="ghost brm hidden" style="padding:7px 12px;font-size:13px">Remove</button></div><div class="small muted">Wide (4 : 1, e.g. 1600 × 400), up to 1.5 MB</div></div>
+            </div>
+            <div class="small">PNG, JPEG, WebP or a plain SVG. Big photos are shrunk for you before they upload.</div>
+          </div>
+          <label class="bsec" style="display:flex;flex-direction:column;gap:6px">"Back to" link (your website)<input id="bBack" placeholder="https://your-website.com" autocomplete="off"></label>
+          <div class="row">
+            <button id="bSave">Save look</button>
+            <button id="bReset" class="ghost">Back to the KasPass look</button>
+            <a href="/" target="_blank" rel="noopener" class="small">Open my page ↗</a>
+          </div>
+          <div class="small hidden" id="bStatus" style="margin-top:8px"></div>
+          <div class="err hidden" id="bErr"></div>
+        </div>
+        <aside class="bpreview" aria-label="Preview">
+          <div class="small" style="margin-bottom:6px">Preview</div>
+          <div class="bpv" id="bPv">
+            <div class="bpv-strip">Memberships by <b>KasPass</b></div>
+            <div class="bpv-head"><span class="bpv-name"><img id="bPvLogo" alt="" class="hidden"><span id="bPvName">Your page</span></span><span class="bpv-back" id="bPvBack"></span></div>
+            <div class="bpv-body">
+              <div class="bpv-h1" id="bPvTitle">Your page</div>
+              <div class="bpv-card"><div class="bpv-cn">A plan</div><div class="bpv-price">CA$100 <span>a year</span></div><span class="bpv-btn">Buy for CA$100</span></div>
+            </div>
+          </div>
+          <div class="small" id="bPvNote" style="margin-top:6px"></div>
+        </aside>
+      </div>
+    </section>
+    <section class="panel">
+      <h2>Display</h2>
+      <label class="check small"><input type="checkbox" id="statExact"> Show exact KAS amounts (with decimals) in the Overview</label>
+    </section>
+    <section class="panel">
+      <details class="adv"><summary>Technical details</summary>
+      <div id="tierInfo" class="small"></div>
+      </details>
+    </section>
+    </div>
+  </div>
+
+  <div id="launchHome">
+  <section class="panel hidden" id="launch">
+    <h2 id="launchTitle">Launch a new membership</h2>
+    <p class="muted small" id="lIntro">Creating a <span class="lw1">plan</span> costs 1 KAS, which stays locked in it, plus a tiny network fee. Payments go to your payout vault. Settings marked <span class="perm">Permanent</span> can never be changed, so check them before you create it.</p>
+    <p class="muted small" id="lFeeNote">KasPass takes 2% of each payment, from your share (none on payments under 25 KAS).</p>
+    <div class="lneed hidden" id="lNeedRecord"><p class="small"><b>Turn on payouts first.</b> New <span class="lwN">plans</span> pay into your payout vault, so that comes first.</p><button id="lNeedGo">Turn on payouts first</button></div>
+    <div class="lbody" id="lBody">
+    <div class="grid hidden" id="lCopyBox">
+      <label>Start from one of your plans (optional)<select id="lCopy"><option value="">Start from scratch</option></select></label>
+      <p class="small muted" style="align-self:end;margin:0 0 12px">Fills in everything from that <span class="lw1">plan</span>: name, what it includes, price and settings. Change what you need, like the name or the free trial, then create it.</p>
+    </div>
+    <div class="grid" id="lNameBox">
+      <label>Name (for example Silver, or VIP)<input id="lName" maxlength="40" placeholder="Name it"></label>
+    </div>
+    <label class="small" id="lPerksBox" style="display:block;margin:10px 0 14px">What it includes, one per line (optional)
+      <textarea id="lPerks" rows="3" style="width:100%;margin-top:6px" placeholder="1-on-1 mentoring&#10;Portfolio reviews"></textarea></label>
+    <div id="lAboutBox" style="margin:0 0 14px"><div class="edlabel" id="lAboutL">About it (optional)</div><div id="lAboutEd"></div></div>
+    <div class="grid hidden" id="lV5Box">
+      <label>Currency<select id="lCur"><option>CAD</option><option>USD</option><option>EUR</option><option value="KAS">KAS (a fixed KAS price)</option></select></label>
+      <label>Price each period<input id="lAmount" type="number" min="0.5" step="any" value="100"></label>
+      <details class="adv" style="grid-column:1/-1" id="lMorePrices"><summary>More ways to pay (optional): lifetime, commitment, founding price</summary>
+      <div class="grid" style="margin-top:10px">
+      <label>Lifetime price (optional)<input id="lV5Life" type="number" min="0" step="any" placeholder="not offered"></label>
+      <label>Commitment price (optional)<input id="lV5Term" type="number" min="0" step="any" placeholder="not offered"></label>
+      <label>Periods the commitment covers<input id="lV5TermN" type="number" min="2" max="120" step="1" value="12"></label>
+      <label>Founding price (optional)<input id="lFound" type="number" min="0" step="any" placeholder="none"></label>
+      <label>Founding price ends (end of day)<input id="lFoundUntil" type="date"></label>
+      </div>
+      <p class="muted small">These can all be changed later in Prices &amp; sales. A founding price is a lower first payment for people who join before a date.</p>
+      </details>
+    </div>
+    <div class="grid">
+      <label>Members pay every <span class="perm">Permanent</span><span class="dur"><input id="lPeriod" type="number" min="1" step="any" value="10"><select id="lPeriodU" aria-label="Members pay every (unit)"><option value="1">minutes</option><option value="60">hours</option><option value="1440">days</option><option value="10080">weeks</option><option value="43200" title="30 days">months</option></select></span></label>
+      <label>Free trial length <span class="perm">Permanent</span><span class="dur"><input id="lTrial" type="number" min="0" step="any" value="5"><select id="lTrialU" aria-label="Free trial length (unit)"><option value="0">no free trial</option><option value="1">minutes</option><option value="60">hours</option><option value="1440">days</option><option value="10080">weeks</option><option value="43200" title="30 days">months</option></select></span></label>
+      <label class="check" style="grid-column:1/-1;align-items:flex-start" id="lSelfTrialBox"><input type="checkbox" id="lSelfTrial" style="margin-top:3px"><span>Members can start the free trial themselves, with a "Start my free trial" button on your page <span class="perm">Permanent</span><span class="muted small" style="display:block;font-weight:400;margin-top:4px">They set aside their first month in their own membership. It's only taken if they stay after the trial, and "Cancel my trial" gives it all back. One free trial per wallet, and at most 20 new trials a day. Plans with this can't limit how many can join.</span></span></label>
+    </div>
+    <details class="adv" id="lAdv"><summary>Advanced settings (most creators leave these as they are)</summary>
+    <div class="grid" style="margin-top:10px">
+      <label>How early members can renew <span class="perm">Permanent</span><span class="dur"><input id="lAhead" type="number" min="0" step="any" value="20"><select id="lAheadU" aria-label="How early members can renew (unit)"><option value="1">minutes</option><option value="60">hours</option><option value="1440">days</option><option value="10080">weeks</option><option value="43200" title="30 days">months</option></select></span></label>
+      <label>Refundable deposit per member (KAS) <span class="perm">Permanent</span><input id="lBond" type="number" min="0.5" step="any" value="1"></label>
+      <label>Limit how many can join <span class="perm">Permanent</span><input id="lSupply" type="number" min="0" step="1" value="" placeholder="No limit"></label>
+      <label class="check" style="align-self:end;padding-bottom:12px"><input id="lResell" type="checkbox" checked><span>Members can sell or give away their membership <span class="perm">Permanent</span></span></label>
+      <label>You receive this each time one changes hands (KAS) <span class="perm">Permanent</span><input id="lRoyalty" type="number" min="0" step="any" value="1"></label>
+      <label id="lCeilBox">The most KAS a member can ever be charged (times today's price)<input id="lCeil" type="number" min="1.5" max="10" step="0.5" value="3"></label>
+      <p class="muted small" style="grid-column:1/-1" id="lV5Note">Members pay your price in KAS at today's rate. The ceiling is the most KAS a payment can ever be: if KAS falls a lot, members pay the ceiling instead. It starts at 3 times today's amount, and you can change it later in Prices &amp; sales.</p>
+    </div>
+    </details>
+    <div style="margin-top:16px"><button id="lGo">Launch membership</button>
+    <span class="small muted" id="lGoNote" style="margin-left:8px"></span></div>
+    </div>
+    <div id="lStatus" class="small hidden" style="margin-top:12px"></div>
+    <div class="err hidden" id="lErr"></div>
+  </section>
+  </div>
+
+  <footer><span id="netNote">Test network only. New software, not yet reviewed by an outside security firm.</span> <a href="https://github.com/kaspass/kaspass" target="_blank" rel="noopener">github.com/kaspass/kaspass</a></footer>
+</div>
+
+<script src="/assets/kaspire-mobile.js?v=2"></script>
+<script src="/assets/dashboard.js?v=65"></script>
+</body>
+</html>

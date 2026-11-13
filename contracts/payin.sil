@@ -1,0 +1,88 @@
+// =====================================================================
+// KasPass Pay-in: one order paid from any wallet (a QR code). NOT AUDITED.
+// =====================================================================
+// Each order gets its own pay-in address. A phone wallet (or an exchange)
+// just sends KAS to it. The coins can only go two ways:
+//
+//   * COMPLETE: into a purchase or renewal on the order's level that leaves
+//     a pass owned by the order's buyer. Whatever the purchase doesn't use
+//     goes back to the buyer in the same transaction.
+//   * REFUND: after `refund_after`, everything minus a small network fee
+//     goes back to the buyer.
+//
+// Nobody holds the money in between, KasPass included: either path is
+// enforced here, and the level's own contracts enforce the price.
+//
+// Where the change goes: the last outputs mirror the inputs. The coin at
+// input i gets its change at output (outputs - inputs + i), so two pay-in
+// coins in one transaction can never share one change output.
+//
+// Constants (fixed per order):
+//   buyer          blake2b of the buyer's public key (the pass owner)
+//   level_id       covenant id of the level (its sales lane and passes)
+//   member_template  template hash of that level's pass contract
+//   refund_spk     the buyer's own address (version and script)
+//   max_spend      the most this coin may put into the purchase: price,
+//                  bond, prepaid balance and network fee
+//   refund_after   when the refund path opens (ms, chain time)
+//   max_fee        the most a refund may leave as network fee
+// =====================================================================
+
+pragma silverscript ^0.1.0;
+
+contract PayIn(
+    byte[32] buyer,
+    byte[32] level_id,
+    byte[32] member_template,
+    byte[] refund_spk,
+    int max_spend,
+    temporal refund_after,
+    int max_fee
+) {
+    struct MemberState {
+        byte[32] owner;
+        temporal expiry;
+        int rate;
+        int life_price;
+        int credit;
+        int paid;
+        byte[32] voucher;
+    }
+
+    function change_index() : (int) {
+        return(tx.outputs.length - tx.inputs.length + this.activeInputIndex);
+    }
+
+    // COMPLETE: `cov_in` is the level's lane (a purchase) or the buyer's pass
+    // (a renewal); its `k`-th authorised output is the new pass, whose state
+    // is given here so it can be checked against the template.
+    entry complete(
+        int cov_in,
+        int k,
+        temporal expiry,
+        int rate,
+        int life_price,
+        int credit,
+        int paid,
+        byte[32] voucher,
+        byte[] member_prefix,
+        byte[] member_suffix
+    ) {
+        require(OpInputCovenantId(cov_in) == level_id);
+        int pass_out = OpAuthOutputIdx(cov_in, k);
+        validateOutputStateWithTemplate(pass_out, MemberState { owner: buyer, expiry: expiry, rate: rate, life_price: life_price, credit: credit, paid: paid, voucher: voucher }, member_prefix, member_suffix, member_template);
+
+        (int c) = change_index();
+        require(c != pass_out);
+        require(tx.outputs[c].scriptPubKey == refund_spk);
+        require(tx.outputs[c].value >= tx.inputs[this.activeInputIndex].value - max_spend);
+    }
+
+    // REFUND: after `refund_after`, back to the buyer.
+    entry refund() {
+        require(tx.time >= refund_after);
+        (int c) = change_index();
+        require(tx.outputs[c].scriptPubKey == refund_spk);
+        require(tx.outputs[c].value >= tx.inputs[this.activeInputIndex].value - max_fee);
+    }
+}

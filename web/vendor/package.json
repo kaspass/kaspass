@@ -1,0 +1,9 @@
+{
+  "name": "kaspass-web-vendor",
+  "private": true,
+  "description": "Builds web/walletconnect.js. See README.md.",
+  "dependencies": {
+    "@walletconnect/sign-client": "2.21.8",
+    "esbuild": "0.25.10"
+  }
+}

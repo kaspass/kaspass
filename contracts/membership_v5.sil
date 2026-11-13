@@ -1,0 +1,282 @@
+// =====================================================================
+// KasPass Membership v5: one UTXO per pass. NOT AUDITED.
+// =====================================================================
+// New in v5:
+//   * AUTORENEW needs the voucher key's signature, even with no discount.
+//     Only the holder of the voucher key (the KasPass server) can renew
+//     from the prepaid balance. It signs today's price in the plan's
+//     currency, but the contract allows anything up to the full on-chain
+//     rate once per period, so members trust the key's holder on this
+//     (see SECURITY.md). The payment still only goes to the vault.
+//   * creator_spk is the creator's payout vault (see vault.sil), so the
+//     owner of the payouts can change without touching any pass.
+//   * The voucher key is part of each pass's state, not fixed in the
+//     contract. REKEY (with the creator's owner record in the same
+//     transaction) points a pass at a new voucher key, so a leaked server
+//     key can be replaced without relaunching anything.
+//   * Discounts are in millionths of the price (ppm), capped by
+//     `max_discount` (999900 = 99.99%), and always rounded so the buyer pays
+//     at least the discounted price.
+//
+// From v4:
+//   * The pass can hold prepaid months on top of its bond (its value minus
+//     `bond`). AUTORENEW pays one period from that balance, and only close
+//     to the end of the current period, so nobody can drain it early.
+//   * The owner can WITHDRAW the prepaid balance at any time (cancel
+//     auto-renew). Anyone can DEPOSIT more.
+//   * Holder discounts: a renewal may be discounted by up to
+//     `max_discount_bps` when the tier's voucher key co-signs it. The key
+//     belongs to whoever the creator chose at launch (normally the KasPass
+//     server, which checks NFT holdings). It can never discount more than
+//     the cap, and every voucher signs one exact transaction.
+//
+// Constants (fixed per tier, part of the template hash):
+//   creator_spk       where payments go
+//   period            length of one paid period
+//   resellable        1 = owners may transfer (royalty applies), 0 = never
+//   royalty           creator's cut on each transfer, in sompi
+//   max_ahead         cap on how far ahead a pass may be paid manually
+//   fee_spk, fee_bps, fee_min   the KasPass protocol fee (see v3)
+//   bond              sompi a pass always keeps; the rest is prepaid balance
+//   auto_window       AUTORENEW is allowed only this close to the end
+//   record_id         covenant id of the creator's owner record (for REKEY)
+//   max_discount      largest discount a voucher may give, in millionths
+//
+// State (locked in when bought):
+//   owner, expiry, rate, life_price, credit, paid   (as in v3)
+//   voucher           blake2b of the voucher key this pass trusts
+// =====================================================================
+
+pragma silverscript ^0.1.0;
+
+contract Membership(
+    byte[] creator_spk,
+    temporal period,
+    int resellable,
+    int royalty,
+    temporal max_ahead,
+    byte[] fee_spk,
+    int fee_bps,
+    int fee_min,
+    int bond,
+    temporal auto_window,
+    byte[32] record_id,
+    int max_discount,
+    byte[32] init_owner,
+    temporal init_expiry,
+    int init_rate,
+    int init_life_price,
+    int init_credit,
+    int init_paid,
+    byte[32] init_voucher
+) {
+    temporal constant LIFETIME = temporal(4000000000000000);
+
+    byte[32] owner = init_owner;
+    temporal expiry = init_expiry;
+    int rate = init_rate;
+    int life_price = init_life_price;
+    int credit = init_credit;
+    int paid = init_paid;
+    byte[32] voucher = init_voucher;
+
+    function fee_of(int amount) : (int) {
+        int f = amount * fee_bps / 10000;
+        if (f < fee_min) {
+            f = 0;
+        }
+        return(f);
+    }
+
+    function pay(int at, int amount) {
+        if (amount > 0) {
+            (int f) = fee_of(amount);
+            require(tx.outputs[at].scriptPubKey == creator_spk);
+            require(tx.outputs[at].value >= amount - f);
+            if (f > 0) {
+                require(tx.outputs[at + 1].scriptPubKey == fee_spk);
+                require(tx.outputs[at + 1].value >= f);
+            }
+        }
+    }
+
+    // The price of one period after a holder discount. A discount needs the
+    // voucher key's signature on this exact transaction, and is capped.
+    function discounted(int amount, int discount, sig voucher_sig, pubkey voucher_pk, byte[32] voucher_hash) : (int) {
+        require(discount >= 0);
+        int due = amount;
+        if (discount > 0) {
+            require(discount <= max_discount);
+            require(blake2b(byte[](voucher_pk)) == voucher_hash);
+            require(checkSig(voucher_sig, voucher_pk));
+            // Split so large amounts can't overflow; the cut rounds down.
+            int cut = (amount / 1000000) * discount + ((amount % 1000000) * discount) / 1000000;
+            due = amount - cut;
+        }
+        return(due);
+    }
+
+    // RENEW: anyone can pay from their own wallet (gifts, trials converting).
+    #[covenant.singleton(mode = transition)]
+    function renew(State prev_state, temporal renew_time, int discount_bps, sig voucher_sig, pubkey voucher_pk) : (State) {
+        require(prev_state.expiry < LIFETIME);
+        require(tx.time >= renew_time);
+
+        temporal base = prev_state.expiry;
+        if (renew_time > base) {
+            base = renew_time;
+        }
+        require(base - renew_time <= max_ahead);
+
+        (int due) = discounted(prev_state.rate, discount_bps, voucher_sig, voucher_pk, prev_state.voucher);
+        int succ_idx = OpAuthOutputIdx(this.activeInputIndex, 0);
+        pay(succ_idx + 1, due);
+        require(tx.outputs[succ_idx].value == tx.inputs[this.activeInputIndex].value);
+
+        return(State {
+            owner: prev_state.owner,
+            expiry: base + period,
+            rate: prev_state.rate,
+            life_price: prev_state.life_price,
+            credit: prev_state.credit,
+            paid: prev_state.paid + due,
+            voucher: prev_state.voucher
+        });
+    }
+
+    // AUTORENEW: pays one period from the pass's own prepaid balance. Anyone
+    // may submit it (the KasPass server does, paying the network fee), but
+    // only within `auto_window` of the end, and the payment can only go to
+    // the creator. The pass value drops by exactly what was paid.
+    #[covenant.singleton(mode = transition)]
+    function autorenew(State prev_state, temporal renew_time, int discount_bps, sig voucher_sig, pubkey voucher_pk) : (State) {
+        require(prev_state.expiry < LIFETIME);
+        require(tx.time >= renew_time);
+        require(prev_state.expiry - renew_time <= auto_window);
+
+        temporal base = prev_state.expiry;
+        if (renew_time > base) {
+            base = renew_time;
+        }
+
+        require(blake2b(byte[](voucher_pk)) == prev_state.voucher);
+        require(checkSig(voucher_sig, voucher_pk));
+        (int due) = discounted(prev_state.rate, discount_bps, voucher_sig, voucher_pk, prev_state.voucher);
+        require(due > 0);
+        int succ_idx = OpAuthOutputIdx(this.activeInputIndex, 0);
+        pay(succ_idx + 1, due);
+        int left = tx.inputs[this.activeInputIndex].value - due;
+        require(left >= bond);
+        require(tx.outputs[succ_idx].value == left);
+
+        return(State {
+            owner: prev_state.owner,
+            expiry: base + period,
+            rate: prev_state.rate,
+            life_price: prev_state.life_price,
+            credit: prev_state.credit,
+            paid: prev_state.paid + due,
+            voucher: prev_state.voucher
+        });
+    }
+
+    // DEPOSIT: anyone adds prepaid balance. Nothing else changes.
+    #[covenant.singleton(mode = transition)]
+    function deposit(State prev_state) : (State) {
+        int succ_idx = OpAuthOutputIdx(this.activeInputIndex, 0);
+        require(tx.outputs[succ_idx].value > tx.inputs[this.activeInputIndex].value);
+        return(prev_state);
+    }
+
+    // WITHDRAW: the owner takes prepaid balance back (cancels auto-renew,
+    // fully or partly). The bond always stays, and access is unchanged.
+    #[covenant.singleton(mode = transition)]
+    function withdraw(State prev_state, sig owner_sig, pubkey owner_pk) : (State) {
+        require(blake2b(byte[](owner_pk)) == prev_state.owner);
+        require(checkSig(owner_sig, owner_pk));
+        int succ_idx = OpAuthOutputIdx(this.activeInputIndex, 0);
+        require(tx.outputs[succ_idx].value >= bond);
+        require(tx.outputs[succ_idx].value < tx.inputs[this.activeInputIndex].value);
+        return(prev_state);
+    }
+
+    // UPGRADE: switch to lifetime at the price locked into this pass,
+    // minus what has already been paid if this pass earns credit.
+    #[covenant.singleton(mode = transition)]
+    function upgrade(State prev_state) : (State) {
+        require(prev_state.life_price > 0);
+        require(prev_state.expiry < LIFETIME);
+
+        int cost = prev_state.life_price;
+        if (prev_state.credit == 1) {
+            cost = cost - prev_state.paid;
+        }
+        if (cost < 0) {
+            cost = 0;
+        }
+
+        int succ_idx = OpAuthOutputIdx(this.activeInputIndex, 0);
+        pay(succ_idx + 1, cost);
+        require(tx.outputs[succ_idx].value == tx.inputs[this.activeInputIndex].value);
+
+        return(State {
+            owner: prev_state.owner,
+            expiry: LIFETIME,
+            rate: prev_state.rate,
+            life_price: prev_state.life_price,
+            credit: prev_state.credit,
+            paid: prev_state.paid + cost,
+            voucher: prev_state.voucher
+        });
+    }
+
+    // TRANSFER: only on resellable tiers. Owner signs, creator gets a royalty.
+    // Any prepaid balance moves with the pass (the site asks sellers to
+    // withdraw it first).
+    #[covenant.singleton(mode = transition)]
+    function transfer(State prev_state, sig owner_sig, pubkey owner_pk, byte[32] new_owner) : (State) {
+        require(resellable == 1);
+        require(blake2b(byte[](owner_pk)) == prev_state.owner);
+        require(checkSig(owner_sig, owner_pk));
+
+        int succ_idx = OpAuthOutputIdx(this.activeInputIndex, 0);
+        pay(succ_idx + 1, royalty);
+        require(tx.outputs[succ_idx].value == tx.inputs[this.activeInputIndex].value);
+
+        return(State {
+            owner: new_owner,
+            expiry: prev_state.expiry,
+            rate: prev_state.rate,
+            life_price: prev_state.life_price,
+            credit: prev_state.credit,
+            paid: prev_state.paid,
+            voucher: prev_state.voucher
+        });
+    }
+
+    // REKEY: the creator's owner record (spent in the same transaction,
+    // which only its owner or recovery wallet can do) points this pass at a
+    // new voucher key. Nothing else changes.
+    #[covenant.singleton(mode = transition)]
+    function rekey(State prev_state, int record_in, byte[32] new_voucher) : (State) {
+        require(OpInputCovenantId(record_in) == record_id);
+        int succ_idx = OpAuthOutputIdx(this.activeInputIndex, 0);
+        require(tx.outputs[succ_idx].value == tx.inputs[this.activeInputIndex].value);
+        return(State {
+            owner: prev_state.owner,
+            expiry: prev_state.expiry,
+            rate: prev_state.rate,
+            life_price: prev_state.life_price,
+            credit: prev_state.credit,
+            paid: prev_state.paid,
+            voucher: new_voucher
+        });
+    }
+
+    // CLOSE: owner ends the pass and takes the bond and any balance back.
+    entry close(sig owner_sig, pubkey owner_pk) {
+        require(blake2b(byte[](owner_pk)) == owner);
+        require(checkSig(owner_sig, owner_pk));
+        require(OpAuthOutputCount(this.activeInputIndex) == 0);
+    }
+}

@@ -1,0 +1,45 @@
+// =====================================================================
+// KasPass Owner Record: who controls a creator's tiers and payouts.
+// NOT AUDITED.
+// =====================================================================
+// One per creator. Its covenant id is written into the creator's tiers
+// (Minter v5) and payout vault (vault.sil).
+//
+// The OWNER spends it (unchanged) to act for the creator: withdraw from
+// the vault, change prices, issue trials. The RECOVERY wallet can hand it
+// to a new owner and a new recovery wallet. The owner can't change the
+// recovery wallet, so a leaked owner seed can't lock the creator out.
+//
+// Either wallet proves itself by spending an ordinary coin of its own in
+// the same transaction: its signature (SIG_HASH_ALL) covers the whole
+// transaction, and any wallet, hardware ones included, can sign that.
+//
+// State:
+//   owner       blake2b of the owner wallet's scriptPubKey (version + script)
+//   recovery    blake2b of the recovery wallet's scriptPubKey
+// =====================================================================
+
+pragma silverscript ^0.1.0;
+
+contract OwnerRecord(byte[32] init_owner, byte[32] init_recovery) {
+    byte[32] owner = init_owner;
+    byte[32] recovery = init_recovery;
+
+    // USE: the owner acts for the creator; the record carries on unchanged.
+    entry use(int owner_in) {
+        require(blake2b(tx.inputs[owner_in].scriptPubKey) == owner);
+        require(OpAuthOutputCount(this.activeInputIndex) == 1);
+        int out = OpAuthOutputIdx(this.activeInputIndex, 0);
+        validateOutputState(out, State { owner: owner, recovery: recovery });
+        require(tx.outputs[out].value == tx.inputs[this.activeInputIndex].value);
+    }
+
+    // HANDOVER: the recovery wallet names a new owner and recovery wallet.
+    entry handover(int recovery_in, byte[32] new_owner, byte[32] new_recovery) {
+        require(blake2b(tx.inputs[recovery_in].scriptPubKey) == recovery);
+        require(OpAuthOutputCount(this.activeInputIndex) == 1);
+        int out = OpAuthOutputIdx(this.activeInputIndex, 0);
+        validateOutputState(out, State { owner: new_owner, recovery: new_recovery });
+        require(tx.outputs[out].value == tx.inputs[this.activeInputIndex].value);
+    }
+}

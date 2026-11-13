@@ -1,0 +1,13 @@
+# cargo audit: advisories that were checked and can't be reached from KasPass.
+[advisories]
+ignore = [
+  # tracing-subscriber 0.2.25 (log output can carry terminal escape codes). It only arrives
+  # through the SilverScript compiler's proof tooling (risc0, ark-relations 0.5), built without
+  # the `fmt` log writer the advisory is about, and KasPass never logs through `tracing`.
+  # Goes away when risc0 updates.
+  "RUSTSEC-2025-0055",
+  # faster-hex 0.9.0 (hex_decode_unchecked can read past a short input). The kaspa 2.1 crates
+  # only call the length-checked hex_decode, which refuses short input first. KasPass's own
+  # dependency is 0.10.1. Goes away when the kaspa crates update.
+  "RUSTSEC-2026-0306",
+]

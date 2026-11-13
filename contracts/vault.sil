@@ -1,0 +1,19 @@
+// =====================================================================
+// KasPass Payout Vault: where a creator's tiers pay. NOT AUDITED.
+// =====================================================================
+// A plain contract address (no state). Coins here can only be spent in a
+// transaction that also spends the creator's owner record, which only its
+// current owner (or the recovery wallet) can do. After a handover the same
+// vault, and every pass that pays it, answers to the new owner.
+//
+// Constants:
+//   record_id   covenant id of the creator's owner record
+// =====================================================================
+
+pragma silverscript ^0.1.0;
+
+contract Vault(byte[32] record_id) {
+    entry withdraw(int record_in) {
+        require(OpInputCovenantId(record_in) == record_id);
+    }
+}

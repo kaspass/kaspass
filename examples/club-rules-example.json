@@ -1,0 +1,16 @@
+{
+  "club": "Bitcoin the Turtle",
+  "collection": { "network": "mainnet", "tick": "BITCOIN" },
+  "count_listed": false,
+  "bands": [
+    { "name": "Legacy", "ranks": [1, 4],      "credits": 0 },
+    { "name": "Gold",   "ranks": [5, 21],     "credits": 25 },
+    { "name": "Silver", "ranks": [22, 210],   "credits": 10 },
+    { "name": "Bronze", "ranks": [211, 630],  "credits": 5 },
+    { "name": "Normal", "ranks": [631, 2100], "credits": 2 }
+  ],
+  "tiers": [
+    { "name": "Turtle Holder", "rule": { "min_tokens": 1 } },
+    { "name": "Whale", "rule": { "any_of": [ { "owns_band": "Legacy" }, { "min_credits": 200 } ] } }
+  ]
+}

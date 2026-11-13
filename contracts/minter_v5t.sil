@@ -1,0 +1,262 @@
+// =====================================================================
+// KasPass Minter v5 with self-serve trials: the only way into a tier. NOT AUDITED.
+// =====================================================================
+// Minter v5 plus one entry, SELF_TRIAL: a member starts the tier's free
+// trial themselves, approved by the voucher key (the server checks one trial
+// per wallet). The member funds the pass's deposit and, above it, a prepaid
+// balance for the first paid period; nothing goes to the creator until the
+// keeper's auto-renewal at the end of the trial, which the member can stop by
+// taking the balance back. Everything else is minter_v5.sil unchanged.
+//
+// New in v5:
+//   * Creator actions (trials, prices, forks, retiring) need the creator's
+//     owner record (see owner_record.sil) to be spent in the same
+//     transaction, which only its current owner can do. The owner can be
+//     replaced by the recovery wallet without relaunching the tier.
+//   * creator_spk is the creator's payout vault (see vault.sil).
+//   * The voucher key is part of the lane's state (SET_VOUCHER through the
+//     owner record) and is copied into every new pass. Discounts are in
+//     millionths (ppm), capped by `max_discount`.
+//
+// From v4:
+//   * A new pass may carry prepaid months (value above the bond), so a
+//     buyer can set up auto-renew in the same transaction.
+//   * BUY_TERM: a commitment plan. The buyer pays `term_price` once for
+//     `term_length` (usually discounted, never refunded). After
+//     the term, renewals use the normal monthly rate.
+//   * Holder discounts on any purchase, co-signed by the voucher key and
+//     capped by `max_discount_bps` (see Membership v4).
+//
+// Constants (fixed at launch):
+//   record_id         covenant id of the creator's owner record
+//   creator_spk, period, trial_period, bond,
+//   member_template, fee_spk, fee_bps, fee_min      (as in v3)
+//   max_discount      largest discount a voucher may give, in millionths
+//
+// State (each Minter UTXO is a sales lane):
+//   price, life_price, credit, remaining              (as in v3)
+//   term_price        price of one commitment term, 0 = not offered
+//   term_length       how long one term runs (e.g. 12 periods)
+//   voucher           blake2b of the voucher key this lane trusts
+// =====================================================================
+
+pragma silverscript ^0.1.0;
+
+contract Minter(
+    byte[32] record_id,
+    byte[] creator_spk,
+    temporal period,
+    temporal trial_period,
+    int bond,
+    byte[32] member_template,
+    byte[] fee_spk,
+    int fee_bps,
+    int fee_min,
+    int max_discount,
+    int init_price,
+    int init_life_price,
+    int init_credit,
+    int init_remaining,
+    int init_term_price,
+    temporal init_term_length,
+    byte[32] init_voucher
+) {
+    temporal constant LIFETIME = temporal(4000000000000000);
+
+    struct MemberState {
+        byte[32] owner;
+        temporal expiry;
+        int rate;
+        int life_price;
+        int credit;
+        int paid;
+        byte[32] voucher;
+    }
+
+    int price = init_price;
+    int life_price = init_life_price;
+    int credit = init_credit;
+    int remaining = init_remaining;
+    int term_price = init_term_price;
+    temporal term_length = init_term_length;
+    byte[32] voucher = init_voucher;
+
+    function next_remaining() : (int) {
+        require(remaining != 0);
+        int r = remaining;
+        if (remaining > 0) {
+            r = remaining - 1;
+        }
+        return(r);
+    }
+
+    function fee_of(int amount) : (int) {
+        int f = amount * fee_bps / 10000;
+        if (f < fee_min) {
+            f = 0;
+        }
+        return(f);
+    }
+
+    // The owner record is spent in this transaction (its own script checks
+    // that the current owner, or the recovery wallet, signed for it).
+    function creator_ok(int record_in) {
+        require(OpInputCovenantId(record_in) == record_id);
+    }
+
+    function discounted(int amount, int discount, sig voucher_sig, pubkey voucher_pk) : (int) {
+        require(discount >= 0);
+        int due = amount;
+        if (discount > 0) {
+            require(discount <= max_discount);
+            require(blake2b(byte[](voucher_pk)) == voucher);
+            require(checkSig(voucher_sig, voucher_pk));
+            int cut = (amount / 1000000) * discount + ((amount % 1000000) * discount) / 1000000;
+            due = amount - cut;
+        }
+        return(due);
+    }
+
+    // Shared shape of every sale: [lane][new pass](creator share)(fee).
+    // The pass holds at least the bond; anything above it is prepaid balance.
+    function issue(MemberState pass, int pay, byte[] member_prefix, byte[] member_suffix) {
+        require(OpAuthOutputCount(this.activeInputIndex) == 2);
+        int lane_out = OpAuthOutputIdx(this.activeInputIndex, 0);
+        int member_out = OpAuthOutputIdx(this.activeInputIndex, 1);
+
+        (int r) = next_remaining();
+        validateOutputState(lane_out, State { price: price, life_price: life_price, credit: credit, remaining: r, term_price: term_price, term_length: term_length , voucher: voucher });
+        require(tx.outputs[lane_out].value == tx.inputs[this.activeInputIndex].value);
+
+        validateOutputStateWithTemplate(member_out, pass, member_prefix, member_suffix, member_template);
+        require(tx.outputs[member_out].value >= bond);
+
+        if (pay > 0) {
+            (int f) = fee_of(pay);
+            require(tx.outputs[member_out + 1].scriptPubKey == creator_spk);
+            require(tx.outputs[member_out + 1].value >= pay - f);
+            if (f > 0) {
+                require(tx.outputs[member_out + 2].scriptPubKey == fee_spk);
+                require(tx.outputs[member_out + 2].value >= f);
+            }
+        }
+    }
+
+    // BUY a monthly pass at today's price (or a voucher's discount on it).
+    // The pass keeps today's full price as its renewal rate; a holder
+    // discount is checked again at each renewal.
+    entry buy(byte[32] buyer, temporal join_time, int discount_bps, sig voucher_sig, pubkey voucher_pk, byte[] member_prefix, byte[] member_suffix) {
+        require(tx.time >= join_time);
+        (int due) = discounted(price, discount_bps, voucher_sig, voucher_pk);
+        issue(
+            MemberState { owner: buyer, expiry: join_time + period, rate: price, life_price: life_price, credit: credit, paid: due, voucher: voucher },
+            due,
+            member_prefix,
+            member_suffix
+        );
+    }
+
+    // BUY LIFETIME outright at today's lifetime price (or discounted).
+    entry buy_lifetime(byte[32] buyer, int discount_bps, sig voucher_sig, pubkey voucher_pk, byte[] member_prefix, byte[] member_suffix) {
+        require(life_price > 0);
+        (int due) = discounted(life_price, discount_bps, voucher_sig, voucher_pk);
+        issue(
+            MemberState { owner: buyer, expiry: LIFETIME, rate: price, life_price: life_price, credit: credit, paid: due, voucher: voucher },
+            due,
+            member_prefix,
+            member_suffix
+        );
+    }
+
+    // BUY A TERM: a commitment plan, paid once and never refunded. The pass
+    // runs `term_length`, then renews at the normal monthly rate.
+    entry buy_term(byte[32] buyer, temporal join_time, int discount_bps, sig voucher_sig, pubkey voucher_pk, byte[] member_prefix, byte[] member_suffix) {
+        require(term_price > 0);
+        require(term_length > temporal(0));
+        require(tx.time >= join_time);
+        (int due) = discounted(term_price, discount_bps, voucher_sig, voucher_pk);
+        issue(
+            MemberState { owner: buyer, expiry: join_time + term_length, rate: price, life_price: life_price, credit: credit, paid: due, voucher: voucher },
+            due,
+            member_prefix,
+            member_suffix
+        );
+    }
+
+    // TRIAL: only the creator can issue free trial passes.
+    entry trial(int record_in, byte[32] member, temporal join_time, byte[] member_prefix, byte[] member_suffix) {
+        creator_ok(record_in);
+        require(trial_period > temporal(0));
+        require(tx.time >= join_time);
+        issue(
+            MemberState { owner: member, expiry: join_time + trial_period, rate: price, life_price: life_price, credit: credit, paid: 0, voucher: voucher },
+            0,
+            member_prefix,
+            member_suffix
+        );
+    }
+
+    // SET PRICES for new buyers on this lane. Existing passes keep theirs.
+    entry set_prices(int record_in, int new_price, int new_life_price, int new_credit, int new_term_price, temporal new_term_length) {
+        creator_ok(record_in);
+        require(new_price >= 0);
+        require(new_life_price >= 0);
+        require(new_credit == 0 || new_credit == 1);
+        require(new_term_price >= 0);
+        require(new_term_length >= temporal(0));
+        require(new_term_price == 0 || new_term_length > temporal(0));
+        require(OpAuthOutputCount(this.activeInputIndex) == 1);
+        int lane_out = OpAuthOutputIdx(this.activeInputIndex, 0);
+        validateOutputState(lane_out, State { price: new_price, life_price: new_life_price, credit: new_credit, remaining: remaining, term_price: new_term_price, term_length: new_term_length , voucher: voucher });
+        require(tx.outputs[lane_out].value == tx.inputs[this.activeInputIndex].value);
+    }
+
+    // SELF TRIAL: the member starts the free trial themselves. The voucher key
+    // co-signs (the server checks one trial per wallet and the wallet's age).
+    // Nothing is paid; the pass holds the deposit and any prepaid balance.
+    entry self_trial(byte[32] member, temporal join_time, sig voucher_sig, pubkey voucher_pk, byte[] member_prefix, byte[] member_suffix) {
+        require(trial_period > temporal(0));
+        require(tx.time >= join_time);
+        require(blake2b(byte[](voucher_pk)) == voucher);
+        require(checkSig(voucher_sig, voucher_pk));
+        issue(
+            MemberState { owner: member, expiry: join_time + trial_period, rate: price, life_price: life_price, credit: credit, paid: 0, voucher: voucher },
+            0,
+            member_prefix,
+            member_suffix
+        );
+    }
+
+    // FORK one lane into two for busy launches. A capped supply is split,
+    // never increased.
+    entry fork(int record_in, int left_remaining) {
+        creator_ok(record_in);
+        require(OpAuthOutputCount(this.activeInputIndex) == 2);
+        int right_remaining = -1;
+        if (remaining == -1) {
+            require(left_remaining == -1);
+        } else {
+            require(left_remaining >= 0);
+            require(left_remaining <= remaining);
+            right_remaining = remaining - left_remaining;
+        }
+        validateOutputState(OpAuthOutputIdx(this.activeInputIndex, 0), State { price: price, life_price: life_price, credit: credit, remaining: left_remaining, term_price: term_price, term_length: term_length , voucher: voucher });
+        validateOutputState(OpAuthOutputIdx(this.activeInputIndex, 1), State { price: price, life_price: life_price, credit: credit, remaining: right_remaining, term_price: term_price, term_length: term_length , voucher: voucher });
+    }
+
+    // SET VOUCHER: point this lane (and every pass sold from it from now on)
+    // at a new voucher key, through the owner record.
+    entry set_voucher(int record_in, byte[32] new_voucher) {
+        creator_ok(record_in);
+        require(OpAuthOutputCount(this.activeInputIndex) == 1);
+        int lane_out = OpAuthOutputIdx(this.activeInputIndex, 0);
+        validateOutputState(lane_out, State { price: price, life_price: life_price, credit: credit, remaining: remaining, term_price: term_price, term_length: term_length, voucher: new_voucher });
+        require(tx.outputs[lane_out].value == tx.inputs[this.activeInputIndex].value);
+    }
+
+    // RETIRE a lane. Existing passes are unaffected.
+    entry retire(int record_in) {
+        creator_ok(record_in);
+        require(OpAuthOutputCount(this.activeInputIndex) == 0);
+    }
+}

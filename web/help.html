@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Help · KasPass</title>
+<script src="/assets/theme-boot.js"></script>
+<link rel="stylesheet" href="/assets/fonts.css">
+<style>
+  :root {
+    --bg: #050808;
+    --panel: #0d1414;
+    --line: #1c2a29;
+    --text: #e8f1f0;
+    --muted: #8aa09d;
+    --teal: #49d9c8;
+    --teal-dim: #1f5f58;
+    --font-head: Montserrat, sans-serif;
+    --font-body: Inter, system-ui, sans-serif;
+    --accent-ink: #031312;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.6 var(--font-body); }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 32px 16px 64px; }
+  header { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
+  header svg { width: 40px; height: 40px; flex: none; }
+  .word { font: 800 26px/1 var(--font-head); letter-spacing: -0.5px; }
+  .word .k { color: var(--teal); }
+  header a.back { margin-left: auto; font-size: 14px; }
+  h1 { font: 800 clamp(28px, 6vw, 38px)/1.15 var(--font-head); letter-spacing: -0.6px; margin: 0 0 10px; }
+  .lead { color: var(--muted); font-size: 17px; margin: 0 0 22px; }
+  nav.toc { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 26px; }
+  [hidden] { display: none !important; }
+  nav.toc a { font-size: 13px; padding: 6px 12px; border-radius: 999px; background: color-mix(in srgb, var(--teal) 8%, transparent); text-decoration: none; }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 20px 22px; margin-bottom: 14px; scroll-margin-top: 16px; }
+  h2 { font: 600 19px/1.3 var(--font-head); margin: 0 0 10px; }
+  h3 { font: 600 16px/1.3 var(--font-head); margin: 16px 0 6px; }
+  p { margin: 0 0 10px; }
+  p:last-child, ol:last-child, ul:last-child { margin-bottom: 0; }
+  ol, ul { margin: 0 0 10px; padding-left: 22px; }
+  li { margin-bottom: 6px; }
+  a { color: var(--teal); }
+  b { font-weight: 600; }
+  .muted { color: var(--muted); }
+  .note { border-left: 3px solid var(--teal-dim); padding: 2px 0 2px 12px; color: var(--muted); font-size: 15px; }
+  .ui { font-weight: 600; color: var(--teal); white-space: nowrap; }
+  footer { margin-top: 28px; color: var(--muted); font-size: 13px; text-align: center; }
+</style>
+<link rel="stylesheet" href="/brand/fonts.css">
+<link rel="stylesheet" href="/brand/theme.css">
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <svg viewBox="0 0 512 512" aria-hidden="true"><rect width="512" height="512" rx="112" fill="#49d9c8"/><path transform="translate(-16 0)" fill-rule="evenodd" fill="#050808" d="M150 110 H290 A104 104 0 0 1 290 318 H240 V402 H150 Z M150 194 H278 V160 L340 214 L278 268 V234 H150 Z"/></svg>
+    <div class="word">Kas<span class="k">Pass</span></div>
+    <a class="back" href="/">Back to the membership page</a>
+  </header>
+
+  <h1>Help</h1>
+  <p class="lead">Your membership lives in your own Kaspa wallet. You pay in KAS, nobody can take it away, and there's no card, account or password.</p>
+  <p class="note" id="testnet" hidden></p>
+
+  <nav class="toc">
+    <a href="#start">Getting started</a><a href="#kas">What is KAS?</a><a href="#trial">Free trials</a><a href="#groups">Join the groups</a><a href="#renew">Renewing</a><a href="#cancel">Cancel or end</a><a href="#refunds">Refunds</a><a href="#trouble">Trouble?</a>
+  </nav>
+
+  <section id="start">
+    <h2>Getting started</h2>
+    <div id="startPhone">
+      <h3>On a phone</h3>
+      <ol>
+        <li>Get the free <b>Kaspire</b> app from <a id="appLink" href="https://kaspire.kaslab.space" target="_blank" rel="noopener">kaspire.kaslab.space</a>. It's on Android for now; on an iPhone, use a computer instead (below) until the app arrives.</li>
+        <li>Create a wallet. Write down the recovery words and keep them somewhere safe and offline. They're the only way back into your wallet, and your membership lives there.</li>
+        <li>Put some KAS in it (<a href="#kas">how</a>).</li>
+        <li>On the membership page, tap <span class="ui">Sign in with the Kaspire app</span>. Approve in the app, then come back to the page.</li>
+      </ol>
+    </div>
+    <div id="startComputer">
+      <h3>On a computer</h3>
+      <ol>
+        <li>Add the free <b>Kaspire</b> wallet to Chrome (or another browser that runs Chrome extensions) from <a href="https://kaspire.kaslab.space" target="_blank" rel="noopener">kaspire.kaslab.space</a>.</li>
+        <li>Create a wallet and write down the recovery words. Keep them safe and offline.</li>
+        <li>Put some KAS in it (<a href="#kas">how</a>).</li>
+        <li>On the membership page, click <span class="ui">Sign in with Kaspire</span>. Already have the Kaspire app on your phone? Click <span class="ui">Use the Kaspire app on my phone instead</span> and scan the code with the app.</li>
+      </ol>
+    </div>
+    <p>Signing in is free: Kaspire asks you to approve a short message. Nothing is paid.</p>
+    <h3>Joining a plan</h3>
+    <ol>
+      <li>Pick a plan. Its price is shown in dollars or euros, with what that is in KAS today.</li>
+      <li>The box that opens shows what you get, the price, a small refundable deposit and the total. Turn on auto-renew there if you'd like it to renew itself.</li>
+      <li>Press the pay button. Kaspire shows the same amounts, numbered. Check that they match, then approve.</li>
+    </ol>
+    <p>Your membership appears within a few seconds. The KAS price follows the exchange rate, and a price you're shown is held for 10 minutes.</p>
+  </section>
+
+  <section id="kas">
+    <h2>What is KAS, and where do I get it?</h2>
+    <p>KAS is the coin of the Kaspa network. Plans are priced in dollars or euros, and you pay the same value in KAS.</p>
+    <ol>
+      <li>Buy KAS on a crypto exchange. Most large exchanges sell it.</li>
+      <li>In Kaspire, open <span class="ui">Receive</span> and copy your address.</li>
+      <li>On the exchange, withdraw (send) the KAS to that address.</li>
+    </ol>
+    <p>Send a little more than the price: each payment has a tiny network fee, and a small deposit (usually 1 KAS) is held in your membership. You get the deposit back when your membership ends.</p>
+  </section>
+
+  <section id="trial">
+    <h2>Free trials</h2>
+    <p>Some plans let you try them free. To start, you set aside your first month inside your own membership (plus 10% in case the KAS price moves) and a small deposit. Nobody else can touch it.</p>
+    <ul>
+      <li><b>Changed your mind?</b> Press <span class="ui">Cancel my trial</span> before the trial ends. Everything you set aside comes straight back to your wallet, and you keep access until the trial ends.</li>
+      <li><b>Staying?</b> Do nothing. At the end of the trial your first month is taken from what you set aside, and you stay a member. Anything left over stays in your membership, and you can take it back any time.</li>
+    </ul>
+    <p>One free trial per person.</p>
+  </section>
+
+  <section id="groups">
+    <h2>Join the members' groups</h2>
+    <p>Once you've joined, the page shows <span class="ui">Join the Telegram group</span> and <span class="ui">Connect Discord</span> (if the creator has them).</p>
+    <ul>
+      <li><b>Telegram:</b> it opens a chat with the site's bot. Press <span class="ui">Start</span> and the bot sends you a one-time invite.</li>
+      <li><b>Discord:</b> sign in with Discord and you get the members' role.</li>
+    </ul>
+    <p>If your membership ends, you're removed automatically. Renew, then send <span class="ui">/status</span> to the Telegram bot to come back (on Discord your role comes back by itself).</p>
+  </section>
+
+  <section id="renew">
+    <h2>Renewing</h2>
+    <p><b>Nothing is taken automatically</b> unless you turn on auto-renew. When your membership ends, it simply stops.</p>
+    <ul>
+      <li><b>Renew by hand:</b> near the end date a <span class="ui">Renew</span> button appears on your plan. If your membership has already ended, renewing brings it back.</li>
+      <li><b>Auto-renew:</b> pay a few renewals ahead. That money stays in your own membership, and shortly before each end date it renews itself at that day's price. Turn it on with <span class="ui">Manage your membership</span>, then <span class="ui">Turn on auto-renew…</span> (or tick it when you join).</li>
+      <li><b>Moving to a higher plan:</b> buy the higher plan. The unused part of your current one counts toward it. Afterwards the page offers to end the lower one and give you its deposit back.</li>
+    </ul>
+  </section>
+
+  <section id="cancel">
+    <h2>Cancel or end a membership</h2>
+    <p><b>You don't need to do anything to cancel.</b> A membership ends on its end date unless you renew.</p>
+    <ul>
+      <li><b>Stop auto-renew:</b> <span class="ui">Manage your membership</span>, then <span class="ui">Cancel auto-renew</span>. The unused balance comes back to you, and your access stays until the end date.</li>
+      <li><b>End it early:</b> <span class="ui">Manage your membership</span>, then <span class="ui">End membership now</span>. You lose access straight away, and the time you paid for is not refunded. Only your deposit (and any auto-renew balance) comes back. You press twice, so it can't happen by accident.</li>
+      <li><b>After it has ended:</b> the same place offers <span class="ui">Get my deposit back</span>.</li>
+    </ul>
+  </section>
+
+  <section id="refunds">
+    <h2>Can I get my money back?</h2>
+    <p>Payments go straight to the creator, so KasPass can't refund them. If something went wrong, contact the creator. These always come back to you:</p>
+    <ul>
+      <li>your deposit, when you end your membership;</li>
+      <li>any auto-renew balance you haven't used;</li>
+      <li>a free trial's money, if you cancel before the trial ends.</li>
+    </ul>
+  </section>
+
+  <section id="give">
+    <h2>Give your membership to someone else</h2>
+    <p>If the plan allows it: <span class="ui">Manage your membership</span>, then <span class="ui">Give it to someone else</span>, and paste their Kaspa address. They get the rest of your time and you lose access. This can't be undone. Some creators receive a small fee when a membership changes hands; the page shows it first.</p>
+  </section>
+
+  <section id="qr">
+    <h2>Pay from another wallet (QR code)</h2>
+    <p>If your KAS is in another wallet or on an exchange, sign in with Kaspire, pick a plan, and choose <span class="ui">Pay from another wallet (QR code)</span>. Scan the code with that wallet (or copy the address and amount) and send the exact amount. The page finishes by itself.</p>
+    <p>The membership goes to the wallet you're signed in with. Your payment is held safely until it becomes your membership. If it can't (too little, or too late), it comes back to your signed-in wallet automatically within the hour.</p>
+  </section>
+
+  <section id="money">
+    <h2>Where your KAS goes</h2>
+    <p>Payments go straight to the creator. KasPass never holds your KAS. Your deposit and any auto-renew balance stay inside your own membership, and only you can take them back.</p>
+  </section>
+
+  <section id="trouble">
+    <h2>Trouble?</h2>
+    <ul>
+      <li><b>"We couldn't find the Kaspire wallet in this browser":</b> check the extension is installed and turned on, then reload the page. On a phone, use the Kaspire app instead.</li>
+      <li><b>"You need about … KAS and this wallet has … KAS":</b> add KAS to your wallet (<a href="#kas">how</a>), then try again.</li>
+      <li><b>"That price was held for 10 minutes and has run out":</b> press the button again for today's price.</li>
+      <li><b>"Price unavailable right now":</b> exchange rates couldn't be fetched just now. Try again in a minute.</li>
+      <li><b>"We're still loading the latest payments":</b> wait a minute and try again.</li>
+      <li><b>"You've been signed out":</b> sign in again.</li>
+      <li><b>"Your payment was sent and is still being confirmed":</b> don't pay again. Refresh the page in a minute.</li>
+      <li><b>New phone or computer:</b> install Kaspire and restore your wallet with its recovery words. Your membership is still in it.</li>
+    </ul>
+  </section>
+
+  <footer>Powered by KasPass · <a href="https://github.com/kaspass/kaspass" target="_blank" rel="noopener">github.com/kaspass/kaspass</a></footer>
+</div>
+<script src="/assets/help.js?v=63"></script>
+</body>
+</html>
