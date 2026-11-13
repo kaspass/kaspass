@@ -2725,8 +2725,11 @@ async fn dm_owner(s: &AppState, owner_hash: &str, text: &str) {
 
 /// v5 alerts (`price-alerts.json`): payments that used a price approval this server never made.
 const ALERTS_FILE: &str = "price-alerts.json";
-/// The payments the alert has already checked.
-const ALERTS_SEEN_FILE: &str = "price-alerts-seen.json";
+/// The payments the alert has already checked, one file per level (each level runs its own
+/// watcher; one shared file let them overwrite each other, so a restart re-checked old payments).
+fn alerts_seen_file(s: &AppState) -> std::path::PathBuf {
+    s.home.join(format!("price-alerts-seen-{}.json", short_id(&s.card.covenant_id)))
+}
 
 fn price_alerts(home: &std::path::Path) -> Vec<serde_json::Value> {
     std::fs::read_to_string(home.join(ALERTS_FILE)).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default()
@@ -2737,7 +2740,7 @@ fn price_alerts(home: &std::path::Path) -> Vec<serde_json::Value> {
 async fn price_alert_loop(s: AppState) {
     // The payments already checked, kept on disk so whatever lands while the server is down is
     // still checked when it comes back.
-    let file = s.home.join(ALERTS_SEEN_FILE);
+    let file = alerts_seen_file(&s);
     let mut seen: Option<std::collections::HashSet<String>> = std::fs::read_to_string(&file).ok().and_then(|t| serde_json::from_str(&t).ok());
     loop {
         tokio::time::sleep(std::time::Duration::from_secs(5)).await;

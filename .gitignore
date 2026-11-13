@@ -43,7 +43,7 @@ promo.json
 promo-claims.json
 signed-txids.json
 price-alerts.json
-price-alerts-seen.json
+price-alerts-seen*.json
 alerts.json
 alerts-seen.json
 lapsed-no-price.json
