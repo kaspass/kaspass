@@ -133,6 +133,10 @@ fn signed_load(dir: &Path) -> std::collections::HashMap<String, i64> {
     std::fs::read_to_string(dir.join(SIGNED_FILE)).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default()
 }
 
+/// The cushions a member can add to prepaid renewals in case KAS falls, in percent.
+pub const CUSHIONS: [u64; 3] = [0, 10, 25];
+pub const DEFAULT_CUSHION: u64 = 10;
+
 /// Prices signed while preparing, not sent yet: (txid, when). They're written to
 /// `signed-txids.json` only in `finish`, the moment the signature leaves the server.
 static PREPARED: std::sync::LazyLock<std::sync::Mutex<std::collections::HashMap<String, std::time::Instant>>> = std::sync::LazyLock::new(Default::default);
@@ -255,10 +259,19 @@ impl Shop {
         Ok(Some(Voucher { key, bps: d.min(v.max_discount_bps * 100) }))
     }
 
-    /// Prepaid renewals on a plan priced in a currency get 10% extra in case KAS falls; a plan
-    /// priced in KAS always costs the same, so it needs none.
+    /// Prepaid renewals on a plan priced in a currency get a cushion in case KAS falls (10%
+    /// unless the member picks another); a plan priced in KAS always costs the same, so it
+    /// needs none.
     pub fn prepaid_margin(&self, per: u64) -> u64 {
-        if crate::prices::level_prices(&self.dir).get(&self.card.covenant_id).is_some_and(|p| p.currency == "KAS") { per } else { per * 11 / 10 }
+        self.prepaid_with(per, DEFAULT_CUSHION)
+    }
+
+    pub fn prepaid_with(&self, per: u64, cushion_pct: u64) -> u64 {
+        if self.priced_in_kas() { per } else { per * (100 + cushion_pct) / 100 }
+    }
+
+    fn priced_in_kas(&self) -> bool {
+        crate::prices::level_prices(&self.dir).get(&self.card.covenant_id).is_some_and(|p| p.currency == "KAS")
     }
 
     fn is_v5(&self) -> bool {
@@ -571,7 +584,7 @@ impl Shop {
     /// `renew_ppm` (v5): what a renewal costs today, in millionths off the ceiling; prepaid
     /// renewals are sized on it (not on this purchase's founding or upgrade price).
     #[allow(clippy::too_many_arguments)]
-    pub async fn prepare_v4(&self, chain: &Chain, buyer: &str, kind: Sale, lane: &FoundLane, prepaid_periods: u64, bps: u64, renew_ppm: Option<u64>) -> Result<(Quote, Value)> {
+    pub async fn prepare_v4(&self, chain: &Chain, buyer: &str, kind: Sale, lane: &FoundLane, prepaid_periods: u64, cushion_pct: u64, bps: u64, renew_ppm: Option<u64>) -> Result<(Quote, Value)> {
         if kind == Sale::Trial {
             bail!("free trials are given by the creator");
         }
@@ -582,10 +595,10 @@ impl Shop {
             bail!("a lifetime pass never renews, so there's nothing to prepay");
         }
         // Prepaid renewals cost what a renewal costs: today's price on v5 (a discount off the
-        // ceiling, with a 10% margin for price moves), the locked rate otherwise.
-        let per = if self.is_v5() { self.prepaid_margin(crate::discounted_ppm(lane.lane.price, renew_ppm.unwrap_or(bps))) } else { lane.lane.price };
+        // ceiling, with the cushion the member picked for price moves), the locked rate otherwise.
+        let per = if self.is_v5() { self.prepaid_with(crate::discounted_ppm(lane.lane.price, renew_ppm.unwrap_or(bps)), cushion_pct) } else { lane.lane.price };
         let voucher = if self.is_v5() { self.voucher_for_v5(bps, lane.lane.voucher)?.filter(|v| v.bps > 0) } else { self.voucher_for(bps)? };
-        let opts = SaleOpts { prepaid: prepaid_periods * per, voucher, periods: prepaid_periods };
+        let opts = SaleOpts { prepaid: prepaid_periods * per, voucher, periods: prepaid_periods, cushion_pct };
         self.prepare_for_opts(chain, buyer, buyer, kind, lane, opts).await
     }
 
@@ -724,6 +737,7 @@ impl Shop {
         let creator_pk = trial.then(|| addr.payload.to_vec());
         let prepaid = opts.prepaid;
         let periods = opts.periods;
+        let cushion_pct = opts.cushion_pct;
         let bps = opts.voucher.as_ref().map(|v| v.bps).unwrap_or(0);
         let signs = opts.voucher.is_some();
         let b = sale_tx_full(&creator, chain, self.tier(), lane.lane, &live, self.cov()?, kind, false, owner_id, buyer, payer.clone(), None, creator_pk, opts).await?;
@@ -759,7 +773,7 @@ impl Shop {
             }
             if prepaid > 0 {
                 let n = if self.is_v5() { periods } else { prepaid / lane.lane.price.max(1) };
-                let at = if self.is_v5() && self.prepaid_margin(100) > 100 { " at today's price, plus 10% in case KAS falls" } else { "" };
+                let at = if self.is_v5() && self.prepaid_with(100, cushion_pct) > 100 { format!(" at today's price, plus {cushion_pct}% in case KAS falls") } else if self.is_v5() && !self.priced_in_kas() { " at today's price, no cushion".to_string() } else { String::new() };
                 v.push(format!("{} prepaid for auto-renew ({} renewal{}{}, yours to take back any time)", kas(prepaid), n, if n == 1 { "" } else { "s" }, at));
             }
             let t = v.join("; ");
@@ -1175,7 +1189,7 @@ impl Shop {
         let voucher = self.voucher_for_v5(bps, lane.lane.voucher)?.filter(|v| v.bps > 0);
         let owner_id = owner_hash_of(buyer.trim())?;
         let live = Live { txid: lane.txid.clone(), index: lane.index, value: lane.value };
-        let opts = SaleOpts { prepaid, voucher, periods };
+        let opts = SaleOpts { prepaid, voucher, periods, cushion_pct: DEFAULT_CUSHION };
         let payer = Payer::PayIn(crate::PayInCoin { pin, coin, refund });
         let b = sale_tx_full(&self.creator()?, chain, self.tier(), lane.lane, &live, self.cov()?, Sale::Monthly, false, owner_id, buyer.trim(), payer, None, None, opts).await?;
         verify_all(&b.tx, &b.entries)?;

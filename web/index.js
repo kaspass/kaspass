@@ -47,6 +47,25 @@ const span = (ms) => { const m = Math.round(ms / 60000); return m >= 2880 && m %
 // v5 plans are priced in a currency; their renewals are at today's price, not a locked KAS rate.
 const isV5 = () => !!(offer && offer.price);
 const rateWord = () => (isV5() ? "today's price" : "your locked rate");
+// "Auto-renew" is really prepaying future periods from KAS the member sets aside: say so.
+const unitNow = () => unitOf(card ? card.settings.period_ms : 0);
+const prepayName = () => `Prepay future ${unitNow()}s (auto-renew)`;
+const prepayLine = () => isV5()
+  ? `Each ${unitNow()} is charged at that ${unitNow()}'s KAS price. Cancel any time and the unused KAS comes back to your wallet.`
+  : `Each ${unitNow()} is charged at your locked rate. Cancel any time and the unused KAS comes back to your wallet.`;
+// The cushion on prepaid renewals (plans priced in a currency): what each choice protects against.
+const cushionOn = () => isV5() && !!(offer && offer.price && offer.price.currency !== "KAS");
+const cushionOf = (id) => (cushionOn() ? Number($(id).value) : 0);
+const cushionWhy = (pct) => (pct === 0
+  ? "No cushion: if KAS drops at all, you may need to top up before the next renewal."
+  : `Still covers your renewals if KAS drops by up to about ${Math.floor(100 - 10000 / (100 + pct))}%.`) +
+  " KAS goes up and down. A cushion keeps your renewals going if it drops. Whatever isn't used stays yours and comes back if you cancel.";
+function wireCushion(sel, row, why, onChange) {
+  show(row, cushionOn());
+  const upd = () => { $(why).textContent = cushionWhy(Number($(sel).value)); };
+  $(sel).onchange = () => { upd(); if (onChange) onChange(); };
+  upd();
+}
 const disc = (sompi, bps) => Math.floor(Number(sompi) * (10000 - bps) / 10000);
 let address = null;
 let session = null;
@@ -175,7 +194,7 @@ async function loadTier() {
       ["Creator", card.creator_address, true],
       ...(testing() ? [[`Length of a ${u}`, `${mins(t.period_ms)} (shortened for testing)`]] : u === "period" ? [["Renews every", mins(t.period_ms)]] : []),
       ...(t.trial_ms > 0 ? [["Free trial", mins(t.trial_ms)]] : []),
-      ...(t.v4 ? [["Auto-renew", `Optional. Pay a few renewals ahead and your ${pw()} renews itself before it runs out, so you never lose access. Cancel any time and get your unused balance back.`]] : []),
+      ...(t.v4 ? [["Auto-renew", `Optional: ${prepayName().replace(" (auto-renew)", "")}. Set some KAS aside in your ${pw()}'s own contract and it renews itself before it runs out. ${prepayLine()}`]] : []),
       ...(t.v4 && t.v4.max_discount_bps > 0 && !t.v4.record_id ? [["Holder discount", `NFT holders can pay up to ${t.v4.max_discount_bps / 100}% less.`]] : []),
       ["Refundable deposit", `${kas(t.bond)}, held in your ${pw()} and returned when you end it`],
       ["Passing it on", t.resellable ? `You can sell or give your ${pw()} to someone else${t.royalty > 0 ? `; the creator gets a ${kas(t.royalty)} royalty` : ""}` : `${pw({ cap: true, many: true })} stay with the wallet that bought them`],
@@ -988,6 +1007,7 @@ async function loadOffer() {
   show("holderBanner", !!(v4 && v4.discounts && v4.holder_bps > 0));
   // Auto-renew toggle.
   show("autoBox", !!(v4 && v4.auto_renew));
+  $("autoOnText").textContent = `${prepayName().replace(")", ", optional)")}`;
   const autoAmt = () => {
     const n = Number($("autoN").value);
     $("autoAmt").textContent = `= ${kas(n * offer.monthly_sompi)} more, held in your ${pw()}. It's still yours: whatever isn't used comes back if you cancel.`;
@@ -1099,7 +1119,7 @@ async function runPaid({ url, body, statusId, errId, buttons, done, level, doneS
 
 async function buy(kind, buttons) {
   const auto = offer && offer.v4 && $("autoOn").checked && kind !== "lifetime";
-  const body = { address, kind, ...(auto ? { prepaid_periods: Number($("autoN").value) } : {}) };
+  const body = { address, kind, ...(auto ? { prepaid_periods: Number($("autoN").value), cushion_pct: cushionOf("autoCushion") } : {}) };
   await runPaid({ url: "/v1/buy/prepare", body, statusId: "buyStatus", errId: "buyErr", buttons: buttons || [...$("buyButtons").querySelectorAll("button")], doneScreen: true });
 }
 
@@ -1109,12 +1129,16 @@ const renewPrice = (p) => (offer && offer.price && offer.monthly_sompi ? disc(of
 
 function balanceText(p) {
   const n = Math.floor(p.balance_sompi / Math.max(1, renewPrice(p)));
-  if (p.balance_sompi === 0) return "None. Auto-renew is off";
-  if (n === 0) return `${kas(p.balance_sompi)}, not enough for a renewal yet (${kas(renewPrice(p))})`;
-  const wait = p.auto_renew === "waiting_for_price" ? ". Auto-renew is waiting for a price and tries again every few minutes; nothing is charged until it has one" : "";
+  if (p.balance_sompi === 0) return "None. Nothing is prepaid, so it won't renew by itself";
+  // Due now, but the prepaid KAS doesn't cover today's renewal price (for example KAS fell).
+  if (p.auto_renew === "not_enough_balance" && p.renewal_due_sompi) {
+    return `${kas(p.balance_sompi)} prepaid, less than today's renewal price (${kas(p.renewal_due_sompi)}), so nothing was charged. Top up at least ${kas(p.renewal_due_sompi - p.balance_sompi)} before ${fmtDate(p.expiry_ms)} and it renews by itself. Otherwise it ends then, and your prepaid KAS stays yours`;
+  }
+  if (n === 0) return `${kas(p.balance_sompi)} prepaid, not enough for a renewal yet (${kas(renewPrice(p))})`;
+  const wait = p.auto_renew === "waiting_for_price" ? ". It's waiting for a KAS price and tries again every few minutes; nothing is charged until it has one" : "";
   // Plans priced in a currency renew at today's KAS price, so the count is approximate.
   const v5 = !!(offer && offer.price && offer.price.currency !== "KAS");
-  return `${kas(p.balance_sompi)}. Auto-renew is on: covers ${v5 ? "about " : ""}${n} renewal${n === 1 ? "" : "s"}${v5 ? " at today's price" : ""}${wait}`;
+  return `${kas(p.balance_sompi)} prepaid: covers ${v5 ? "about " : ""}${n} ${unitNow()}${n === 1 ? "" : "s"}${v5 ? " at today's price. Each one is charged at its own day's price" : ""}${wait}`;
 }
 
 function upgradeCost(p) {
@@ -1164,7 +1188,29 @@ function renderPassActions(p) {
   const renewLabel = `Renew · ${kas(renewPrice(p))}`;
   const renew = () => run({ action: "renew" });
   const topup = () => { show("topupBox", $("topupBox").classList.contains("hidden")); };
-  $("topupGo").onclick = () => run({ action: "deposit", periods: Number($("topupN").value) }, { buttons: [...all(), $("topupGo")] });
+  $("topupGo").onclick = () => run({ action: "deposit", periods: Number($("topupN").value), cushion_pct: cushionOf("topupCushion") }, { buttons: [...all(), $("topupGo")] });
+  wireCushion("topupCushion", "topupCushionRow", "topupCushionWhy");
+  // The renewal balance, as a balance: what's in it, what it covers, and where it's held.
+  const bb = $("balBox");
+  bb.innerHTML = "";
+  show("balBox", !!(v4 && !p.lifetime && p.balance_sompi > 0));
+  if (v4 && !p.lifetime && p.balance_sompi > 0) {
+    const n = Math.floor(p.balance_sompi / Math.max(1, renewPrice(p)));
+    const short = p.auto_renew === "not_enough_balance" && p.renewal_due_sompi;
+    const line = (cls, t) => { const d = document.createElement("div"); d.className = cls; d.textContent = t; bb.append(d); };
+    line("bt", "Renewal balance (prepaid, auto-renew)");
+    line("bv", kas(p.balance_sompi));
+    if (short) line("bs warn", `Less than today's renewal price (${kas(p.renewal_due_sompi)}). Top up at least ${kas(p.renewal_due_sompi - p.balance_sompi)} before ${fmtDate(p.expiry_ms)}, or it ends then. Your KAS stays yours either way.`);
+    else if (n === 0) line("bs warn", `Not enough for the next renewal (about ${kas(renewPrice(p))}). Top up before ${fmtDate(p.expiry_ms)}, or it ends then.`);
+    else line("bs", `About ${n} ${unitNow()}${n === 1 ? "" : "s"}${isV5() ? " at today's price" : ""}. Next renewal shortly before ${fmtDate(p.expiry_ms)} (about ${kas(renewPrice(p))}${isV5() ? ", at that day's price" : ""}).`);
+    line("bs", `It's held in your ${pw()}'s own contract on the Kaspa blockchain, not by KasPass or the creator. Nobody else can take it out: it can only pay your renewals, one at a time, and you can take the rest back any time.`);
+    line("bs muted", "Only keep enough here for your renewals. It isn't a bank account.");
+    const r = document.createElement("div"); r.className = "row";
+    const up = btn("Top up…", "ghost", () => { show("topupBox", true); $("topupBox").scrollIntoView({ behavior: "smooth", block: "center" }); });
+    const back = btn(`Take it back · ${kas(p.balance_sompi)}`, "ghost warn", null);
+    back.onclick = twoStep(back, "Press again to confirm", () => run({ action: "withdraw" }));
+    r.append(up, back); bb.append(r);
+  }
 
   // The one thing most people want right now.
   // Renew leads only when it's due: expired, or in the last third of the period (when the
@@ -1174,7 +1220,7 @@ function renderPassActions(p) {
   if (!p.lifetime && !tooEarly && (!p.active || (!auto && (nearEnd || !v4)))) primary = "renew";
   else if (v4 && !p.lifetime && !auto) primary = "auto";
   if (primary === "renew") box.append(btn(renewLabel, "", renew));
-  if (primary === "auto") box.append(btn("Turn on auto-renew…", "ghost", topup));
+  if (primary === "auto") box.append(btn(`Prepay future ${unitNow()}s…`, "ghost", topup));
   const manage = btn(`Manage ${pw()} ▾`, "ghost", () => {
     const open = menu.classList.contains("hidden");
     show("passMenu", open);
@@ -1195,12 +1241,12 @@ function renderPassActions(p) {
     item("Renew now", tooEarly ? `Opens when ${mins(card.settings.max_ahead_ms)} or less remain.` : `Adds a ${unitOf(card.settings.period_ms)}${testing() ? ` (${mins(card.settings.period_ms)} here)` : ""} at ${rateWord()}${holder.bps && v4 && !isV5() ? `, ${holder.bps / 100}% off as a holder` : ""}.`, btn(renewLabel, "ghost", renew, tooEarly));
   }
   if (v4 && !p.lifetime && primary !== "auto") {
-    item(p.balance_sompi > 0 ? "Top up balance" : "Turn on auto-renew", `Pay a few renewals ahead and your ${pw()} renews itself before it runs out. Cancel any time and get your unused balance back.`, btn(p.balance_sompi > 0 ? "Top up…" : "Turn on…", "ghost", topup));
+    item(p.balance_sompi > 0 ? `Prepay more ${unitNow()}s (auto-renew)` : prepayName(), `Set some KAS aside in your ${pw()} and it renews itself before it runs out. ${prepayLine()}`, btn(p.balance_sompi > 0 ? "Top up…" : "Prepay…", "ghost", topup));
   }
   if (v4 && p.balance_sompi > 0) {
-    const w = btn(`Cancel auto-renew · get ${kas(p.balance_sompi)} back`, "ghost warn", null);
+    const w = btn(`Cancel prepaid ${unitNow()}s · get ${kas(p.balance_sompi)} back`, "ghost warn", null);
     w.onclick = twoStep(w, "Press again to confirm", () => run({ action: "withdraw" }));
-    item("Cancel auto-renew", `Your unused balance comes back to you. Your access stays until the current ${unitOf(card.settings.period_ms)} ends.`, w);
+    item(`Cancel prepaid ${unitNow()}s (auto-renew)`, `All your unused prepaid KAS comes back to your wallet. Your access stays until the current ${unitOf(card.settings.period_ms)} ends.`, w);
   }
   if (!p.lifetime && p.lifetime_price_sompi > 0 && upgradeOffered()) {
     const credit = p.credit && p.paid_sompi > 0 ? ` Includes ${kas(Math.min(p.paid_sompi, p.lifetime_price_sompi))} credit for what you've paid.` : "";
@@ -1226,9 +1272,9 @@ function renderPassActions(p) {
 
   // One short line about where things stand.
   const note = p.lifetime ? `Lifetime ${pw()}: nothing to renew.`
-    : auto ? `Auto-renew is on. Nothing to do: it renews itself shortly before each ${unitOf(card.settings.period_ms)} ends.`
+    : auto ? `Prepaid (auto-renew). Nothing to do: shortly before each ${unitOf(card.settings.period_ms)} ends, it renews itself from your prepaid KAS.`
     : !p.active ? `Renew to bring this ${pw()} back at ${rateWord()}.`
-    : primary === "auto" ? `You're paid up for now. Turn on auto-renew and the ${pw()} renews itself, or renew by hand later.`
+    : primary === "auto" ? `You're paid up for now. Prepay future ${unitNow()}s and the ${pw()} renews itself, or renew by hand later.`
     : tooEarly ? `You're paid up. Renewals open when ${mins(card.settings.max_ahead_ms)} or less remain.`
     : `Renewing adds a ${unitOf(card.settings.period_ms)} at ${rateWord()}.`;
   say("passNote", note);
@@ -1258,8 +1304,8 @@ function showDone(j, txid, lv, action) {
   $("doneNext").append($("tgBox"), $("dcBox"));
   const auto = p.balance_sompi > 0 && action !== "trial";
   say("doneLine", p.lifetime || action === "trial" ? "" : auto
-    ? `Auto-renew is on: it renews itself from your balance before ${fmtDate(p.expiry_ms)}.`
-    : `It won't renew by itself. Come back before ${fmtDate(p.expiry_ms)} to renew, or turn on auto-renew in "Manage your ${m}".`);
+    ? `Prepaid (auto-renew): it renews itself from your prepaid KAS before ${fmtDate(p.expiry_ms)}.`
+    : `It won't renew by itself. Come back before ${fmtDate(p.expiry_ms)} to renew, or prepay future ${unitNow()}s in "Manage your ${m}".`);
   $("switchSlot").append($("switchBox"));
   $("passDetails").open = false;
   FOLDLIST = true;
@@ -1315,7 +1361,7 @@ function renderWelcome() {
   $("wStep2").innerHTML = test
     ? `This site uses test KAS, which is free: get some from the <a href="https://faucet-testnet.kaspanet.io" target="_blank" rel="noopener">test faucet</a>. Nothing here costs real money.`
     : `KAS is the Kaspa coin. Buy it on an exchange and send it to your Kaspire address. You need a little more than the ${escH(lw())}'s price. <a href="/help#kas">Where to buy KAS</a>.`;
-  $("wStep3").textContent = `Signing in is free. Kaspire shows every amount before you approve${t.v4 ? ", and nothing renews by itself unless you turn on auto-renew" : ""}.`;
+  $("wStep3").textContent = `Signing in is free. Kaspire shows every amount before you approve${t.v4 ? ", and nothing renews by itself unless you choose to prepay future renewals (auto-renew)" : ""}.`;
   applyLevelWord();
   renderHero();
   namesOf(card.creator_address).then((n) => { n = (offer && offer.creator_name) || (n || "").split(" · ")[0]; if (site.club_name) {
@@ -1406,7 +1452,7 @@ async function loadLevels() {
   // Prices set in a currency: say once what KAS is, and that nothing is charged by itself.
   const curs = [...new Set(levels.map((l) => l.price && l.price.currency).filter((c) => c && c !== "KAS"))];
   const NAMES = { CAD: "Canadian dollars", USD: "US dollars", EUR: "euros" };
-  $("levelsKas").textContent = (curs.length === 1 ? `KAS is the Kaspa coin. Prices are set in ${NAMES[curs[0]] || curs[0]} and you pay the same value in KAS. ` : "") + "Nothing is charged automatically unless you turn on auto-renew.";
+  $("levelsKas").textContent = (curs.length === 1 ? `KAS is the Kaspa coin. Prices are set in ${NAMES[curs[0]] || curs[0]} and you pay the same value in KAS. ` : "") + "Nothing is charged automatically unless you choose to prepay future renewals (auto-renew).";
   show("levelsKas", levels.length > 1);
   levelsTail();
 }
@@ -1711,7 +1757,7 @@ async function runDo() {
   if (what === "renew" && q && q.action === "renew") { await openPay(id); return; }
   await goManage(id, { menu: what !== "topup" });
   if (what === "topup" && $("topupBox").classList.contains("hidden")) {
-    const t = [...$("passActions").querySelectorAll("button"), ...$("passMenu").querySelectorAll("button")].find((b) => /auto-renew|Top up/i.test(b.textContent) && !/Cancel/i.test(b.textContent));
+    const t = [...$("passActions").querySelectorAll("button"), ...$("passMenu").querySelectorAll("button")].find((b) => /Prepay|auto-renew|Top up/i.test(b.textContent) && !/Cancel/i.test(b.textContent));
     if (t) t.click();
     if (!$("topupBox").classList.contains("hidden")) $("topupBox").scrollIntoView({ behavior: "smooth", block: "center" });
   }
@@ -1975,7 +2021,8 @@ function renderPay() {
   const autoOk = q.action !== "renew" && kind !== "lifetime" && !!(offer && offer.v4 && offer.v4.auto_renew);
   show("autoBox", autoOk);
   const u = unitOf(l.period_ms);
-  const ahead = () => (autoOk && $("autoOn").checked ? Number($("autoN").value) * Number(q.kas_next || 0) * 1.1 : 0);
+  const cush = () => (cur === "KAS" ? 0 : Number($("autoCushion").value)) / 100;
+  const ahead = () => (autoOk && $("autoOn").checked ? Number($("autoN").value) * Number(q.kas_next || 0) * (1 + cush()) : 0);
   const total = () => Number(q.kas_today || 0) + (q.action === "renew" ? 0 : bond / KAS) + ahead();
   const heldP = heldPasses.filter((x) => x.level === PAY && x.active).sort((a, b) => b.expiry_ms - a.expiry_ms)[0];
   const passAuto = q.action === "renew" && heldP && heldP.balance_sompi > 0;
@@ -1992,7 +2039,7 @@ function renderPay() {
       rows.push(["Price today", `<b>${kasOf(q.kas_today)}</b>${bits ? ` (${bits})` : ""}` +
         (q.credit > 0 ? `<div class="sub">${escH(money(cur, q.founding ? q.amount + q.credit : q.regular))} minus ${escH(money(cur, q.credit))} for your unused ${escH(levelName(q.from_level))} time${q.from_until_ms ? ` (until ${escH(until(q.from_until_ms))})` : ""}</div>` : "")]);
       if (q.action !== "renew") rows.push(["Refundable deposit", `${kas(bond)}. You get it back when you end your ${escH(pw())}.`]);
-      if (ahead()) rows.push(["Paid ahead", `about ${kasAbout(ahead())} for auto-renew. It stays yours until it's used.`]);
+      if (ahead()) rows.push(["Paid ahead", `about ${kasAbout(ahead())} prepaid for future ${escH(u)}s (auto-renew). It stays yours until it's used, and each ${escH(u)} is charged at its own day's price.`]);
       rows.push(["Total now", `<b>${kasOf(total())}</b>, plus a tiny network fee`]);
       if (kind !== "lifetime" && q.until_ms) {
         const after = `After ${until(q.until_ms)}`;
@@ -2004,13 +2051,15 @@ function renderPay() {
     }
     if (q.action === "upgrade" && q.from_level) rows.push(["Afterwards", `You can end your ${escH(levelName(q.from_level))} ${escH(pw())} to get its ${kas(bond)} deposit back.`]);
     $("payInfo").innerHTML = rows.map(([k, v]) => `<dt>${escH(k)}</dt><dd>${v}</dd>`).join("");
-    if (autoOk) $("autoAmt").textContent = `= about ${kasAbout(Number($("autoN").value) * Number(q.kas_next || 0) * 1.1)} more (today's price plus 10% in case KAS falls), held in your ${pw()}. Whatever isn't used comes back if you cancel.`;
+    if (autoOk) $("autoAmt").textContent = `= about ${kasAbout(Number($("autoN").value) * Number(q.kas_next || 0) * (1 + cush()))} more (today's price${cush() > 0 ? ` plus a ${Math.round(cush() * 100)}% cushion` : ""}), set aside in your ${pw()}'s contract. Whatever isn't used comes back if you cancel.`;
     $("payGo").textContent = `Pay ${kasOf(total())} in Kaspire`;
   };
   show("payInfo", true);
   $("autoOn").onchange = paint;
   // Choosing how many renewals to pay ahead turns auto-renew on.
   $("autoN").onchange = () => { $("autoOn").checked = true; paint(); };
+  wireCushion("autoCushion", "autoCushionRow", "autoCushionWhy", () => { $("autoOn").checked = true; paint(); });
+  show("autoCushionRow", autoOk && cur !== "KAS");
   paint();
   $("payGo").disabled = !!q.price_unavailable;
   $("payGo").dataset.off = q.price_unavailable ? "1" : "0";

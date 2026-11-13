@@ -166,6 +166,15 @@
   .autobox { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin-top: 14px; }
   .check { display: flex; gap: 10px; align-items: center; font-weight: 600; cursor: pointer; }
   .check input { width: 18px; height: 18px; accent-color: var(--teal); margin: 0; }
+  .cushionRow { margin: 8px 0; }
+  .cushionRow select, #autoN, #topupN { max-width: 100%; }
+  .cushionWhy { margin-top: 4px; }
+  .balbox { border: 1px solid var(--line); border-radius: 12px; padding: 14px; margin-top: 14px; }
+  .balbox .bt { font-size: 13px; color: var(--muted); }
+  .balbox .bv { font: 800 24px/1.2 var(--font-head, Montserrat), sans-serif; margin: 2px 0 6px; overflow-wrap: anywhere; }
+  .balbox .bs { font-size: 13px; margin: 4px 0; }
+  .balbox .bs.warn { color: var(--warn, #e0a64b); font-weight: 600; }
+  .balbox .row { margin-top: 10px; }
   select { background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; font: 14px var(--font-body); }
   .holderbanner { border: 1px solid var(--teal-dim); background: color-mix(in srgb, var(--teal) 8%, transparent); color: var(--teal); border-radius: 12px; padding: 10px 14px; margin-bottom: 14px; font-weight: 600; }
   .holderbanner .sub { color: var(--muted); font-weight: 400; font-size: 13px; }
@@ -462,11 +471,13 @@
     <h2 id="resultTitle">Your <span data-pw="">membership</span></h2>
     <div id="statusBadge"></div>
     <details class="passdetails" id="passDetails" open><summary><span data-pw="C">Membership</span> details</summary><dl id="passInfo" style="margin-top:10px"></dl></details>
+    <div class="balbox hidden" id="balBox"></div>
     <div class="row hidden" id="passActions" style="margin-top:16px"></div>
     <div class="menu hidden" id="passMenu"></div>
     <div id="switchBox" class="hidden"></div>
     <div class="hidden" id="topupBox" style="margin-top:12px">
-      <div class="small muted" style="margin-bottom:6px">Pay a few renewals ahead. Your <span data-pw="">membership</span> renews itself from this balance before it runs out; whatever isn't used stays yours, and you can cancel any time to get it back.</div>
+      <div class="small muted" style="margin-bottom:6px">Add KAS for future renewals. <span class="contractLine">It's held in your <span data-pw="">membership</span>'s own contract on the Kaspa blockchain, not by KasPass or the creator. Nobody else can take it out: it can only pay your renewals, one at a time, and you can take the rest back any time.</span> Only keep enough here for your renewals. It isn't a bank account.</div>
+      <div class="cushionRow hidden" id="topupCushionRow"><select id="topupCushion"><option value="0">No cushion (top up if KAS drops)</option><option value="10" selected>+10% cushion (recommended)</option><option value="25">+25% cushion</option></select><div class="small muted cushionWhy" id="topupCushionWhy"></div></div>
       <div class="row">
         <select id="topupN"><option value="1">1 renewal</option><option value="3" selected>3 renewals</option><option value="6">6 renewals</option><option value="12">12 renewals</option></select>
         <button id="topupGo">Add to balance</button>
@@ -497,11 +508,13 @@
       <div class="nofee hidden" id="noFee">No KasPass fees: everything you pay goes to the creator.</div>
       <div class="opts" id="buyButtons"></div>
       <div class="autobox hidden" id="autoBox">
-        <label class="check"><input type="checkbox" id="autoOn"> Turn on auto-renew (optional)</label>
-        <div class="small muted" style="margin-top:6px">Pay a few renewals ahead and your <span data-pw="">membership</span> renews itself before it runs out, so you never lose access. Cancel any time and get your unused balance back.<span id="autoLifeNote"> Not needed for lifetime.</span></div>
+        <label class="check"><input type="checkbox" id="autoOn"> <span id="autoOnText">Prepay future renewals (auto-renew, optional)</span></label>
+        <div class="small muted" style="margin-top:6px"><span class="prepayWhat">Set some KAS aside and your <span data-pw="">membership</span> renews itself before it runs out.</span> <span class="contractLine">It's held in your <span data-pw="">membership</span>'s own contract on the Kaspa blockchain, not by KasPass or the creator. Nobody else can take it out: it can only pay your renewals, one at a time, and you can take the rest back any time.</span><span id="autoLifeNote"> Not needed for lifetime.</span></div>
         <div class="small" id="autoMore" style="margin-top:8px">
           Pay ahead for <select id="autoN"><option value="1">1 renewal</option><option value="3" selected>3 renewals</option><option value="6">6 renewals</option><option value="12">12 renewals</option></select>
+          <div class="cushionRow hidden" id="autoCushionRow"><select id="autoCushion"><option value="0">No cushion (top up if KAS drops)</option><option value="10" selected>+10% cushion (recommended)</option><option value="25">+25% cushion</option></select><div class="muted cushionWhy" id="autoCushionWhy"></div></div>
           <span id="autoAmt"></span>
+          <div class="muted" style="margin-top:6px">Only keep enough here for your renewals. It isn't a bank account.</div>
         </div>
       </div>
       <p class="muted small" id="buyNote" style="margin-bottom:0"></p>
@@ -584,6 +597,6 @@
 </div>
 
 <script src="/assets/qrcode.js?v=31"></script>
-<script src="/assets/index.js?v=64"></script>
+<script src="/assets/index.js?v=66"></script>
 </body>
 </html>

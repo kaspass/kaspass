@@ -1467,6 +1467,8 @@ struct SaleOpts {
     voucher: Option<Voucher>,
     /// How many renewals `prepaid` was sized for (for the buyer's summary).
     periods: u64,
+    /// The cushion added to each prepaid renewal in case KAS falls, in percent.
+    cushion_pct: u64,
 }
 
 /// "Yearly", "Monthly", ... for a period, as buyers read it.

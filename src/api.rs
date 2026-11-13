@@ -885,10 +885,18 @@ async fn check(State(s): State<AppState>, Query(q): Query<CheckQuery>, Query(lq)
             v["rank"] = serde_json::json!(i);
             v["access_rank"] = serde_json::json!(ar[i]);
             v["period_ms"] = serde_json::json!(l.card.settings.period_ms);
-            // auto_renew: "on" (prepaid balance), "off", or "waiting_for_price" (v5, no fresh price);
-            // a pass that ran out while waiting keeps lapsed_reason "no_price" until it's renewed.
+            // auto_renew: "on" (prepaid balance), "off", "waiting_for_price" (v5, no fresh price) or
+            // "not_enough_balance" (due, but the balance is less than the renewal's price; then
+            // `renewal_due_sompi` is that price). A pass that ran out while waiting keeps
+            // lapsed_reason "no_price" or "not_enough_balance" until it's renewed.
+            let short = short_of_balance(&p.txid, p.index).filter(|due| *due > p.balance_sompi);
+            if let Some(due) = short {
+                v["renewal_due_sompi"] = serde_json::json!(due);
+            }
             v["auto_renew"] = serde_json::json!(if waiting_for_price(&p.txid, p.index) {
                 "waiting_for_price"
+            } else if short.is_some() && p.balance_sompi > 0 {
+                "not_enough_balance"
             } else if p.balance_sompi > 0 && !p.lifetime {
                 "on"
             } else {
@@ -896,6 +904,8 @@ async fn check(State(s): State<AppState>, Query(q): Query<CheckQuery>, Query(lq)
             });
             if !p.active && lapsed_no_price(&s.home, &p.txid, p.index) {
                 v["lapsed_reason"] = serde_json::json!("no_price");
+            } else if !p.active && lapsed_in(&s.home, LAPSED_LOW_FILE, &p.txid, p.index) {
+                v["lapsed_reason"] = serde_json::json!("not_enough_balance");
             }
             passes.push(v);
         }
@@ -2038,17 +2048,37 @@ pub fn waiting_for_price(txid: &str, index: u32) -> bool {
     WAITING_FOR_PRICE.lock().unwrap_or_else(|e| e.into_inner()).contains(&format!("{txid}:{index}"))
 }
 
+/// Passes due to auto-renew whose prepaid balance is less than the renewal's price
+/// ("txid:index" -> the price in sompi): nothing is charged, and the member is told once.
+static LOW_BALANCE: std::sync::LazyLock<Mutex<HashMap<String, u64>>> = std::sync::LazyLock::new(Default::default);
+
+/// The renewal price a pass's balance doesn't cover, if it's waiting for a top-up.
+pub fn short_of_balance(txid: &str, index: u32) -> Option<u64> {
+    LOW_BALANCE.lock().unwrap_or_else(|e| e.into_inner()).get(&format!("{txid}:{index}")).copied()
+}
+
 /// Passes that lapsed because no price was available ("txid:index"). A renewal moves the pass
 /// to a new coin, so the marker goes away by itself.
 const LAPSED_FILE: &str = "lapsed-no-price.json";
 
+/// Passes that lapsed because the prepaid balance didn't cover the renewal ("txid:index").
+const LAPSED_LOW_FILE: &str = "lapsed-low-balance.json";
+
 fn lapsed_no_price(home: &std::path::Path, txid: &str, index: u32) -> bool {
-    let all: Vec<String> = std::fs::read_to_string(home.join(LAPSED_FILE)).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default();
+    lapsed_in(home, LAPSED_FILE, txid, index)
+}
+
+fn lapsed_in(home: &std::path::Path, file: &str, txid: &str, index: u32) -> bool {
+    let all: Vec<String> = std::fs::read_to_string(home.join(file)).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default();
     all.contains(&format!("{txid}:{index}"))
 }
 
 fn mark_lapsed_no_price(home: &std::path::Path, txid: &str, index: u32) {
-    let mut all: Vec<String> = std::fs::read_to_string(home.join(LAPSED_FILE)).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default();
+    mark_lapsed_in(home, LAPSED_FILE, txid, index)
+}
+
+fn mark_lapsed_in(home: &std::path::Path, file: &str, txid: &str, index: u32) {
+    let mut all: Vec<String> = std::fs::read_to_string(home.join(file)).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default();
     let k = format!("{txid}:{index}");
     if !all.contains(&k) {
         all.push(k);
@@ -2056,7 +2086,7 @@ fn mark_lapsed_no_price(home: &std::path::Path, txid: &str, index: u32) {
         if all.len() > 10_000 {
             all.drain(..all.len() - 10_000);
         }
-        let _ = std::fs::write(home.join(LAPSED_FILE), serde_json::to_string(&all).unwrap_or_default());
+        let _ = std::fs::write(home.join(file), serde_json::to_string(&all).unwrap_or_default());
     }
 }
 
@@ -2847,8 +2877,27 @@ async fn keeper_once(s: &AppState, tried: &mut HashMap<String, std::time::Instan
         };
         let due = crate::discounted_ppm(p.rate_sompi, bps);
         if p.balance_sompi < due {
+            // Not enough prepaid for this renewal: nothing is charged (no partial renewals). Tell
+            // the member once; a top-up before the end date lets the next round renew it.
+            let first = LOW_BALANCE.lock().unwrap_or_else(|e| e.into_inner()).insert(key.clone(), due).is_none();
+            if first {
+                let text = format!(
+                    "{} is due to renew ({}), but its prepaid balance ({} KAS) is less than today's renewal price ({} KAS), so nothing has been charged. Top up at least {} KAS at {} and it renews by itself. Otherwise it simply ends, and your balance stays yours to take back.",
+                    your_pass(s),
+                    if p.expiry_ms > now { format!("it ends in {}", human_span(p.expiry_ms - now)) } else { "it has just ended".to_string() },
+                    kas4(p.balance_sompi),
+                    kas4(due),
+                    kas4(due - p.balance_sompi),
+                    site_url(s)
+                );
+                dm_owner(s, &p.owner_hash, &text).await;
+            }
+            if p.expiry_ms <= now {
+                mark_lapsed_in(&s.home, LAPSED_LOW_FILE, &p.txid, p.index);
+            }
             continue;
         }
+        LOW_BALANCE.lock().unwrap_or_else(|e| e.into_inner()).remove(&key);
         tried.insert(key, std::time::Instant::now());
         let res = {
             let mut chain = s.chain.lock().await;
@@ -3151,6 +3200,15 @@ struct PrepareRequest {
     /// v4: renewals to prepay into the pass for auto-renew.
     #[serde(default)]
     prepaid_periods: u64,
+    /// The cushion on each prepaid renewal in case KAS falls: 0, 10 (default) or 25 percent.
+    #[serde(default)]
+    cushion_pct: Option<u64>,
+}
+
+/// A cushion the member picked, or the default; anything else is refused.
+fn cushion(pct: Option<u64>) -> Result<u64, ApiError> {
+    let c = pct.unwrap_or(crate::shop::DEFAULT_CUSHION);
+    if crate::shop::CUSHIONS.contains(&c) { Ok(c) } else { Err(bad("the cushion can be 0%, 10% or 25%")) }
 }
 
 /// One pass per wallet from the website: refuse a purchase if this wallet already holds an
@@ -3198,7 +3256,7 @@ async fn buy_prepare(State(s): State<AppState>, headers: HeaderMap, Query(lq): Q
         if lane.lane.remaining == 0 {
             return Err((StatusCode::CONFLICT, "sold out: every pass for this membership has been sold".into()));
         }
-        let r = shop.prepare_v4(&chain, &req.address, kind, &lane, req.prepaid_periods, bps, v5.as_ref().map(|q| q.renew_ppm)).await.map_err(bad)?;
+        let r = shop.prepare_v4(&chain, &req.address, kind, &lane, req.prepaid_periods, cushion(req.cushion_pct)?, bps, v5.as_ref().map(|q| q.renew_ppm)).await.map_err(bad)?;
         if let Some(q) = &v5 {
             let note = if q.credit > 0.0 { "upgrade" } else { "purchase" };
             crate::prices::later_payment(&r.0.txid(), crate::prices::PayNote { currency: q.currency.clone(), amount: q.amount, credit: q.credit, kind: note.into() });
@@ -3232,6 +3290,9 @@ struct PassRequest {
     periods: Option<u64>,
     #[serde(default)]
     amount_kas: Option<f64>,
+    /// Top-up by renewals: the cushion in case KAS falls (0, 10 or 25 percent).
+    #[serde(default)]
+    cushion_pct: Option<u64>,
 }
 
 async fn pass_prepare(State(s): State<AppState>, headers: HeaderMap, Query(lq): Query<LevelQ>, Json(req): Json<PassRequest>) -> Result<Json<serde_json::Value>, ApiError> {
@@ -3286,9 +3347,9 @@ async fn pass_prepare(State(s): State<AppState>, headers: HeaderMap, Query(lq): 
         None => 0,
     };
     let add = match (req.periods, req.amount_kas) {
-        // v5: renewals at today's price (+10% for price moves); older plans at the locked rate.
+        // v5: renewals at today's price (plus the member's cushion for price moves); older plans at the locked rate.
         (Some(n), _) if (1..=36).contains(&n) => match &v5 {
-            Some(q) => n * shop.prepaid_margin(crate::discounted_ppm(pass.rate_sompi, crate::prices::ppm_for(pass.rate_sompi, q.kas_today, s.card.settings.v4.as_ref().map(|v| v.max_discount_bps * 100).unwrap_or(0)))),
+            Some(q) => n * shop.prepaid_with(crate::discounted_ppm(pass.rate_sompi, crate::prices::ppm_for(pass.rate_sompi, q.kas_today, s.card.settings.v4.as_ref().map(|v| v.max_discount_bps * 100).unwrap_or(0))), cushion(req.cushion_pct)?),
             None => n * pass.rate_sompi,
         },
         (_, Some(k)) if k > 0.0 && k <= 1e9 => (k * crate::SOMPI as f64).round() as u64,

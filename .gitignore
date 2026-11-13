@@ -47,6 +47,7 @@ price-alerts-seen*.json
 alerts.json
 alerts-seen.json
 lapsed-no-price.json
+lapsed-low-balance.json
 second-node-confirmed.json
 brand.json
 brand/
