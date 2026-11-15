@@ -198,7 +198,6 @@ async function loadTier() {
     const t = card.settings;
     const u = unitOf(t.period_ms);
     dl($("tier"), [
-      ["Creator", card.creator_address, true],
       ...(testing() ? [[`Length of a ${u}`, `${mins(t.period_ms)} (shortened for testing)`]] : u === "period" ? [["Renews every", mins(t.period_ms)]] : []),
       ...(t.trial_ms > 0 ? [["Free trial", mins(t.trial_ms)]] : []),
       ...(t.v4 ? [["Auto-renew", prepayRowText()]] : []),
@@ -208,6 +207,7 @@ async function loadTier() {
       ["KasPass fee", "None for you. The price shown is what you pay."],
     ]);
     dl($("techDl"), [
+      ["Creator", card.creator_address, true],
       ["Membership ID", card.covenant_id, true],
       ["Network", card.network === "testnet-10" ? "Testnet-10 (test KAS only)" : card.network === "mainnet" ? "Kaspa mainnet" : card.network],
       ["Contract version", t.v4 ? "v4" : t.fee ? "v3" : "v2"],
@@ -587,8 +587,9 @@ function signinLayout() {
   const g = $("getWallet");
   if (session) { g.innerHTML = ""; return; }
   if (noApp()) {
-    g.innerHTML = `The Kaspire app isn't on iPhone yet. To join, open this page on a computer and use the free <a href="${KASPIRE_SITE}" target="_blank" rel="noopener">Kaspire browser extension</a>. <button class="linkish" id="copyLink" type="button">Copy this page's link</button>`;
+    g.innerHTML = `The Kaspire app isn't on iPhone yet. To join, open this page on a computer and use the free <a href="${KASPIRE_SITE}" target="_blank" rel="noopener">Kaspire browser extension</a>. <div class="row" style="margin-top:10px"><button class="ghost" id="copyLink" type="button">Copy this page's link</button>${navigator.share ? '<button class="ghost" id="shareLink" type="button">Send this link to myself</button>' : ""}</div>`;
     $("copyLink").onclick = () => navigator.clipboard.writeText(location.href).then(() => ($("copyLink").textContent = "Copied")).catch(() => {});
+    if ($("shareLink")) $("shareLink").onclick = () => navigator.share({ title: document.title, url: location.href }).catch(() => {});
     return;
   }
   g.innerHTML = phone
@@ -1483,7 +1484,7 @@ async function renderCreatorRow() {
   const n = await namesOf(card.creator_address);
   const chosen = offer && offer.creator_name;
   if (!n && !chosen) return;
-  const rows = [...$("tier").children];
+  const rows = [...$("techDl").children];
   const i = rows.findIndex((el) => el.tagName === "DT" && el.textContent === "Creator");
   if (i < 0) return;
   rows[i + 1].className = "";
@@ -1651,8 +1652,9 @@ function v5PriceHtml(o, big) {
   if (f) {
     const fp = shown(p.currency, f.amount);
     const until = new Date(f.until_ms - 1).toLocaleDateString(undefined, { dateStyle: "medium" });
+    const u = unitOf(o.period_ms);
     return `<div class="was"><s>${escH(reg.main)}</s><span class="off">Founding</span></div>${escH(fp.main)}` +
-      `<div class="kasline">Your first ${escH(unitOf(o.period_ms))} if you join by ${escH(until)}${f.kas_today != null ? ` · about ${kasAbout(f.kas_today)} today` : ""}</div>` + (big ? kasLine : "");
+      `<div class="kasline">For your first ${escH(u)}, then ${escH(reg.main)} a ${escH(u)}. Founding price until ${escH(until)}.${f.kas_today != null ? ` About ${kasAbout(f.kas_today)} today.` : ""}</div>`;
   }
   return `${escH(reg.main)}${per}${kasLine}`;
 }
@@ -1732,10 +1734,10 @@ function renderCompare() {
   for (const l of levels) {
     const mine = held.find((x) => x.level === l.level && x.active);
     const sel = l.level === LEVEL;
-    h += `<td${cls(l)}><button data-pick="${escH(l.level)}" class="${sel ? "ghost" : ""}" ${sel ? "disabled" : ""}>${sel ? "Viewing" : "Choose"} ${escH(l.name)}</button>${mine ? `<div class="from">Your ${escH(lw())}</div>` : ""}</td>`;
+    h += `<td${cls(l)}><button data-pick="${escH(l.level)}" class="${sel ? "ghost" : ""}">Choose ${escH(l.name)}</button>${mine ? `<div class="from">Your ${escH(lw())}</div>` : ""}</td>`;
   }
   box.innerHTML = h + "</tr></tfoot></table>";
-  box.querySelectorAll("[data-pick]").forEach((b) => (b.onclick = () => selectLevel(b.dataset.pick)));
+  box.querySelectorAll("[data-pick]").forEach((b) => (b.onclick = () => { PICKED = true; selectLevel(b.dataset.pick); }));
 }
 
 function renderLevels() {
@@ -1770,7 +1772,7 @@ function renderLevels() {
     const o = l.offer;
     const d = document.createElement("div");
     const sel = l.level === LEVEL;
-    d.className = "lvl" + (sel ? " sel" : "");
+    d.className = "lvl" + (sel && (PICKED || session) ? " sel" : "");
     const mine = held.find((h) => h.level === l.level && h.active);
     const pr = levelPrice(l);
     const price = !pr ? "Not on sale right now" : l.offer.price ? (l.offer.founding ? v5PriceHtml(l.offer) : v5PriceHtml(l.offer, "card")) : (pr.reg ? `<div class="was"><s>${kas(pr.reg)}</s><span class="off">${pr.pct}% off</span></div>${kas(pr.final)}` : kas(pr.final)) + `<div class="per">a ${pr.u}</div>`;
@@ -1787,6 +1789,8 @@ function renderLevels() {
     if (v5Site()) {
       v5Card(d, l);
       if (hasMore) foldCard(d, l);
+      const act = d.querySelector(":scope > .trialnote, :scope > button:not(.more-t), :scope > .noact");
+      if (act) act.before(Object.assign(document.createElement("div"), { className: "grow" }));
       box.append(d);
       if (PAY === l.level) box.append($("join"));
       continue;
@@ -1814,13 +1818,14 @@ function renderTrialAbout(on) {
   const ms = same(({ tr }) => tr.trial_ms);
   const unit = same(({ l }) => unitOf(l.period_ms));
   const first = unit ? `your first ${unit}` : "your first payment";
-  const ends = ms ? fmtDate(chainNow() + ms) : null;
+  const ends = ms && ms >= 86400000 ? fmtDate(chainNow() + ms) : null;
+  const within = ms && ms < 86400000 ? len : null;
   const bondKas = kas((TRIAL_SHOWN[0].l.offer && TRIAL_SHOWN[0].l.offer.bond_sompi) || (card && card.settings.bond) || KAS);
   const cushion = TRIAL_SHOWN.some(({ tr }) => tr.first_period && tr.first_period.currency !== "KAS");
   const one = TRIAL_SHOWN.length === 1;
   const title = one ? `Try ${TRIAL_SHOWN[0].l.name} free for ${trialWords(TRIAL_SHOWN[0].tr)}` : len ? `Try any of these free for ${len}` : "Free trials";
   box.innerHTML = `<h3>${escH(title)}</h3>
-    <p>To start, you set aside ${escH(first)}${cushion ? " (plus 10% in case the KAS price moves)" : ""} and a ${escH(bondKas)} deposit. It stays yours. Cancel ${ends ? `before ${escH(ends)}` : "before your trial ends"} and all of it comes back. If you stay, ${escH(first)} is taken ${ends ? `on ${escH(ends)}` : "when the trial ends"}.</p>
+    <p>To start, you set aside ${escH(first)}${cushion ? " (plus 10% in case the KAS price moves)" : ""} and a ${escH(bondKas)} deposit. It stays yours. Cancel ${ends ? `before ${escH(ends)}` : within ? `within ${escH(within)}` : "before your trial ends"} and all of it comes back. If you stay, ${escH(first)} is taken ${ends ? `on ${escH(ends)}` : within ? `after ${escH(within)}` : "when the trial ends"}.</p>
     <p class="muted">One free trial per person${TRIAL_AGE ? `, and your wallet must be at least ${TRIAL_AGE} days old` : ""}.</p>`;
   show("trialAbout", true);
 }
@@ -1828,6 +1833,9 @@ function renderTrialAbout(on) {
 // What a plan includes is shown on every card. "Hide details" folds it (and it stays folded while
 // the page is open); "What's included" opens it again.
 const CLOSED = new Set();
+// The chosen plan is outlined once the visitor has picked one (or signed in), not before: an
+// outline nobody chose reads as "recommended".
+let PICKED = false;
 function foldCard(d, l) {
   const det = d.querySelector(".det");
   if (!det) return;
@@ -1845,7 +1853,7 @@ function foldCard(d, l) {
   const toggle = () => {
     const open = det.hidden;
     set(open);
-    if (open && LEVEL !== l.level) selectLevel(l.level, { quiet: true });
+    if (open && LEVEL !== l.level) { PICKED = true; selectLevel(l.level, { quiet: true }); }
   };
   t.onclick = (e) => { e.stopPropagation(); toggle(); };
   det.before(t);
@@ -1854,7 +1862,8 @@ function foldCard(d, l) {
   d.addEventListener("click", (e) => {
     if (e.target.closest("button, a, input, select, label, .promo")) return;
     if (det.hidden) set(true);
-    if (LEVEL !== l.level) selectLevel(l.level, { quiet: true });
+    PICKED = true;
+    if (LEVEL !== l.level) selectLevel(l.level, { quiet: true }); else renderLevels();
   });
 }
 
@@ -1924,6 +1933,7 @@ function v5Card(d, l) {
     } else {
       trialOn = true;
       TRIAL_SHOWN.push({ l, tr });
+      d.querySelector(".ln").insertAdjacentHTML("beforeend", '<span class="trialtag">Free trial</span>');
       const note = document.createElement("div");
       note.className = "trialnote small";
       const back = fp ? kasAbout(fp.sompi / KAS) : "";
@@ -1932,7 +1942,7 @@ function v5Card(d, l) {
       d.append(note);
       const tb = document.createElement("button");
       tb.className = "trialgo";
-      tb.textContent = `Start my free ${trialLen(tr)} trial`;
+      tb.textContent = "Start my free trial";
       const hint = document.createElement("div");
       hint.className = "trialhint small muted";
       hint.setAttribute("role", "status");
@@ -1947,7 +1957,7 @@ function v5Card(d, l) {
     if (sp) lp.innerHTML = `<div class="was"><s>${escH(money(l.price.currency, l.founding ? l.founding.amount : l.price.amount))}</s><span class="off">${sp}% off</span></div>${escH(money(l.price.currency, amt))} <span class="per">a ${escH(unitOf(l.period_ms))}</span>${l.price.currency === "KAS" ? "" : `<div class="kasline">about ${kasRound(Math.round(o.monthly_sompi * (100 - sp) / 100))} today</div>`}`;
     // The button says what the wallet actually pays: KAS. The currency price above is for reference.
     const kasNow = l.price.currency === "KAS" ? money("KAS", amt) : `about ${kasRound(Math.round(o.monthly_sompi * amt / Math.max(0.0001, l.price.amount)))}`;
-    const b = btn(`Buy for ${kasNow}`, (promo && promo.claim) || trialOn ? "ghost" : "");
+    const b = btn(`Buy, ${kasNow}`, (promo && promo.claim) || trialOn ? "ghost" : "");
     b.disabled = !!o.price_unavailable || o.available === false;
     return;
   }
@@ -1998,7 +2008,7 @@ function v5Card(d, l) {
   if (q.credit > 0) lp.insertAdjacentHTML("afterend", `<div class="credit">${escH(money(cur, q.amount))} today because your unused ${escH(levelName(q.from_level))} time counts toward it (${escH(money(cur, q.credit))}).</div>`);
   if (q.action === "renew") d.querySelector(".ln").insertAdjacentHTML("beforeend", `<span class="yours">Your ${escH(lw())}</span>`);
   const verb = q.action === "upgrade" ? "Upgrade" : q.action === "renew" ? "Renew" : "Buy";
-  btn(`${verb} for ${cur === "KAS" ? money(cur, q.amount) : "about " + kasAbout(q.kas_today)}`, PAY === l.level || (promo && promo.claim) || trialOn ? "ghost" : "");
+  btn(`${verb}, ${cur === "KAS" ? money(cur, q.amount) : "about " + kasAbout(q.kas_today)}`, PAY === l.level || (promo && promo.claim) || trialOn ? "ghost" : "");
 }
 
 // The promotion on its plan's card: the line, then (signed in) a claim button or why not.
@@ -2146,7 +2156,7 @@ function renderPay() {
   const until = (ms) => (ms ? fmtDate(ms) : "");
   if (!session || !q) {
     $("joinTitle").textContent = `Buy ${l.name}`;
-    $("joinLead").textContent = "Sign in with Kaspire first: your price depends on the plans your wallet already holds.";
+    $("joinLead").textContent = "Sign in with Kaspire first, so we can show your exact price. Signing in is free.";
     show("joinLead", true); show("payInfo", false); show("autoBox", false);
     $("payGo").textContent = "Sign in with Kaspire to continue";
     $("payGo").disabled = false;
@@ -2464,7 +2474,7 @@ function foldTierBox() {
 }
 function syncTierSum() {
   const s = document.getElementById("tierSum");
-  if (s) s.textContent = `Plan details: ${$("tierTitle").textContent}`;
+  if (s) { const w = lw(); s.textContent = `${w.charAt(0).toUpperCase() + w.slice(1)} details: ${$("tierTitle").textContent}`; }
 }
 
 loadLevels().then(loadPage).then(loadTier).then(loadOffer).then(renderWelcome).then(loadTrials).then(renderLevels);

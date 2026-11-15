@@ -84,14 +84,17 @@
   .opt .save { color: var(--teal); font-size: 13px; font-weight: 600; }
   .opt button { margin-top: 6px; }
   /* Several paid levels, side by side. */
-  .levels { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; }
+  .levels { display: grid; grid-template-columns: repeat(auto-fit, minmax(205px, 1fr)); gap: 10px; }
+  .lvl .grow { flex: 1; min-height: 0; }
+  .lvl > button:not(.more-t) { font-size: 15px; padding-left: 10px; padding-right: 10px; text-wrap: balance; }
+  .lvl .ln .trialtag { font: 600 12px/1 var(--font-body, inherit); padding: 4px 8px; border-radius: 999px; background: color-mix(in srgb, var(--teal) 18%, transparent); color: var(--text); }
   .lvl { border: 1px solid var(--line); border-radius: var(--r-card); padding: 16px; display: flex; flex-direction: column; gap: 6px; background: var(--bg); }
   .lvl.sel { border-color: var(--teal); box-shadow: 0 0 0 1px var(--teal) inset; }
   .trialbox { border-color: var(--teal); }
   .trialbox h2 { margin-bottom: 8px; }
   .trialbox button.warn { margin-top: 6px; }
   .lvl .trialnote { color: var(--muted); margin-top: 4px; }
-  .trialabout { margin: 14px 0 2px; padding: 12px 14px; border-radius: 12px; border: 1px solid color-mix(in srgb, var(--teal) 35%, var(--line)); background: color-mix(in srgb, var(--teal) 7%, transparent); font-size: 14px; }
+  .trialabout { margin: 14px 0 14px; padding: 12px 14px; border-radius: 12px; border: 1px solid color-mix(in srgb, var(--teal) 35%, var(--line)); background: color-mix(in srgb, var(--teal) 7%, transparent); font-size: 14px; }
   .trialabout h3 { margin: 0 0 4px; font-size: 15px; }
   .trialabout p { margin: 0 0 4px; }
   .trialabout p:last-child { margin: 0; }
@@ -101,7 +104,7 @@
   .lvl .det { display: flex; flex-direction: column; gap: 6px; padding-top: 4px; }
   .lvl .det .about { color: var(--muted); font-size: 14px; }
   .lvl .det .about p { margin: 0 0 6px; }
-  .more-t { background: none; border: 0; padding: 4px 0; min-height: 0; color: var(--teal); font-weight: 600; font-size: 14px; cursor: pointer; text-align: left; align-self: flex-start; box-shadow: none; }
+  .more-t { background: none; border: 0; padding: 4px 0; min-height: 44px; color: var(--teal); font-weight: 600; font-size: 14px; cursor: pointer; text-align: left; align-self: flex-start; box-shadow: none; }
   .more-t:hover { text-decoration: underline; background: none; }
   .lvl:has(.det) { cursor: pointer; }
   .welcome.folded .lead, .welcome.folded .steps, .welcome.folded .foot { display: none; }
@@ -148,7 +151,8 @@
   .lvl .also { font-size: 12px; color: var(--muted); margin: -4px 0 10px; }
   .exbar { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; justify-content: center; padding: 10px 16px; font-size: 13px; background: #0b1111; color: #cfe3e0; border-bottom: 1px solid #1c2a29; text-align: center; }
   .exbar .exlinks { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
-  .exbar a { color: #e8f1f0; text-decoration: none; border: 1px solid #2c4442; border-radius: 999px; padding: 4px 12px; }
+  .exbar a { color: #e8f1f0; text-decoration: none; border: 1px solid #2c4442; border-radius: 999px; padding: 4px 12px; min-height: 36px; display: inline-flex; align-items: center; }
+  @media (max-width: 560px) { .exbar { padding: 8px 12px; gap: 6px; } .exbar .exlinks { flex-wrap: nowrap; overflow-x: auto; justify-content: flex-start; width: 100%; padding-bottom: 2px; scrollbar-width: none; } .exbar .exlinks a { flex: none; } }
   .exbar a.exabout { border: 0; text-decoration: underline; color: #cfe3e0; padding: 4px 0; }
   .exbar a.exabout + a.exabout { margin-left: 12px; }
   .exbar a[aria-current="page"] { background: #49d9c8; color: #031312; border-color: #49d9c8; font-weight: 600; }
@@ -341,7 +345,9 @@
   .viewsw button svg { width: 14px; height: 14px; fill: currentColor; }
   .viewsw button[aria-pressed="true"] { background: color-mix(in srgb, var(--teal) 14%, transparent); color: var(--teal); }
   .cmpwrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 14px; }
-  table.cmp { border-collapse: separate; border-spacing: 0; width: 100%; min-width: 520px; font-size: 14px; }
+  table.cmp { border-collapse: separate; border-spacing: 0; width: 100%; min-width: 520px; font-size: 14px; table-layout: fixed; }
+  .cmp th, .cmp td { overflow-wrap: anywhere; }
+  .cmp .cp, .cmp .kasline { white-space: normal !important; }
   .cmp th, .cmp td { padding: 12px 14px; border-bottom: 1px solid var(--line); text-align: center; vertical-align: middle; }
   .cmp th:first-child, .cmp td:first-child { text-align: left; position: sticky; left: 0; background: var(--panel); min-width: 180px; }
   .cmp thead th { background: var(--bg); vertical-align: bottom; }
@@ -610,10 +616,10 @@
   </section>
 
 
-  <footer><a class="powered" href="https://kaspass.app/" target="_blank" rel="noopener"><svg viewBox="19.6 14 64.7 72" aria-hidden="true"><path fill="currentColor" d="M28 61.61 28 86 42 86 42 73.36ZM28 38.39 42 26.64 42 14 28 14ZM41.39 50 84.28 14 62.51 14 19.61 50 62.51 86 84.28 86Z"/></svg>Powered by KasPass</a><br><span id="clubLink" class="hidden">NFT holder? <a href="/club" id="clubLinkA">Join the holder club</a> · </span><a href="/help">Help</a> · Creator? <a href="/dashboard">Open your dashboard</a> · <span id="netNote">Test network only. New software, not yet reviewed by an outside security firm.</span> <a href="https://github.com/kaspass/kaspass" target="_blank" rel="noopener">github.com/kaspass/kaspass</a></footer>
+  <footer><a class="powered" href="https://kaspass.app/" target="_blank" rel="noopener"><svg viewBox="19.6 14 64.7 72" aria-hidden="true"><path fill="currentColor" d="M28 61.61 28 86 42 86 42 73.36ZM28 38.39 42 26.64 42 14 28 14ZM41.39 50 84.28 14 62.51 14 19.61 50 62.51 86 84.28 86Z"/></svg>Powered by KasPass</a><br><span id="clubLink" class="hidden">NFT holder? <a href="/club" id="clubLinkA">Join the holder club</a> · </span><a href="/help">Help</a> · Creator? <a href="/dashboard">Open your dashboard</a><br><span id="netNote">Test network only. New software, not yet reviewed by an outside security firm.</span> <a href="https://github.com/kaspass/kaspass" target="_blank" rel="noopener">github.com/kaspass/kaspass</a></footer>
 </div>
 
 <script src="/assets/qrcode.js?v=31"></script>
-<script src="/assets/index.js?v=75"></script>
+<script src="/assets/index.js?v=76"></script>
 </body>
 </html>

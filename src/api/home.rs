@@ -56,10 +56,21 @@ fn gate(s: &AppState, headers: &HeaderMap, uri: &axum::http::Uri) -> Result<Opti
 }
 
 /// The membership page, behind the private-link gate when the creator turned it on.
+/// The link preview's address: the host that was asked for (only plain host characters), over
+/// https except on this computer, and the page's own path.
+pub(crate) fn fill_preview(headers: &HeaderMap, uri: &axum::http::Uri, html: String) -> String {
+    let host: String = headers.get(header::HOST).and_then(|h| h.to_str().ok()).unwrap_or("").chars().filter(|c| c.is_ascii_alphanumeric() || ".-:[]".contains(*c)).take(253).collect();
+    let local = host.starts_with("127.0.0.1") || host.starts_with("localhost") || host.starts_with("[::1]");
+    let origin = if host.is_empty() { String::new() } else { format!("{}://{host}", if local { "http" } else { "https" }) };
+    let path: String = uri.path().chars().filter(|c| c.is_ascii_alphanumeric() || "/-_.".contains(*c)).take(200).collect();
+    html.replace(super::PAGE_ORIGIN, &origin).replace(super::PAGE_PATH, &path)
+}
+
 fn membership_page(s: &AppState, headers: &HeaderMap, uri: &axum::http::Uri, html: String) -> axum::response::Response {
     match gate(s, headers, uri) {
         Err(r) => r,
         Ok(cookie) => {
+            let html = fill_preview(headers, uri, html);
             let mut r = ([(header::CACHE_CONTROL, "no-store")], Html(html)).into_response();
             if private(&s.home).is_some() {
                 r.headers_mut().insert(header::HeaderName::from_static("x-robots-tag"), header::HeaderValue::from_static("noindex"));

@@ -1081,6 +1081,10 @@ async fn member(State(s): State<AppState>, headers: HeaderMap, Query(q): Query<C
     Ok(Json(out))
 }
 
+/// Stand-ins in the membership page's link preview, filled in per request with the address asked for.
+pub(crate) const PAGE_ORIGIN: &str = "%%PAGE_ORIGIN%%";
+pub(crate) const PAGE_PATH: &str = "%%PAGE_PATH%%";
+
 fn esc(t: &str) -> String {
     t.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;")
 }
@@ -1131,7 +1135,19 @@ fn fill_site(s: &AppState) -> String {
         html = html.replacen(r#"<img id="brandPhoto" class="avatar hidden" alt="">"#, &format!(r#"<img id="brandPhoto" class="avatar" src="{u}" alt="">"#), 1);
     }
     html = html.replacen("/brand/fonts.css?v=0", &format!("/brand/fonts.css?v={}", b.version), 1).replacen("/brand/theme.css?v=0", &format!("/brand/theme.css?v={}", b.version), 1);
-    html.replacen("<title>Membership</title>", &format!("<title>{}</title>", esc(&title)), 1)
+    // A link preview for chat apps and social sites: the creator's tagline and banner. The
+    // address is filled in per request (`home::fill_preview`), from the host that was asked.
+    let tagline = page_profile(&s.home).tagline;
+    let desc = if !tagline.trim().is_empty() { tagline.trim().to_string() } else if !heading.is_empty() { format!("Join {heading}. Memberships paid in KAS, from your own Kaspa wallet.") } else { "Memberships paid in KAS, from your own Kaspa wallet.".to_string() };
+    let banner = brand::picture_url(&b, "banner");
+    let preview = format!(
+        "<title>{t}</title>\n<meta name=\"description\" content=\"{d}\">\n<link rel=\"canonical\" href=\"{PAGE_ORIGIN}{PAGE_PATH}\">\n<meta property=\"og:type\" content=\"website\">\n<meta property=\"og:title\" content=\"{t}\">\n<meta property=\"og:description\" content=\"{d}\">\n<meta property=\"og:url\" content=\"{PAGE_ORIGIN}{PAGE_PATH}\">\n{img}<meta name=\"twitter:card\" content=\"{card}\">",
+        t = esc(&title),
+        d = esc(&desc),
+        img = banner.as_deref().map(|u| format!("<meta property=\"og:image\" content=\"{PAGE_ORIGIN}{}\">\n", esc(u))).unwrap_or_default(),
+        card = if banner.is_some() { "summary_large_image" } else { "summary" },
+    );
+    html.replacen("<title>Membership</title>", &preview, 1)
         .replacen(r#"<h1 class="page" id="pageTitle">Membership</h1>"#, &format!(r#"<h1 class="page" id="pageTitle">{}</h1>"#, esc(&heading)), 1)
         .replacen(r#"aria-current="page">Membership</a>"#, &format!(r#"aria-current="page">{}</a>"#, esc(&cap(&w.one))), 1)
         .replace(r#"data-pw="">membership<"#, &format!(r#"data-pw="">{}<"#, esc(&w.one)))
@@ -4238,10 +4254,24 @@ const HELP_PAGE: &str = include_str!("../web/help.html");
 
 /// How to get Kaspire, sign in, buy, auto-renew, renew, upgrade and close (served as /help,
 /// so partner sites can link to steps that stay in step with the buy page).
+/// The help page's look on KasPass's own site: the home page's fonts and colors.
+const HELP_KASPASS_LOOK: &str = r#"<style>
+@font-face { font-family: "Bricolage Grotesque"; font-weight: 800; font-display: swap; src: url(/assets/fonts/bricolage-grotesque-latin-800-normal.woff2) format("woff2"); }
+@font-face { font-family: "Bricolage Grotesque"; font-weight: 600; font-display: swap; src: url(/assets/fonts/bricolage-grotesque-latin-600-normal.woff2) format("woff2"); }
+@font-face { font-family: "Instrument Sans"; font-weight: 400; font-display: swap; src: url(/assets/fonts/instrument-sans-latin-400-normal.woff2) format("woff2"); }
+@font-face { font-family: "Instrument Sans"; font-weight: 600; font-display: swap; src: url(/assets/fonts/instrument-sans-latin-600-normal.woff2) format("woff2"); }
+:root { --bg: #f2f5f4; --panel: #ffffff; --line: #c9d5d2; --text: #0f2321; --muted: #3b514e; --teal: #0b7a6e; --teal-dim: #9cc7c1; --accent-ink: #ffffff; --font-head: "Bricolage Grotesque", "Instrument Sans", system-ui, sans-serif; --font-body: "Instrument Sans", system-ui, sans-serif; color-scheme: light; }
+@media (prefers-color-scheme: dark) { :root { --bg: #0b1615; --panel: #10201e; --line: #24403c; --text: #e6efed; --muted: #a8bbb7; --teal: #49d9c8; --teal-dim: #1f5f58; --accent-ink: #062421; color-scheme: dark; } }
+</style>"#;
+
 async fn help_page(State(s): State<AppState>, headers: HeaderMap) -> impl IntoResponse {
     let html = if home::is_home(&headers) {
         // On KasPass's own site: a way back to the home page, besides the example page.
-        home::to_demo(HELP_PAGE).replacen(r#"<a class="back" href="/demo">Back to the membership page</a>"#, r#"<a class="back" href="/">KasPass home</a><a class="back" href="/demo/podcast">Example page</a>"#, 1)
+        // KasPass's own look, following the visitor's light or dark setting, instead of the
+        // site creator's: this help page belongs to the KasPass site here.
+        home::to_demo(HELP_PAGE)
+            .replacen(r#"<a class="back" href="/demo">Back to the membership page</a>"#, r#"<a class="back" href="/">Home</a><a class="back" href="/demo/podcast">Example</a>"#, 1)
+            .replacen("<link rel=\"stylesheet\" href=\"/brand/fonts.css\">\n<link rel=\"stylesheet\" href=\"/brand/theme.css\">", HELP_KASPASS_LOOK, 1)
     } else {
         HELP_PAGE.to_string()
     };

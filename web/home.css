@@ -76,7 +76,7 @@ p { margin: 0; }
 .btn:hover { transform: translateY(-1px); text-decoration: none; }
 .btn:active { transform: translateY(0); }
 .btn.ghost { background: transparent; color: var(--ink); border-color: var(--ink); }
-.btn.small { min-height: 40px; padding: 0 18px; font-size: 15px; }
+.btn.small { min-height: 44px; padding: 0 18px; font-size: 15px; }
 .btn:disabled { opacity: .55; cursor: default; transform: none; }
 .btns { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 32px; }
 
@@ -84,7 +84,7 @@ p { margin: 0; }
 .top { position: sticky; top: 0; z-index: 5; background: var(--paper); background: color-mix(in srgb, var(--paper) 90%, transparent); backdrop-filter: saturate(1.4) blur(10px); -webkit-backdrop-filter: saturate(1.4) blur(10px); border-bottom: 1px solid var(--line); }
 .top .wrap { display: flex; align-items: center; gap: 20px; min-height: 68px; }
 .logo { display: inline-flex; align-items: center; gap: 10px; color: var(--ink); text-decoration: none; font: 800 21px/1 var(--display); letter-spacing: -0.02em; }
-.logo svg { width: 30px; height: 30px; color: var(--teal); }
+.logo svg { width: 23.4px; height: 26px; color: var(--teal); }
 nav.main { margin-left: auto; display: flex; align-items: center; gap: 2px; }
 nav.main a:not(.btn) { color: var(--ink); text-decoration: none; font-weight: 600; font-size: 15px; padding: 8px 12px; border-radius: 999px; }
 nav.main a:not(.btn):hover { background: var(--paper-2); }
@@ -97,6 +97,11 @@ nav.main .btn { margin-left: 8px; }
 .hero .wrap { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, .8fr); gap: 56px; align-items: center; }
 .hero .lead { margin-top: 22px; }
 .hero .fine { margin-top: 22px; max-width: 32em; }
+.hero .points { list-style: none; padding: 0; margin: 26px 0 0; display: grid; gap: 10px; max-width: 34em; }
+.hero .points li { position: relative; padding-left: 26px; color: var(--ink-2); font-size: 16px; line-height: 1.5; }
+.hero .points li::before { content: ""; position: absolute; left: 2px; top: .5em; width: 12px; height: 7px; border-left: 2.4px solid var(--teal); border-bottom: 2.4px solid var(--teal); transform: rotate(-45deg); }
+.hero .points b { color: var(--ink); }
+.hero .btns { margin-top: 28px; }
 @media (max-width: 900px) {
   .hero { padding: 36px 0 64px; }
   .hero .wrap { grid-template-columns: 1fr; gap: 48px; }
@@ -180,6 +185,11 @@ nav.main .btn { margin-left: 8px; }
 }
 
 /* What a creator gets: a ruled list, not a wall of identical cards. */
+.why { list-style: none; padding: 0; margin: 36px 0 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px; }
+.why li { border-top: 2px solid var(--teal); padding-top: 18px; }
+.why h3 { font-size: 19px; }
+.why p { color: var(--ink-2); font-size: 16px; margin-top: 6px; }
+@media (max-width: 760px) { .why { grid-template-columns: 1fr; gap: 22px; } }
 .gets { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 56px; margin-top: 40px; }
 .gets div { display: grid; grid-template-columns: 30px 1fr; align-content: start; gap: 4px 16px; padding: 22px 0; border-top: 1px solid var(--line); }
 .gets svg { width: 26px; height: 26px; grid-row: span 2; margin-top: 2px; }
@@ -253,6 +263,7 @@ nav.main .btn { margin-left: 8px; }
 .foot { padding: 36px 0 44px; font-size: 15px; color: var(--ink-2); }
 .foot .wrap { display: flex; flex-wrap: wrap; gap: 14px 28px; justify-content: space-between; align-items: center; }
 .foot .links { display: flex; flex-wrap: wrap; gap: 8px 22px; }
+@media (max-width: 700px) { .foot .links { gap: 0 20px; } .foot .links a { display: inline-flex; align-items: center; min-height: 44px; } }
 .foot a { color: var(--ink); }
 
 /* ---- "Get your own page" -------------------------------------------------- */

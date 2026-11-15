@@ -204,17 +204,17 @@ pub async fn layer(State(s): State<AppState>, req: axum::extract::Request, next:
 }
 
 /// `/demo/<id>`: the membership page as one of the example creators.
-pub async fn page(State(s): State<AppState>, headers: HeaderMap, axum::extract::Path(id): axum::extract::Path<String>) -> axum::response::Response {
+pub async fn page(State(s): State<AppState>, headers: HeaderMap, uri: axum::http::Uri, axum::extract::Path(id): axum::extract::Path<String>) -> axum::response::Response {
     if !home::is_home(&headers) {
         return axum::response::Redirect::to("/").into_response();
     }
     let Some(e) = build(&s, &id) else { return axum::response::Redirect::to(&format!("/demo/{}", default_id())).into_response() };
-    let html = EXAMPLE.scope(Arc::new(e), async { fill_site(&s) }).await;
+    let html = home::fill_preview(&headers, &uri, EXAMPLE.scope(Arc::new(e), async { fill_site(&s) }).await);
     let tabs: String = list()
         .iter()
         .map(|(x, label, _)| format!(r#"<a href="/demo/{x}"{}>{label}</a>"#, if *x == id { r#" aria-current="page""# } else { "" }))
         .collect();
-    let bar = format!(r#"<nav class="exbar" aria-label="Example creators"><span>Example creators, made up for this demo on Kaspa's test network (memberships cost free test KAS). Just looking? You can browse without a wallet.</span><span class="exlinks">{tabs}</span><a class="exabout" href="/creators">Get your own page</a><a class="exabout" href="/">About KasPass</a></nav>"#);
+    let bar = format!(r#"<nav class="exbar" aria-label="Example creators"><span>These creators are made up. This page runs on Kaspa's test network, so joining costs nothing real. No wallet? You can still look around.</span><span class="exlinks">{tabs}</span><a class="exabout" href="/creators">Get your own page</a><a class="exabout" href="/">About KasPass</a></nav>"#);
     let html = html
         .replace(r#"href="/""#, &format!(r#"href="/demo/{id}""#))
         .replacen("<head>", &format!(r#"<head><meta name="kp-example" content="{id}">"#), 1)
