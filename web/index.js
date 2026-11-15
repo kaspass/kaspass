@@ -939,6 +939,9 @@ async function loadPromoMe() {
 // Self-serve free trials, per level: offered, how long, the first month's price, and (signed in)
 // whether this wallet can start one.
 let TRIALS = {};
+// The trials shown on the plan cards right now, and the wallet age they share (if one).
+let TRIAL_SHOWN = [];
+let TRIAL_AGE = null;
 async function loadTrials() {
   if (!v5Site()) return;
   const next = {};
@@ -956,9 +959,9 @@ const trialLen = (t) => (t.trial_ms >= 86400000 ? `${trialDays(t)}-day` : `${Mat
 // A pass that is a self-serve trial: nothing paid yet, on a level that offers them.
 const isTrialPass = (p) => p && p.active && !p.lifetime && p.paid_sompi === 0 && !!TRIALS[p.level];
 
-async function startTrial(l, b) {
+async function startTrial(l, b, hint) {
   if (!session || !address) {
-    say("trialHint", "Sign in with your wallet first (just below), then press Start again.");
+    if (hint) hint.textContent = "Sign in with your wallet first (just below), then press Start again.";
     $("wallet").scrollIntoView({ behavior: "smooth", block: "start" });
     return;
   }
@@ -1737,7 +1740,8 @@ function renderCompare() {
 
 function renderLevels() {
   renderTrialBox();
-  if (levels.length < 2) return;
+  TRIAL_SHOWN = [];
+  if (levels.length < 2) { show("trialAbout", false); return; }
   const anyPerks = levels.some((l) => l.perks && l.perks.length);
   // The visitor's own choice, else the creator's default.
   let stored = null; try { stored = localStorage.getItem("kaspass.view"); } catch {}
@@ -1760,6 +1764,8 @@ function renderLevels() {
   // The pay box may sit between the cards: keep it in the page while they're redrawn.
   if ($("join").parentElement === box) $("levelsBox").after($("join"));
   box.replaceChildren();
+  const ages = [...new Set(Object.values(TRIALS).filter((t) => t.eligible !== false).map((t) => t.min_age_days || 0))];
+  TRIAL_AGE = ages.length === 1 ? ages[0] : null;
   for (const l of levels) {
     const o = l.offer;
     const d = document.createElement("div");
@@ -1773,7 +1779,7 @@ function renderLevels() {
     const hasMore = !!(about || lower || (l.perks && l.perks.length));
     d.innerHTML = `<div class="ln">${escH(l.name)}${mine ? `<span class="yours">Your ${escH(lw())}</span>` : ""}</div>` +
       `<div class="lp">${price}</div>` +
-      `<div class="det"${OPEN.has(l.level) ? "" : " hidden"}>` +
+      `<div class="det"${CLOSED.has(l.level) || !hasMore ? " hidden" : ""}>` +
       (about ? `<div class="rich about">${about}</div>` : "") +
       (lower ? `<div class="inc">Everything in ${lower}${l.perks && l.perks.length ? ", plus:" : ""}</div>` : "") +
       (l.perks && l.perks.length ? `<ul>${l.perks.map((x) => `<li>${escH(x)}</li>`).join("")}</ul>` : `<ul></ul>`) +
@@ -1794,11 +1800,34 @@ function renderLevels() {
     d.append(b);
     box.append(d);
   }
+  renderTrialAbout(!compare && !FOLDLIST);
 }
 
-// What a plan includes stays folded until asked for, so a phone shows every plan at a glance:
-// "What's included" (or a tap anywhere on the card that isn't a button) opens it.
-const OPEN = new Set();
+// The free trial, explained once above the plans: how it works is the same for every plan, so
+// each card only says its own length, price and the amount set aside.
+function renderTrialAbout(on) {
+  const box = $("trialAbout");
+  if (!box) return;
+  if (!on || !TRIAL_SHOWN.length) { show("trialAbout", false); return; }
+  const same = (f) => { const v = [...new Set(TRIAL_SHOWN.map(f))]; return v.length === 1 ? v[0] : null; };
+  const len = same(({ tr }) => trialWords(tr));
+  const ms = same(({ tr }) => tr.trial_ms);
+  const unit = same(({ l }) => unitOf(l.period_ms));
+  const first = unit ? `your first ${unit}` : "your first payment";
+  const ends = ms ? fmtDate(chainNow() + ms) : null;
+  const bondKas = kas((TRIAL_SHOWN[0].l.offer && TRIAL_SHOWN[0].l.offer.bond_sompi) || (card && card.settings.bond) || KAS);
+  const cushion = TRIAL_SHOWN.some(({ tr }) => tr.first_period && tr.first_period.currency !== "KAS");
+  const one = TRIAL_SHOWN.length === 1;
+  const title = one ? `Try ${TRIAL_SHOWN[0].l.name} free for ${trialWords(TRIAL_SHOWN[0].tr)}` : len ? `Try any of these free for ${len}` : "Free trials";
+  box.innerHTML = `<h3>${escH(title)}</h3>
+    <p>To start, you set aside ${escH(first)}${cushion ? " (plus 10% in case the KAS price moves)" : ""} and a ${escH(bondKas)} deposit. It stays yours. Cancel ${ends ? `before ${escH(ends)}` : "before your trial ends"} and all of it comes back. If you stay, ${escH(first)} is taken ${ends ? `on ${escH(ends)}` : "when the trial ends"}.</p>
+    <p class="muted">One free trial per person${TRIAL_AGE ? `, and your wallet must be at least ${TRIAL_AGE} days old` : ""}.</p>`;
+  show("trialAbout", true);
+}
+
+// What a plan includes is shown on every card. "Hide details" folds it (and it stays folded while
+// the page is open); "What's included" opens it again.
+const CLOSED = new Set();
 function foldCard(d, l) {
   const det = d.querySelector(".det");
   if (!det) return;
@@ -1810,7 +1839,7 @@ function foldCard(d, l) {
     d.classList.toggle("open", open);
     t.setAttribute("aria-expanded", String(open));
     t.innerHTML = `${open ? "Hide details" : "What's included"} <span aria-hidden="true">${open ? "▴" : "▾"}</span>`;
-    if (open) OPEN.add(l.level); else OPEN.delete(l.level);
+    if (open) CLOSED.delete(l.level); else CLOSED.add(l.level);
   };
   // Opening a plan also makes it the one "Plan details" below describes.
   const toggle = () => {
@@ -1821,9 +1850,11 @@ function foldCard(d, l) {
   t.onclick = (e) => { e.stopPropagation(); toggle(); };
   det.before(t);
   set(!det.hidden);
+  // A tap on the card itself picks that plan for "Plan details" (opening it if it was folded).
   d.addEventListener("click", (e) => {
     if (e.target.closest("button, a, input, select, label, .promo")) return;
-    toggle();
+    if (det.hidden) set(true);
+    if (LEVEL !== l.level) selectLevel(l.level, { quiet: true });
   });
 }
 
@@ -1892,20 +1923,21 @@ function v5Card(d, l) {
       if (tr.reason !== "member") d.insertAdjacentHTML("beforeend", `<div class="trialno small">${escH(tr.reason_text || "")}</div>`);
     } else {
       trialOn = true;
+      TRIAL_SHOWN.push({ l, tr });
       const note = document.createElement("div");
       note.className = "trialnote small";
       const back = fp ? kasAbout(fp.sompi / KAS) : "";
-      const ends = fmtDate(chainNow() + tr.trial_ms);
-      const cushion = fp && fp.currency !== "KAS" ? ` (${price}, plus 10% in case the KAS price moves)` : price ? ` (${price})` : "";
-      const bondKas = kas((l.offer && l.offer.bond_sompi) || (card && card.settings.bond) || KAS);
-      note.textContent = `Try it free for ${trialWords(tr)}. To start, you set aside your first ${unitOf(l.period_ms)}${back ? `: about ${back}${cushion}` : ""}, and a ${bondKas} deposit. It stays yours. Cancel before ${ends} and all of it comes back. If you stay, ${price || `your first ${unitOf(l.period_ms)}`} is taken on ${ends}. One free trial per person${tr.min_age_days ? `, and your wallet must be at least ${tr.min_age_days} days old` : ""}.`;
+      const age = tr.min_age_days && TRIAL_AGE !== tr.min_age_days ? ` Your wallet must be at least ${tr.min_age_days} days old.` : "";
+      note.textContent = `${trialWords(tr)} free${price ? `, then ${price} a ${unitOf(l.period_ms)}` : ""}.${back ? ` To start, you set aside about ${back}.` : ""}${age}`;
       d.append(note);
       const tb = document.createElement("button");
       tb.className = "trialgo";
       tb.textContent = `Start my free ${trialLen(tr)} trial`;
-      tb.onclick = () => startTrial(l, tb);
-      d.append(tb);
-      d.insertAdjacentHTML("beforeend", '<div id="trialHint" class="small muted" role="status"></div>');
+      const hint = document.createElement("div");
+      hint.className = "trialhint small muted";
+      hint.setAttribute("role", "status");
+      tb.onclick = () => startTrial(l, tb, hint);
+      d.append(tb, hint);
     }
   }
   if (!q) {
