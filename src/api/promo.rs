@@ -113,11 +113,13 @@ fn write_claims(home: &std::path::Path, all: &[Claim]) -> std::io::Result<()> {
 fn edit_claims(home: &std::path::Path, current: &str, f: impl FnOnce(&mut Vec<Claim>)) -> Result<(), String> {
     let mut all = read_claims(home)?;
     f(&mut all);
-    let old = all.iter().filter(|c| c.campaign != current).count();
+    // An invite's claim is what marks it used, so those are never trimmed (MAX_INVITES caps them).
+    let trimmable = |c: &Claim| c.campaign != current && !c.campaign.starts_with("invite:");
+    let old = all.iter().filter(|c| trimmable(c)).count();
     if old > MAX_OLD_CLAIMS {
         let mut drop = old - MAX_OLD_CLAIMS;
         all.retain(|c| {
-            if drop > 0 && c.campaign != current {
+            if drop > 0 && trimmable(c) {
                 drop -= 1;
                 false
             } else {
@@ -426,42 +428,55 @@ pub async fn claim(State(s): State<AppState>, Json(req): Json<SessionBody>) -> R
         return Err((StatusCode::CONFLICT, "you already have this plan (or one that includes it), so there's nothing to claim".to_string()));
     }
     no_duplicate(&ls, &st.wallet).await?;
+    let (txid, until_ms) = send_free_pass(&s, &ls, &shop, &p.id, &p.label, &st.wallet, &st.group, &nfts).await?;
+    Ok(Json(serde_json::json!({ "txid": txid, "level": p.level, "until_ms": until_ms, "nfts_used": nfts })))
+}
+
+/// Has the keeper buy `wallet` a free pass on `ls`'s plan, recording the claim under `campaign`
+/// (before anything is sent) and logging it as a promotion. Call with CLAIMING held, after every
+/// check. Returns the txid and the pass's end.
+#[allow(clippy::too_many_arguments)]
+async fn send_free_pass(s: &AppState, ls: &AppState, shop: &crate::shop::Shop, campaign: &str, label: &str, wallet: &str, group: &[String], nfts: &[String]) -> Result<(String, i64), ApiError> {
+    let level = ls.card.covenant_id.clone();
     // The keeper pays: stop (and tell the creator once) if it can't.
-    let bal = keeper_sompi(&ls).await.unwrap_or(0);
-    let cost = claim_cost(&ls).await;
+    let bal = keeper_sompi(ls).await.unwrap_or(0);
+    let cost = claim_cost(ls).await;
     if bal < cost + KEEPER_FLOOR {
-        let first = TOLD_LOW.lock().unwrap_or_else(|e| e.into_inner()).replace(p.id.clone()).as_deref() != Some(p.id.as_str());
+        // Invite links share one "paused" message, not one per link.
+        let key = if campaign.starts_with("invite:") { "invites" } else { campaign };
+        let first = TOLD_LOW.lock().unwrap_or_else(|e| e.into_inner()).replace(key.to_string()).as_deref() != Some(key);
         if first {
-            let owner = owner_hash_of(&site_owner(&ls)).map(|h| h.to_string()).unwrap_or_default();
-            dm_owner(&ls, &owner, &format!("Your promotion \"{}\" is paused: the keeper wallet needs a top-up (each free pass uses about {} KAS). Its address is in your dashboard › Promotions.", p.label, kas4(cost))).await;
+            let owner = owner_hash_of(&site_owner(ls)).map(|h| h.to_string()).unwrap_or_default();
+            dm_owner(ls, &owner, &format!("Free passes (\"{label}\") are paused: the keeper wallet needs a top-up (each free pass uses about {} KAS). Its address is in your dashboard › Promotions.", kas4(cost))).await;
         }
         return Err((StatusCode::SERVICE_UNAVAILABLE, "free passes are paused for a moment while the site tops up. Try again later.".to_string()));
     }
     *TOLD_LOW.lock().unwrap_or_else(|e| e.into_inner()) = None;
-    let lane = current_lane(&ls).await?;
+    let lane = current_lane(ls).await?;
     if lane.lane.remaining == 0 {
         return Err((StatusCode::CONFLICT, "this plan is sold out".to_string()));
     }
-    let ppm = promo_ppm(&ls, lane.lane.price);
+    let ppm = promo_ppm(ls, lane.lane.price);
     // Recorded before anything is sent: if the record can't be saved, nothing is sent.
     let now = wall_ms();
-    let rec = Claim { campaign: p.id.clone(), wallet: st.wallet.clone(), nfts: nfts.clone(), txid: String::new(), at_ms: now, level: p.level.clone(), charge_sompi: 0, group: st.group.clone(), status: "pending".into(), label: p.label.clone() };
-    edit_claims(&s.home, &p.id, |all| all.push(rec)).map_err(unreadable)?;
-    let mine = |c: &Claim| c.campaign == p.id && c.wallet == st.wallet && c.at_ms == now && c.status == "pending";
+    let rec = Claim { campaign: campaign.to_string(), wallet: wallet.to_string(), nfts: nfts.to_vec(), txid: String::new(), at_ms: now, level: level.clone(), charge_sompi: 0, group: group.to_vec(), status: "pending".into(), label: label.to_string() };
+    let keep = current_campaign(&s.home);
+    edit_claims(&s.home, &keep, |all| all.push(rec)).map_err(unreadable)?;
+    let mine = |c: &Claim| c.campaign == campaign && c.wallet == wallet && c.at_ms == now && c.status == "pending";
     let res = {
         let mut chain = ls.chain.lock().await;
-        shop.promo_buy(&mut chain, &st.wallet, &lane, ppm).await
+        shop.promo_buy(&mut chain, wallet, &lane, ppm).await
     };
     let (txid, charge) = match res {
         Ok(x) => x,
         Err((None, e)) => {
             // Nothing was sent: the claim doesn't count.
-            let _ = edit_claims(&s.home, &p.id, |all| all.retain(|c| !mine(c)));
+            let _ = edit_claims(&s.home, &keep, |all| all.retain(|c| !mine(c)));
             return Err((StatusCode::BAD_GATEWAY, format!("the free pass couldn't be sent ({e:#}); nothing was used up, try again in a minute")));
         }
         Err((Some(txid), e)) => {
             eprintln!("promo: sending a free pass reported an error (tx {txid}): {e:#}");
-            let _ = edit_claims(&s.home, &p.id, |all| {
+            let _ = edit_claims(&s.home, &keep, |all| {
                 if let Some(c) = all.iter_mut().find(|c| mine(c)) {
                     c.txid = txid.clone();
                     c.status = "unsure".into();
@@ -470,8 +485,8 @@ pub async fn claim(State(s): State<AppState>, Json(req): Json<SessionBody>) -> R
             return Err((StatusCode::BAD_GATEWAY, "the network didn't confirm your free pass yet. If it doesn't show up in a few minutes, try again.".to_string()));
         }
     };
-    members::remember(&s.home, &st.wallet);
-    let _ = edit_claims(&s.home, &p.id, |all| {
+    members::remember(&s.home, wallet);
+    let _ = edit_claims(&s.home, &keep, |all| {
         if let Some(c) = all.iter_mut().find(|c| mine(c)) {
             c.txid = txid.clone();
             c.charge_sompi = charge;
@@ -484,13 +499,240 @@ pub async fn claim(State(s): State<AppState>, Json(req): Json<SessionBody>) -> R
         snap.lanes.retain(|l| !(l.txid == lane.txid && l.index == lane.index));
         snap.lanes.insert(0, next);
     }
-    let currency = crate::prices::level_prices(&s.home).get(&p.level).map(|x| x.currency.clone()).unwrap_or_else(|| "KAS".into());
+    let currency = crate::prices::level_prices(&s.home).get(&level).map(|x| x.currency.clone()).unwrap_or_else(|| "KAS".into());
     crate::prices::log_payment(&s.home, &txid, crate::prices::PayNote { currency: currency.clone(), amount: 0.0, credit: 0.0, kind: "promo".into() });
     // Paid nothing in the plan's currency, so it earns no upgrade credit on a higher plan.
-    crate::prices::log_paid(&s.home, &p.level, &owner_hash_of(&st.wallet).map(|h| h.to_string()).unwrap_or_default(), charge as i64, &currency, 0.0);
-    ls.recent_buys.lock().unwrap_or_else(|e| e.into_inner()).insert(format!("{}:{}", ls.card.covenant_id, st.wallet), std::time::Instant::now());
+    crate::prices::log_paid(&s.home, &level, &owner_hash_of(wallet).map(|h| h.to_string()).unwrap_or_default(), charge as i64, &currency, 0.0);
+    ls.recent_buys.lock().unwrap_or_else(|e| e.into_inner()).insert(format!("{}:{}", ls.card.covenant_id, wallet), std::time::Instant::now());
     println!("promo: gave a free pass ({} KAS to the vault, paid by the keeper), tx {txid}", kas4(charge));
-    Ok(Json(serde_json::json!({ "txid": txid, "level": p.level, "until_ms": now + ls.card.settings.period_ms, "nfts_used": nfts })))
+    Ok((txid, now + ls.card.settings.period_ms))
+}
+
+/// The holder campaign whose claims are never trimmed (invite claims are kept by `edit_claims`
+/// as long as their invite is listed).
+fn current_campaign(home: &std::path::Path) -> String {
+    read_promo(home).map(|p| p.id).unwrap_or_default()
+}
+
+// ---- Invite links ---------------------------------------------------------------
+//
+// Single-use links the creator hands out ("a free month for early supporters"): the person signs
+// in, presses "Claim my free month", and the keeper buys their pass, as with a holder promotion
+// but with no holding needed. Each code works once (used up at the claim, not at sign-in), runs
+// alongside any holder promotion, and is recorded in promo-claims.json as campaign "invite:CODE".
+
+const INVITES_FILE: &str = "invites.json";
+const MAX_INVITES: usize = 2_000;
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct Invite {
+    pub code: String,
+    /// The plan (level covenant id) whose pass it gives.
+    pub level: String,
+    /// What the invite page says, e.g. "A free month for early supporters".
+    pub label: String,
+    /// The creator's own note: who it's for. Never shown to the person.
+    #[serde(default)]
+    pub note: String,
+    pub created_ms: i64,
+    pub end_ms: i64,
+    #[serde(default)]
+    pub cancelled: bool,
+}
+
+fn read_invites(home: &std::path::Path) -> Vec<Invite> {
+    std::fs::read_to_string(home.join(INVITES_FILE)).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default()
+}
+
+fn save_invites(home: &std::path::Path, all: &[Invite]) -> Result<(), ApiError> {
+    crate::prices::write_atomic(&home.join(INVITES_FILE), serde_json::to_string_pretty(all).unwrap_or_default().as_bytes()).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("couldn't save {INVITES_FILE} ({e})")))
+}
+
+fn invite_campaign(code: &str) -> String {
+    format!("invite:{code}")
+}
+
+/// An invite's state: "open", "used", "ended" or "cancelled", and its claim when used.
+async fn invite_state(s: &AppState, inv: &Invite) -> Result<(&'static str, Option<Claim>), ApiError> {
+    let ls = s.at(Some(&inv.level))?;
+    let used = campaign_claims(&ls, &invite_campaign(&inv.code)).await.map_err(unreadable)?.into_iter().next();
+    Ok(match (&used, inv.cancelled, wall_ms() >= inv.end_ms) {
+        (Some(_), _, _) => ("used", used),
+        (None, true, _) => ("cancelled", None),
+        (None, false, true) => ("ended", None),
+        _ => ("open", None),
+    })
+}
+
+fn find_invite(home: &std::path::Path, code: &str) -> Option<Invite> {
+    let code = code.trim();
+    read_invites(home).into_iter().find(|i| i.code == code)
+}
+
+#[derive(Deserialize)]
+pub struct InviteQuery {
+    code: String,
+    /// When signed in: "mine" instead of "used" if this wallet used it.
+    session: Option<String>,
+}
+
+/// `GET /v1/invite?code=`: what an invite gives and whether it can still be claimed.
+pub async fn invite_info(State(s): State<AppState>, Query(q): Query<InviteQuery>) -> Result<Json<serde_json::Value>, ApiError> {
+    let inv = find_invite(&s.home, &q.code).ok_or((StatusCode::NOT_FOUND, "this invite link isn't valid. Check you copied the whole link.".to_string()))?;
+    let ls = s.at(Some(&inv.level))?;
+    let (mut state, claim) = invite_state(&s, &inv).await?;
+    if let (Some(c), Some(sess)) = (&claim, &q.session) {
+        let me = s.sessions.lock().unwrap_or_else(|e| e.into_inner()).address_for(sess);
+        if me.is_some_and(|w| s.wallets.group_of(&w).contains(&c.wallet)) {
+            state = "mine";
+        }
+    }
+    let paused = !can_give(&ls)
+        || match keeper_sompi_at(&ls, false).await {
+            Some(b) => b < claim_cost(&ls).await + KEEPER_FLOOR,
+            None => true,
+        };
+    let rank = s.levels.iter().position(|l| l.card.covenant_id == inv.level);
+    Ok(Json(serde_json::json!({
+        "state": state,
+        "paused": paused,
+        "label": inv.label,
+        "level": inv.level,
+        "level_name": rank.map(|i| level_name(&s.home, &s.levels, i)),
+        "period_ms": ls.card.settings.period_ms,
+        "end_ms": inv.end_ms,
+    })))
+}
+
+#[derive(Deserialize)]
+pub struct InviteClaim {
+    session: String,
+    code: String,
+}
+
+/// `POST /v1/invite/claim {session, code}`: uses the invite for the signed-in wallet.
+pub async fn invite_claim(State(s): State<AppState>, Json(req): Json<InviteClaim>) -> Result<Json<serde_json::Value>, ApiError> {
+    let inv = find_invite(&s.home, &req.code).ok_or((StatusCode::NOT_FOUND, "this invite link isn't valid. Check you copied the whole link.".to_string()))?;
+    let ls = s.at(Some(&inv.level))?;
+    let shop = shop_of(&ls)?;
+    if !can_give(&ls) {
+        return Err((StatusCode::SERVICE_UNAVAILABLE, "this site can't give free passes right now".to_string()));
+    }
+    let wallet = s.sessions.lock().unwrap_or_else(|e| e.into_inner()).address_for(&req.session).ok_or((StatusCode::UNAUTHORIZED, "please sign in again".to_string()))?;
+    let group = s.wallets.group_of(&wallet);
+    let closed = |state: &str| match state {
+        "used" => Err((StatusCode::CONFLICT, "this invite has already been used. Each invite link works once.".to_string())),
+        "cancelled" => Err((StatusCode::CONFLICT, "this invite was cancelled.".to_string())),
+        "ended" => Err((StatusCode::CONFLICT, "this invite has expired.".to_string())),
+        _ => Ok(()),
+    };
+    closed(invite_state(&s, &inv).await?.0)?;
+    let member = |m: Option<bool>| match m {
+        None => Err((StatusCode::SERVICE_UNAVAILABLE, "still reading the chain, try again in a moment".to_string())),
+        Some(true) => Err((StatusCode::CONFLICT, "you already have this plan (or one that includes it), so there's nothing to claim. The invite is still unused.".to_string())),
+        Some(false) => Ok(()),
+    };
+    member(has_access(&ls, &inv.level, &group).await)?;
+    // One claim at a time from here: check again.
+    let _one = CLAIMING.lock().await;
+    let inv = find_invite(&s.home, &req.code).ok_or((StatusCode::NOT_FOUND, "this invite link isn't valid.".to_string()))?;
+    closed(invite_state(&s, &inv).await?.0)?;
+    member(has_access(&ls, &inv.level, &group).await)?;
+    no_duplicate(&ls, &wallet).await?;
+    let (txid, until_ms) = send_free_pass(&s, &ls, &shop, &invite_campaign(&inv.code), &inv.label, &wallet, &group, &[]).await?;
+    Ok(Json(serde_json::json!({ "txid": txid, "level": inv.level, "until_ms": until_ms })))
+}
+
+/// `GET /v1/creator/invites?session=`: every invite, newest first, with its state and claim.
+pub async fn invites_get(State(s): State<AppState>, Query(q): Query<SessionQuery>) -> Result<Json<serde_json::Value>, ApiError> {
+    creator_of(&s, &q.session)?;
+    let mut out = Vec::new();
+    for inv in read_invites(&s.home).into_iter().rev() {
+        let (state, claim) = invite_state(&s, &inv).await?;
+        let rank = s.levels.iter().position(|l| l.card.covenant_id == inv.level);
+        out.push(serde_json::json!({
+            "code": inv.code,
+            "label": inv.label,
+            "note": inv.note,
+            "level": inv.level,
+            "level_name": rank.map(|i| level_name(&s.home, &s.levels, i)),
+            "created_ms": inv.created_ms,
+            "end_ms": inv.end_ms,
+            "state": state,
+            "claimed_by": claim.as_ref().map(|c| c.wallet.clone()),
+            "claimed_ms": claim.as_ref().map(|c| c.at_ms),
+            "txid": claim.as_ref().map(|c| c.txid.clone()),
+        }));
+    }
+    Ok(Json(serde_json::json!({ "invites": out })))
+}
+
+#[derive(Deserialize)]
+pub struct InviteMake {
+    session: String,
+    level: String,
+    label: String,
+    /// One invite per entry: the creator's note for who it's for (may be empty).
+    notes: Vec<String>,
+    end_ms: i64,
+}
+
+/// `POST /v1/creator/invites`: makes one single-use invite per note.
+pub async fn invites_make(State(s): State<AppState>, Json(req): Json<InviteMake>) -> Result<Json<serde_json::Value>, ApiError> {
+    creator_of(&s, &req.session)?;
+    let label: String = req.label.chars().filter(|c| !c.is_control()).take(MAX_LABEL).collect::<String>().trim().to_string();
+    if label.is_empty() {
+        return Err(bad("write the line the invite page shows, e.g. \"A free month for early supporters\""));
+    }
+    let lv = s.at(Some(req.level.trim()))?;
+    if lv.card.placeholder || !is_v5(&lv.card) {
+        return Err(bad("choose one of this site's plans"));
+    }
+    if !can_give(&lv) {
+        return Err(bad("this site can't give free passes (it needs the fees wallet and the price-approval key)"));
+    }
+    if req.notes.is_empty() || req.notes.len() > 100 {
+        return Err(bad("make between 1 and 100 invites at a time"));
+    }
+    let now = wall_ms();
+    if req.end_ms <= now {
+        return Err(bad("the invites' end date has already passed"));
+    }
+    if req.end_ms - now > 366 * 86_400_000 {
+        return Err(bad("invites can last a year at most"));
+    }
+    let mut all = read_invites(&s.home);
+    if all.len() + req.notes.len() > MAX_INVITES {
+        return Err(bad(format!("{MAX_INVITES} invites at most on a site")));
+    }
+    let mut made = Vec::new();
+    for note in &req.notes {
+        let note: String = note.chars().filter(|c| !c.is_control()).take(MAX_LABEL).collect::<String>().trim().to_string();
+        let code: String = auth::random_token().chars().filter(|c| c.is_ascii_alphanumeric()).take(20).collect();
+        let inv = Invite { code, level: lv.card.covenant_id.clone(), label: label.clone(), note, created_ms: now, end_ms: req.end_ms, cancelled: false };
+        made.push(inv.clone());
+        all.push(inv);
+    }
+    save_invites(&s.home, &all)?;
+    println!("dashboard: made {} invite link(s) for \"{label}\"", made.len());
+    Ok(Json(serde_json::json!({ "ok": true, "made": made })))
+}
+
+#[derive(Deserialize)]
+pub struct InviteCancel {
+    session: String,
+    code: String,
+}
+
+/// `POST /v1/creator/invites/cancel {session, code}`: an unused invite stops working.
+pub async fn invites_cancel(State(s): State<AppState>, Json(req): Json<InviteCancel>) -> Result<Json<serde_json::Value>, ApiError> {
+    creator_of(&s, &req.session)?;
+    let _one = CLAIMING.lock().await;
+    let mut all = read_invites(&s.home);
+    let inv = all.iter_mut().find(|i| i.code == req.code.trim()).ok_or_else(|| bad("no such invite"))?;
+    inv.cancelled = true;
+    save_invites(&s.home, &all)?;
+    Ok(Json(serde_json::json!({ "ok": true })))
 }
 
 // ---- Creator ------------------------------------------------------------------

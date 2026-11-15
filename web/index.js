@@ -606,7 +606,7 @@ fetch("/v1/club?for=page").then((r) => r.json()).then((c) => { if (c.enabled) { 
 })();
 
 const endSession = (t) => { if (t) fetch("/v1/logout", { method: "POST", headers: { "x-kaspass-session": t } }).catch(() => {}); };
-$("logout").onclick = () => { endSession(session); WC = null; session = null; PROMO_ME = null; held = []; heldPasses = []; QUOTES = {}; PAY = null; holder = { bps: 0, enabled: holder.enabled }; setAddress(kaspireNow || address); walletNote(); hideResults(); hideDone(); loadOffer(); renderLevels(); };
+$("logout").onclick = () => { endSession(session); WC = null; session = null; PROMO_ME = null; held = []; heldPasses = []; QUOTES = {}; PAY = null; holder = { bps: 0, enabled: holder.enabled }; setAddress(kaspireNow || address); walletNote(); hideResults(); hideDone(); loadOffer(); renderLevels(); renderInvite(); };
 
 // v4: does this wallet (or one linked to it) qualify for the holder price right now?
 async function loadHolder() {
@@ -831,6 +831,86 @@ async function loadPromo() {
   try { const r = await fetch("/v1/promo"); PROMO = r.ok ? await r.json() : null; } catch { PROMO = null; }
   if (PROMO && !PROMO.active) PROMO = null;
 }
+// An invite link (?invite=CODE): the creator's gift of a free pass. Sign in, press one button, and
+// the site's fees wallet pays. Each link works once; it's used up at the claim, not at sign-in.
+let INVITE = null, INVITE_CODE = null, inviting = false, INVITE_FOR;
+try {
+  INVITE_CODE = new URLSearchParams(location.search).get("invite") || sessionStorage.getItem("kp_invite");
+  if (INVITE_CODE) sessionStorage.setItem("kp_invite", INVITE_CODE);
+} catch {}
+async function loadInvite() {
+  if (!INVITE_CODE) return;
+  // Signed in: the server also says whether this wallet is the one that used it.
+  INVITE_FOR = session;
+  try {
+    const r = await fetch("/v1/invite?code=" + encodeURIComponent(INVITE_CODE) + (session ? "&session=" + encodeURIComponent(session) : ""));
+    INVITE = r.ok ? await r.json() : { error: await r.text() };
+  } catch { INVITE = null; }
+  renderInvite();
+}
+function renderInvite() {
+  if (!INVITE || inviting) { show("inviteBox", !!INVITE); return; }
+  if (session !== INVITE_FOR && !INVITE.error && INVITE.state !== "mine") { loadInvite(); return; }
+  show("inviteBox", true);
+  const u = unitOf(INVITE.period_ms || 0);
+  const t = (title, text) => { $("invTitle").textContent = title; $("invText").textContent = text; };
+  const b = $("invClaim");
+  show("invClaim", false);
+  if (INVITE.error) return t("This invite link doesn't work", plainError(INVITE.error, "Check you copied the whole link, or ask the person who sent it."));
+  if (INVITE.state === "mine") return t("It's yours", `Your free ${u} of ${INVITE.level_name || "this plan"} is in your wallet.`);
+  if (INVITE.state === "used") return t("This invite has already been used", "Each invite link works once. If it was yours, you're all set: sign in to see your membership.");
+  if (INVITE.state === "cancelled" || INVITE.state === "ended") return t(INVITE.state === "ended" ? "This invite has expired" : "This invite was cancelled", "Ask the person who sent it for a new one.");
+  if (INVITE.paused) return t("🎁 You've been invited", `${INVITE.label}: a free ${u} of ${INVITE.level_name || "this plan"}. Free passes are paused for a moment. Please try again later.`);
+  t("🎁 You've been invited", `${INVITE.label}: a free ${u} of ${INVITE.level_name || "this plan"}. ` + (session
+    ? "Press the button and it's yours. No payment, and nothing to approve in your wallet."
+    : `Sign in with Kaspire below, then press "Claim my free ${u}". It costs you nothing, and your wallet can be empty. Use it by ${fmtDate(INVITE.end_ms)}.`));
+  if (session) {
+    b.textContent = `Claim my free ${u}`;
+    b.disabled = false;
+    b.onclick = claimInvite;
+    show("invClaim", true);
+  }
+}
+async function claimInvite() {
+  if (inviting) return;
+  inviting = true;
+  const b = $("invClaim");
+  b.disabled = true;
+  say("invErr", "");
+  busy("invStatus", `Sending your free ${pw()}…`, "No wallet approval needed. Keep this page open until it's done.");
+  try {
+    const r = await fetch("/v1/invite/claim", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ session, code: INVITE_CODE }) });
+    if (!r.ok) throw new Error(await r.text());
+    const { txid, level } = await r.json();
+    busy("invStatus", "Sent. Waiting for the network to confirm…", `Transaction ${txid.slice(0, 12)}…`);
+    for (let i = 0; i < 40; i++) {
+      await sleep(2500);
+      const c = await fetch(withLevel("/v1/check?address=" + encodeURIComponent(address), level));
+      if (!c.ok) continue;
+      const j = await c.json();
+      if (j.passes.some((p) => p.txid === txid)) {
+        try { sessionStorage.removeItem("kp_invite"); } catch {}
+        INVITE.state = "mine";
+        inviting = false;
+        say("invStatus", "");
+        renderInvite();
+        await refreshHeld();
+        await loadQuotes();
+        if (level === LEVEL) await renderResult(j, txid); else await showLevelResult();
+        await loadOffer();
+        renderLevels();
+        showDone(j, txid, level, "promo");
+        return;
+      }
+    }
+    say("invStatus", `Your free ${pw()} was sent and is still being confirmed. Refresh this page in a minute.`);
+  } catch (e) {
+    say("invStatus", "");
+    oops("invErr", e);
+    b.disabled = false;
+  }
+  inviting = false;
+}
 async function loadPromoMe() {
   PROMO_ME = null;
   if (!PROMO || !session) return;
@@ -911,6 +991,7 @@ async function loadQuotes() {
   await loadTrials();
   QUOTES = {};
   for (const k of Object.keys(KQUOTES)) delete KQUOTES[k];
+  renderInvite();
   if (!session || !address || !v5Site()) return;
   loadPromoMe().then(() => { if (!claiming) renderLevels(); });
   await Promise.all(levels.map(async (l) => {
@@ -1445,6 +1526,7 @@ async function loadLevels() {
     site = { club_name: j.club_name || "", level_word: j.level_word || site.level_word };
   } catch { levels = []; }
   await loadPromo();
+  loadInvite();
   const w = site.level_word;
   applyLevelWord();
   $("levelsTitle").textContent = `Choose your ${w.one}`;

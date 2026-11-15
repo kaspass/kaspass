@@ -224,6 +224,9 @@
   .powered svg { width: 16px; height: 16px; }
 
   a { color: var(--teal); }
+  .invrow { border-top: 1px solid var(--line, #2a3a36); padding: 10px 0; }
+  .invrow .row { margin-top: 6px; flex-wrap: wrap; gap: 6px; }
+  .invlink { flex: 1 1 220px; min-width: 0; font-size: 12px; }
   .salebox { border: 1px solid rgba(242,200,107,.4); background: rgba(242,200,107,.08); color: #f2c86b; border-radius: 12px; padding: 12px 14px; margin-bottom: 12px; font-weight: 600; }
   .salebox .sub { color: var(--muted, #8aa09d); font-weight: 400; font-size: 13px; margin-top: 4px; }
 </style>
@@ -416,7 +419,7 @@
     </div>
 
     <div class="pane hidden" data-pane="promos">
-    <p class="muted small panehint">Skip this tab unless your community holds an NFT or token you'd like to reward.</p>
+    <p class="muted small panehint">Give free months: to holders of an NFT or token (Holder promotion), or to people you choose (Invite links).</p>
     <section class="panel hidden" id="promoPanel">
       <h2>Holder promotion</h2>
       <p class="muted small">A free month on one plan for people who hold an NFT or token, for example "NACHO holders: your first month is free". The holder presses "Claim" and gets it straight away. Your fees wallet pays for it: the price goes into your own vault (so it comes back to you), plus a 1 KAS deposit and a tiny network fee.</p>
@@ -440,6 +443,20 @@
       <div class="err hidden" id="prErr"></div>
       <div class="small" id="prKeeper" style="margin-top:14px"></div>
       <div class="tablewrap"><table id="prClaims"></table></div>
+    </section>
+    <section class="panel hidden" id="invPanel">
+      <h2>Invite links</h2>
+      <p class="muted small">Give someone a free month without waiting on you: make a link for each person and send it to them. They sign in with Kaspire and press "Claim my free month", any time, even with an empty wallet. Each link works once. Your fees wallet pays, like a promotion: <span id="ivCost">the price goes into your own vault (so it comes back to you), plus a 1 KAS deposit and a tiny network fee</span>.</p>
+      <div class="grid">
+        <label>Plan<select id="ivLevel"></select></label>
+        <label>Links work until<input type="date" id="ivEnd"></label>
+        <label style="grid-column: 1 / -1">Line on the invite page<input id="ivLabel" maxlength="80" placeholder="A free month for early supporters"></label>
+        <label style="grid-column: 1 / -1">Who they're for, one per line (only you see this)<textarea id="ivNotes" rows="4" placeholder="Alex from Telegram&#10;Sam&#10;Jordan"></textarea></label>
+        <label>Or just how many links<input type="number" id="ivCount" min="1" max="100" value="1"></label>
+      </div>
+      <button id="ivMake">Make the links</button>
+      <div class="err small hidden" id="ivErr"></div>
+      <div id="ivList" style="margin-top:14px"></div>
     </section>
     <section class="panel hidden" id="v4Panel">
       <h2>Fees wallet and holder discount</h2>
@@ -740,6 +757,6 @@
 </div>
 
 <script src="/assets/kaspire-mobile.js?v=2"></script>
-<script src="/assets/dashboard.js?v=65"></script>
+<script src="/assets/dashboard.js?v=67"></script>
 </body>
 </html>

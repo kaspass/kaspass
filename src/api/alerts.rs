@@ -99,7 +99,10 @@ async fn message(s: &AppState, level_name: &str, e: &crate::indexer::Event, note
     let kind = note.map(|n| n.kind.as_str()).unwrap_or("");
     let amt = amount(s, e, note);
     Some(match (e.kind.as_str(), kind) {
-        (_, "promo") => format!("🎁 Promotion claimed: {w} got a free {level_name} pass (the keeper paid; {amt} to your vault)."),
+        (_, "promo") => match promo::read_claims(&s.home).unwrap_or_default().into_iter().find(|c| c.txid == e.txid && c.campaign.starts_with("invite:")) {
+            Some(c) => format!("🎁 Invite link used (\"{}\"): {w} got a free {level_name} pass (the keeper paid; {amt} to your vault).", c.label),
+            None => format!("🎁 Promotion claimed: {w} got a free {level_name} pass (the keeper paid; {amt} to your vault)."),
+        },
         (_, "gift") => format!("🎁 Gift sent: {w} now has {level_name}."),
         ("trial", _) | ("self_trial", _) => format!("🆓 Free trial: {w} started {level_name}."),
         ("monthly", _) => format!("🎉 New member: {w} bought {level_name} for {amt}."),

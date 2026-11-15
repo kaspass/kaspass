@@ -1907,7 +1907,68 @@ async function loadPromo() {
   } catch { show("promoPanel", false); return; }
   show("promoPanel", !!PR.keeper && PR.levels.length > 0);
   renderPromo();
+  loadInvites();
 }
+
+// Invite links: single-use links for a free pass, made here and claimed by the person themselves.
+async function loadInvites() {
+  const on = !!(PR && PR.keeper && PR.levels.length && PR.can_discount);
+  show("invPanel", on);
+  if (!on) return;
+  const sel = $("ivLevel");
+  if (!sel.options.length) {
+    for (const l of PR.levels) sel.add(new Option(l.name, l.level));
+    const d = new Date(Date.now() + 30 * 86400000);
+    $("ivEnd").value = d.toISOString().slice(0, 10);
+  }
+  const unit = PR.network === "mainnet" ? "KAS" : "test KAS";
+  if (PR.cost_per_claim_sompi) $("ivCost").textContent = `each claim uses about ${(PR.cost_per_claim_sompi / 1e8).toFixed(2)} ${unit} from it, and ${(PR.vault_per_claim_sompi / 1e8).toFixed(2)} ${unit} of that goes into your own vault (so it comes back to you); the rest is the member's 1 ${unit} deposit and a tiny network fee`;
+  let list = [];
+  try {
+    const r = await fetch("/v1/creator/invites?session=" + encodeURIComponent(session));
+    if (r.ok) list = (await r.json()).invites || [];
+  } catch {}
+  const box = $("ivList");
+  box.innerHTML = "";
+  if (!list.length) { box.innerHTML = '<p class="muted small">No invite links yet.</p>'; return; }
+  const when = (ms) => new Date(ms).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  for (const i of list) {
+    const link = `${location.origin}/?invite=${encodeURIComponent(i.code)}`;
+    const row = document.createElement("div");
+    row.className = "invrow";
+    const st = i.state === "used" ? `Claimed by ${escHtml(short(i.claimed_by))} on ${escHtml(when(i.claimed_ms))}` : i.state === "open" ? `Not used yet · works until ${escHtml(when(i.end_ms))}` : i.state === "ended" ? "Expired" : "Cancelled";
+    row.innerHTML = `<div><b>${escHtml(i.note || "Invite")}</b> <span class="muted small">${escHtml(i.level_name || "")} · ${escHtml(i.label)}</span></div><div class="small">${st}</div>`;
+    if (i.state === "open") {
+      const r = document.createElement("div");
+      r.className = "row";
+      const inp = document.createElement("input");
+      inp.readOnly = true; inp.value = link; inp.className = "invlink";
+      const cp = document.createElement("button"); cp.className = "ghost"; cp.textContent = "Copy link";
+      cp.onclick = async () => { try { await navigator.clipboard.writeText(link); cp.textContent = "Copied"; } catch { inp.select(); } };
+      const x = document.createElement("button"); x.className = "ghost warn"; x.textContent = "Cancel";
+      x.onclick = async () => {
+        if (x.dataset.sure !== "1") { x.dataset.sure = "1"; x.textContent = "Press again to cancel this link"; return; }
+        await fetch("/v1/creator/invites/cancel", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ session, code: i.code }) });
+        loadInvites();
+      };
+      r.append(inp, cp, x);
+      row.append(r);
+    }
+    box.append(row);
+  }
+}
+$("ivMake").onclick = async () => {
+  show("ivErr", false);
+  const notes = $("ivNotes").value.split("\n").map((x) => x.trim()).filter(Boolean);
+  const n = notes.length ? notes : Array.from({ length: Math.max(1, Math.min(100, Number($("ivCount").value) || 1)) }, () => "");
+  const end = new Date($("ivEnd").value + "T23:59:59").getTime();
+  try {
+    const r = await fetch("/v1/creator/invites", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ session, level: $("ivLevel").value, label: $("ivLabel").value || $("ivLabel").placeholder, notes: n, end_ms: end }) });
+    if (!r.ok) throw new Error(await r.text());
+    $("ivNotes").value = "";
+    await loadInvites();
+  } catch (e) { plainSay("ivErr", e); }
+};
 
 function renderPromo() {
   const p = PR.promo, v = PR.view, unit = PR.network === "mainnet" ? "KAS" : "test KAS";

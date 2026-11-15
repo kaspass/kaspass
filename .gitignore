@@ -41,6 +41,7 @@ payin-history.json
 payin-on
 promo.json
 promo-claims.json
+invites.json
 signed-txids.json
 price-alerts.json
 price-alerts-seen*.json

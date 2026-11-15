@@ -536,6 +536,10 @@ pub async fn serve(setups: Vec<LevelSetup>, chain: Chain, port: u16, members_htm
         .route("/v1/promo/claim", post(promo::claim))
         .route("/v1/creator/promo", get(promo::creator_get).post(promo::creator_set))
         .route("/v1/creator/promo/end", post(promo::creator_end))
+        .route("/v1/invite", get(promo::invite_info))
+        .route("/v1/invite/claim", post(promo::invite_claim))
+        .route("/v1/creator/invites", get(promo::invites_get).post(promo::invites_make))
+        .route("/v1/creator/invites/cancel", post(promo::invites_cancel))
         .route("/v1/creator/member-note", post(members::creator_note))
         .route("/v1/creator/alerts", get(alerts::creator_get).post(alerts::creator_set))
         .route("/v1/creator/alerts/test", post(alerts::creator_test))
@@ -1012,7 +1016,8 @@ async fn member(State(s): State<AppState>, headers: HeaderMap, Query(q): Query<C
                 "level": l.card.covenant_id,
                 "level_name": name,
                 // A promotion's free pass: which campaign, and its line.
-                "promo": promos.get(&e.txid).map(|c| serde_json::json!({ "campaign": c.campaign, "label": c.label })),
+                // An invite link's own code stays private: it shows as "invite".
+                "promo": promos.get(&e.txid).map(|c| serde_json::json!({ "campaign": if c.campaign.starts_with("invite:") { "invite" } else { c.campaign.as_str() }, "label": c.label })),
             })));
         }
     }
