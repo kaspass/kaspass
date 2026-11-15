@@ -1175,7 +1175,7 @@ const ASSETS: &[(&str, &str, &[u8])] = &[
     ("og.png", "image/png", include_bytes!("../web/og.png")),
     ("favicon-32.png", "image/png", include_bytes!("../web/favicon-32.png")),
     ("apple-touch-icon.png", "image/png", include_bytes!("../web/apple-touch-icon.png")),
-    ("example-phone.webp", "image/webp", include_bytes!("../web/example-phone.webp")),
+    ("kaspa-vision-phone.webp", "image/webp", include_bytes!("../web/kaspa-vision-phone.webp")),
 ];
 
 async fn asset(axum::extract::Path(name): axum::extract::Path<String>, headers: HeaderMap) -> axum::response::Response {
