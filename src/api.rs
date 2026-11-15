@@ -540,6 +540,7 @@ pub async fn serve(setups: Vec<LevelSetup>, chain: Chain, port: u16, members_htm
         .route("/v1/invite/claim", post(promo::invite_claim))
         .route("/v1/creator/invites", get(promo::invites_get).post(promo::invites_make))
         .route("/v1/creator/invites/cancel", post(promo::invites_cancel))
+        .route("/v1/creator/invites/return", post(promo::invites_return))
         .route("/v1/creator/member-note", post(members::creator_note))
         .route("/v1/creator/alerts", get(alerts::creator_get).post(alerts::creator_set))
         .route("/v1/creator/alerts/test", post(alerts::creator_test))

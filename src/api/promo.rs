@@ -523,6 +523,26 @@ fn current_campaign(home: &std::path::Path) -> String {
 
 const INVITES_FILE: &str = "invites.json";
 const MAX_INVITES: usize = 2_000;
+/// Where invite links send people after they claim (one setting for every link).
+const INVITE_RETURN_FILE: &str = "invite-return.json";
+
+/// A return address the page may send people to: https, on a site `serve --allow-return` allows.
+fn allowed_return(u: &str) -> Option<String> {
+    let u = u.trim();
+    if u.is_empty() || u.len() > 300 || u.chars().any(|c| c.is_control() || c.is_whitespace()) {
+        return None;
+    }
+    let url = reqwest::Url::parse(u).ok()?;
+    (url.scheme() == "https" && return_origins().contains(&url.origin().ascii_serialization().to_lowercase())).then(|| url.to_string())
+}
+
+/// The invite links' return address: the saved one, or (never saved) the first allowed partner
+/// site. Empty when there's none or it's no longer allowed.
+fn invite_return(home: &std::path::Path) -> String {
+    let saved: Option<String> = std::fs::read_to_string(home.join(INVITE_RETURN_FILE)).ok().and_then(|t| serde_json::from_str::<serde_json::Value>(&t).ok()).and_then(|v| v["return_to"].as_str().map(str::to_string));
+    let u = saved.unwrap_or_else(|| return_origins().into_iter().next().unwrap_or_default());
+    allowed_return(&u).unwrap_or_default()
+}
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct Invite {
@@ -601,6 +621,8 @@ pub async fn invite_info(State(s): State<AppState>, Query(q): Query<InviteQuery>
         "level_name": rank.map(|i| level_name(&s.home, &s.levels, i)),
         "period_ms": ls.card.settings.period_ms,
         "end_ms": inv.end_ms,
+        // Where the done screen sends them (the page uses it when the link has no ?return=).
+        "return_to": invite_return(&s.home),
     })))
 }
 
@@ -664,7 +686,7 @@ pub async fn invites_get(State(s): State<AppState>, Query(q): Query<SessionQuery
             "txid": claim.as_ref().map(|c| c.txid.clone()),
         }));
     }
-    Ok(Json(serde_json::json!({ "invites": out })))
+    Ok(Json(serde_json::json!({ "invites": out, "return_to": invite_return(&s.home), "return_origins": return_origins() })))
 }
 
 #[derive(Deserialize)]
@@ -716,6 +738,28 @@ pub async fn invites_make(State(s): State<AppState>, Json(req): Json<InviteMake>
     save_invites(&s.home, &all)?;
     println!("dashboard: made {} invite link(s) for \"{label}\"", made.len());
     Ok(Json(serde_json::json!({ "ok": true, "made": made })))
+}
+
+#[derive(Deserialize)]
+pub struct InviteReturn {
+    session: String,
+    return_to: String,
+}
+
+/// `POST /v1/creator/invites/return {session, return_to}`: where every invite link sends people
+/// after they claim (empty: they stay on the page).
+pub async fn invites_return(State(s): State<AppState>, Json(req): Json<InviteReturn>) -> Result<Json<serde_json::Value>, ApiError> {
+    creator_of(&s, &req.session)?;
+    let v = if req.return_to.trim().is_empty() {
+        String::new()
+    } else {
+        allowed_return(&req.return_to).ok_or_else(|| {
+            let o = return_origins();
+            bad(if o.is_empty() { "this site isn't set up to send people to another website".to_string() } else { format!("use a full https address on {}", o.join(" or ")) })
+        })?
+    };
+    crate::prices::write_atomic(&s.home.join(INVITE_RETURN_FILE), serde_json::json!({ "return_to": v }).to_string().as_bytes()).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("couldn't save {INVITE_RETURN_FILE} ({e})")))?;
+    Ok(Json(serde_json::json!({ "ok": true, "return_to": v })))
 }
 
 #[derive(Deserialize)]

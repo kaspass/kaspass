@@ -454,6 +454,12 @@
         <label style="grid-column: 1 / -1">Who they're for, one per line (only you see this)<textarea id="ivNotes" rows="4" placeholder="Alex from Telegram&#10;Sam&#10;Jordan"></textarea></label>
         <label>Or just how many links<input type="number" id="ivCount" min="1" max="100" value="1"></label>
       </div>
+      <div id="ivBackBox" class="hidden" style="margin-bottom:12px">
+        <label>After claiming, send them to<input id="ivBack" inputmode="url" autocomplete="off" spellcheck="false"></label>
+        <div class="row" style="gap:8px;margin-top:6px"><button id="ivBackSave" class="ghost">Save</button><span class="small" id="ivBackSaved"></span></div>
+        <p class="muted small" id="ivBackNote"></p>
+        <div class="err small hidden" id="ivBackErr"></div>
+      </div>
       <button id="ivMake">Make the links</button>
       <div class="err small hidden" id="ivErr"></div>
       <div id="ivList" style="margin-top:14px"></div>
@@ -757,6 +763,6 @@
 </div>
 
 <script src="/assets/kaspire-mobile.js?v=2"></script>
-<script src="/assets/dashboard.js?v=67"></script>
+<script src="/assets/dashboard.js?v=68"></script>
 </body>
 </html>

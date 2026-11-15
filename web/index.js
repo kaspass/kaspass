@@ -846,6 +846,11 @@ async function loadInvite() {
     const r = await fetch("/v1/invite?code=" + encodeURIComponent(INVITE_CODE) + (session ? "&session=" + encodeURIComponent(session) : ""));
     INVITE = r.ok ? await r.json() : { error: await r.text() };
   } catch { INVITE = null; }
+  // The creator's "send them back to" address, unless the link brought its own ?return=.
+  if (INVITE && INVITE.return_to && !RETURN) {
+    try { sessionStorage.setItem("kaspass.return", INVITE.return_to); } catch {}
+    pickReturn(RETURN_ALLOWED);
+  }
   renderInvite();
 }
 function renderInvite() {
@@ -1487,8 +1492,9 @@ $("wClose").onclick = () => { try { localStorage.setItem("kaspass.welcome", "hid
 
 // Sent here from a partner site the server allows (`serve --allow-return`): remember where to go
 // back to (for this tab, so it survives signing in), and offer the way back once access is active.
-let RETURN = null;
+let RETURN = null, RETURN_ALLOWED = [];
 function pickReturn(allowed) {
+  RETURN_ALLOWED = allowed;
   let u = null;
   try { u = new URLSearchParams(location.search).get("return") || sessionStorage.getItem("kaspass.return"); } catch {}
   if (!u || !allowed.length) return;

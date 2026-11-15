@@ -1923,11 +1923,20 @@ async function loadInvites() {
   }
   const unit = PR.network === "mainnet" ? "KAS" : "test KAS";
   if (PR.cost_per_claim_sompi) $("ivCost").textContent = `each claim uses about ${(PR.cost_per_claim_sompi / 1e8).toFixed(2)} ${unit} from it, and ${(PR.vault_per_claim_sompi / 1e8).toFixed(2)} ${unit} of that goes into your own vault (so it comes back to you); the rest is the member's 1 ${unit} deposit and a tiny network fee`;
-  let list = [];
+  let list = [], j = {};
   try {
     const r = await fetch("/v1/creator/invites?session=" + encodeURIComponent(session));
-    if (r.ok) list = (await r.json()).invites || [];
+    if (r.ok) { j = await r.json(); list = j.invites || []; }
   } catch {}
+  // Where the links send people after they claim: one setting, for every link (sent ones too).
+  const origins = j.return_origins || [];
+  show("ivBackBox", origins.length > 0);
+  if (origins.length && document.activeElement !== $("ivBack")) {
+    $("ivBack").value = j.return_to || "";
+    $("ivBack").placeholder = origins[0] + "/";
+    const hosts = origins.map((o) => o.replace(/^https:\/\//, "")).join(" or ");
+    $("ivBackNote").textContent = `After they claim, a button takes them here (for example your sign-in page). It's for every invite link, even ones you've already sent. It has to be on ${hosts}. Leave it empty to keep them on this page.`;
+  }
   const box = $("ivList");
   box.innerHTML = "";
   if (!list.length) { box.innerHTML = '<p class="muted small">No invite links yet.</p>'; return; }
@@ -1957,6 +1966,17 @@ async function loadInvites() {
     box.append(row);
   }
 }
+$("ivBackSave").onclick = async () => {
+  show("ivBackErr", false);
+  say("ivBackSaved", "");
+  try {
+    const r = await fetch("/v1/creator/invites/return", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ session, return_to: $("ivBack").value.trim() }) });
+    if (!r.ok) throw new Error(await r.text());
+    const { return_to } = await r.json();
+    $("ivBack").value = return_to;
+    say("ivBackSaved", return_to ? "Saved." : "Saved: they'll stay on this page.");
+  } catch (e) { plainSay("ivBackErr", e); }
+};
 $("ivMake").onclick = async () => {
   show("ivErr", false);
   const notes = $("ivNotes").value.split("\n").map((x) => x.trim()).filter(Boolean);
