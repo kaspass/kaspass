@@ -84,9 +84,7 @@ p { margin: 0; }
 .top { position: sticky; top: 0; z-index: 5; background: var(--paper); background: color-mix(in srgb, var(--paper) 90%, transparent); backdrop-filter: saturate(1.4) blur(10px); -webkit-backdrop-filter: saturate(1.4) blur(10px); border-bottom: 1px solid var(--line); }
 .top .wrap { display: flex; align-items: center; gap: 20px; min-height: 68px; }
 .logo { display: inline-flex; align-items: center; gap: 10px; color: var(--ink); text-decoration: none; font: 800 21px/1 var(--display); letter-spacing: -0.02em; }
-.logo svg { width: 30px; height: 30px; }
-.logo .ms { stroke: var(--teal); }
-.logo .mf { fill: var(--teal); }
+.logo svg { width: 30px; height: 30px; color: var(--teal); }
 nav.main { margin-left: auto; display: flex; align-items: center; gap: 2px; }
 nav.main a:not(.btn) { color: var(--ink); text-decoration: none; font-weight: 600; font-size: 15px; padding: 8px 12px; border-radius: 999px; }
 nav.main a:not(.btn):hover { background: var(--paper-2); }
