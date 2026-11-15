@@ -36,6 +36,9 @@ pub struct Order {
     pub bps: u64,
     pub renew_ppm: u64,
     pub periods: u64,
+    /// The cushion the member picked for prepaid renewals (0, 10 or 25).
+    #[serde(default = "default_cushion")]
+    pub cushion_pct: u64,
     /// What the purchase takes from the payment (price, bond, prepaid), before the network fee.
     pub uses: u64,
     /// The contract's limit on what may leave for the purchase; also the QR amount.
@@ -187,10 +190,17 @@ pub struct OrderReq {
     /// Renewals to prepay for auto-renew (purchases only).
     #[serde(default)]
     periods: u64,
+    /// Their cushion in case KAS falls: 0, 10 or 25 percent (10 if left out).
+    #[serde(default)]
+    cushion_pct: Option<u64>,
 }
 
 fn buy_word() -> String {
     "buy".into()
+}
+
+fn default_cushion() -> u64 {
+    crate::shop::DEFAULT_CUSHION
 }
 
 /// The buyer's newest pass on this level.
@@ -235,6 +245,7 @@ pub async fn create(State(s): State<AppState>, headers: axum::http::HeaderMap, Q
         }
     }
     let bond = s.card.settings.bond;
+    let cushion = super::cushion(req.cushion_pct)?;
     let (q, uses, periods) = match req.action.as_str() {
         "buy" => {
             no_duplicate(&s, &address).await?;
@@ -244,7 +255,7 @@ pub async fn create(State(s): State<AppState>, headers: axum::http::HeaderMap, Q
                 return Err((StatusCode::CONFLICT, "sold out: every pass for this membership has been sold".into()));
             }
             let periods = req.periods.min(36);
-            let (due, prepaid) = shop.payin_buy_cost(&lane, q.bps, q.renew_ppm, periods);
+            let (due, prepaid) = shop.payin_buy_cost(&lane, q.bps, q.renew_ppm, periods, cushion);
             (q, due + bond + prepaid, periods)
         }
         "renew" => {
@@ -274,6 +285,7 @@ pub async fn create(State(s): State<AppState>, headers: axum::http::HeaderMap, Q
         bps: q.bps,
         renew_ppm: q.renew_ppm,
         periods,
+        cushion_pct: cushion,
         uses,
         max_spend,
         currency: q.currency.clone(),
@@ -395,7 +407,7 @@ async fn watch_once(s: &AppState) {
                     },
                     _ => match (v5_quote(s, V5For::Buy(&o.buyer)).await.ok().flatten(), current_lane(s).await.ok()) {
                         (Some(q), Some(lane)) => {
-                            let (due, prepaid) = shop.payin_buy_cost(&lane, q.bps, o.renew_ppm, o.periods);
+                            let (due, prepaid) = shop.payin_buy_cost(&lane, q.bps, o.renew_ppm, o.periods, o.cushion_pct);
                             Some((q.bps, due + s.card.settings.bond + prepaid))
                         }
                         _ => None,
@@ -423,7 +435,7 @@ async fn watch_once(s: &AppState) {
                                 let mut chain = s.chain.lock().await;
                                 let next = FoundLane { txid: String::new(), index: 0, value: lane.value, lane: crate::Lane { remaining: if lane.lane.remaining > 0 { lane.lane.remaining - 1 } else { lane.lane.remaining }, ..lane.lane } };
                                 let old = (lane.txid.clone(), lane.index);
-                                shop.payin_buy(&mut chain, &o.buyer, &lane, bps, o.renew_ppm, o.periods, pin.clone(), refund.clone(), coin).await.map(|r| (r, Some((next, old)), Some(now + s.card.settings.period_ms)))
+                                shop.payin_buy(&mut chain, &o.buyer, &lane, bps, o.renew_ppm, o.periods, o.cushion_pct, pin.clone(), refund.clone(), coin).await.map(|r| (r, Some((next, old)), Some(now + s.card.settings.period_ms)))
                             }
                             Err(e) => Err(anyhow::anyhow!(e.1)),
                         }

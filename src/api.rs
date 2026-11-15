@@ -49,6 +49,8 @@ struct Snapshot {
     events: Vec<Event>,
     scanned_txs: usize,
     updated_ms: i64,
+    /// When this server last finished reading the chain, by its own clock (wall time).
+    read_at_ms: i64,
     synced: bool,
 }
 
@@ -318,6 +320,7 @@ pub async fn serve(setups: Vec<LevelSetup>, chain: Chain, port: u16, members_htm
     }
     members::backfill(&state);
     tokio::spawn(alerts::run(state.clone()));
+    tokio::spawn(promo::settle_claims(state.clone()));
     tokio::spawn(record_watch(state.clone()));
     if let Some(d) = state.discord.clone() {
         let access = access.clone();
@@ -459,6 +462,7 @@ pub async fn serve(setups: Vec<LevelSetup>, chain: Chain, port: u16, members_htm
                     s.events = ix.events().to_vec();
                     s.scanned_txs = ix.scanned_txs;
                     s.updated_ms = now;
+                    s.read_at_ms = wall_ms();
                     s.synced = true;
                     drop(s);
                     progress_now();
@@ -482,6 +486,11 @@ pub async fn serve(setups: Vec<LevelSetup>, chain: Chain, port: u16, members_htm
         .route("/demo", get(home::demo))
         .route("/demo/:id", get(examples::page))
         .route("/creators", get(home::creators))
+        .route("/privacy", get(home::privacy))
+        .route("/terms", get(home::terms))
+        .route("/robots.txt", get(home::robots))
+        .route("/sitemap.xml", get(home::sitemap))
+        .route("/favicon.ico", get(|| async { asset(axum::extract::Path("favicon-32.png".to_string()), HeaderMap::new()).await }))
         .route("/v1/contact", post(home::contact))
         .route("/v1/creator/contact", get(home::creator_notes))
         .route("/v1/creator/contact/delete", post(home::creator_note_delete))
@@ -572,6 +581,9 @@ pub async fn serve(setups: Vec<LevelSetup>, chain: Chain, port: u16, members_htm
         .layer(tower_http::cors::CorsLayer::new().allow_origin(tower_http::cors::Any).allow_methods([axum::http::Method::GET]))
         .layer(axum::middleware::from_fn_with_state(state.clone(), examples::layer))
         .layer(axum::middleware::from_fn(guard))
+        // Pages, scripts and answers go out compressed (about a quarter of the size) when the
+        // browser accepts it; pictures and fonts are already compressed.
+        .layer(tower_http::compression::CompressionLayer::new().gzip(true))
         .with_state(state);
     let addr = std::net::SocketAddr::from(([127, 0, 0, 1], port));
     let listener = match tokio::net::TcpListener::bind(addr).await {
@@ -725,14 +737,50 @@ async fn creator_level_price(State(s): State<AppState>, Query(lq): Query<LevelQ>
     let mut all = crate::prices::level_prices(&s.home);
     let lifetime = req.lifetime_amount.or(old.as_ref().and_then(|o| o.lifetime));
     let term = req.term_amount.or(old.as_ref().and_then(|o| o.term));
-    all.insert(s.card.covenant_id.clone(), crate::prices::LevelPrice { currency: req.currency.clone(), amount: req.amount, founding, lifetime, term });
+    // A rise reaches renewals only after 30 days' notice; until then they keep the old, lower price.
+    // (A cut applies at once.) Rising again during a notice keeps the lowest price and restarts it.
+    let renews_at = old.as_ref().filter(|o| o.currency == req.currency).map(|o| o.renewal_amount());
+    let notice = renews_at.filter(|r| req.amount > *r).map(|r| crate::prices::Notice { amount: r, until_ms: wall_ms() + crate::prices::NOTICE_MS });
+    all.insert(s.card.covenant_id.clone(), crate::prices::LevelPrice { currency: req.currency.clone(), amount: req.amount, founding, lifetime, term, notice: notice.clone() });
     crate::prices::save_level_prices(&s.home, &all).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    // Every price change goes in the server's log: when, by which wallet, old and new.
+    let by = s.sessions.lock().unwrap_or_else(|e| e.into_inner()).address_for(&req.session).unwrap_or_default();
+    println!(
+        "prices: {} price changed by {} from {} to {} {}{}",
+        short_id(&s.card.covenant_id),
+        by.get(by.len().saturating_sub(8)..).unwrap_or(""),
+        old.as_ref().map(|o| format!("{} {}", o.amount, o.currency)).unwrap_or_else(|| "none".into()),
+        req.amount,
+        req.currency,
+        notice.as_ref().map(|n| format!(" (renewals stay at {} until {})", n.amount, iso_day(n.until_ms))).unwrap_or_default()
+    );
+    // Tell members who have prepaid renewals, once, when a rise starts its notice.
+    if let (Some(n), Some(o)) = (&notice, &old) {
+        if renews_at.is_some_and(|r| (r - o.renewal_amount()).abs() < f64::EPSILON) && o.notice.as_ref().is_none_or(|on| wall_ms() >= on.until_ms) {
+            let owners: std::collections::BTreeSet<String> = s.snap.read().await.passes.iter().filter(|p| p.active && !p.lifetime && p.balance_sompi > 0).map(|p| p.owner_hash.clone()).collect();
+            let text = format!(
+                "The price of {} is going up from {} to {} a {}. Your prepaid renewals keep the old price until {}. After that each renewal is charged at the new price. You can take your unused balance back any time at {}.",
+                your_pass(&s),
+                alerts::money_str(&req.currency, n.amount),
+                alerts::money_str(&req.currency, req.amount),
+                period_noun(s.card.settings.period_ms),
+                iso_day(n.until_ms),
+                site_url(&s)
+            );
+            let s2 = s.clone();
+            tokio::spawn(async move {
+                for o in owners {
+                    dm_owner(&s2, &o, &text).await;
+                }
+            });
+        }
+    }
     // Above the ceiling, buyers pay the ceiling: say so.
     let ceiling = current_lane(&s).await.map(|l| l.lane.price as f64 / crate::SOMPI as f64).unwrap_or(0.0);
     let warning = crate::prices::fresh().and_then(|r| r.kas(&req.currency, req.amount)).filter(|k| *k > ceiling).map(|k| {
         format!("At today's rate that's {k:.2} KAS, above this plan's ceiling of {ceiling:.2} KAS, so buyers would pay {ceiling:.2} KAS. Launch a new level with a higher ceiling if you need this price.")
     });
-    Ok(Json(serde_json::json!({ "saved": true, "warning": warning })))
+    Ok(Json(serde_json::json!({ "saved": true, "warning": warning, "notice_until_ms": notice.as_ref().map(|n| n.until_ms), "renews_at": notice.as_ref().map(|n| n.amount) })))
 }
 
 /// The site's owner record and payout vault, for its owner (or the recovery wallet).
@@ -977,8 +1025,9 @@ async fn member(State(s): State<AppState>, headers: HeaderMap, Query(q): Query<C
             // pass's KAS ceiling; a plan priced in KAS charges the pass's rate.
             let (currency, amount, kas_sompi) = match prices.get(&cov) {
                 Some(p) => {
-                    let k = rates.as_ref().and_then(|r| r.kas(&p.currency, p.amount)).map(|k| ((k * crate::SOMPI as f64).round() as u64).min(if rate > 0 { rate } else { u64::MAX }));
-                    (p.currency.clone(), p.amount, k)
+                    let amt = p.renewal_amount();
+                    let k = rates.as_ref().and_then(|r| r.kas(&p.currency, amt)).map(|k| ((k * crate::SOMPI as f64).round() as u64).min(if rate > 0 { rate } else { u64::MAX }));
+                    (p.currency.clone(), amt, k)
                 }
                 None => ("KAS".to_string(), rate as f64 / crate::SOMPI as f64, Some(rate)),
             };
@@ -986,6 +1035,8 @@ async fn member(State(s): State<AppState>, headers: HeaderMap, Query(q): Query<C
                 "currency": currency,
                 "amount": amount,
                 "kas_today": kas_sompi.map(|k| (k as f64 / crate::SOMPI as f64 * 100.0).round() / 100.0),
+                // A price rise in its 30 days' notice: the new price, and when renewals start paying it.
+                "rises_to": prices.get(&cov).filter(|p| p.renewal_amount() < p.amount).map(|p| serde_json::json!({ "amount": p.amount, "from_ms": p.notice.as_ref().map(|n| n.until_ms) })),
             });
             v["periods_prepaid"] = match kas_sompi {
                 Some(k) if k > 0 => serde_json::json!(balance / k),
@@ -1118,18 +1169,28 @@ const ASSETS: &[(&str, &str, &[u8])] = &[
     ("fonts/bricolage-grotesque-latin-600-normal.woff2", "font/woff2", include_bytes!("../web/fonts/bricolage-grotesque-latin-600-normal.woff2")),
     ("fonts/bricolage-grotesque-latin-800-normal.woff2", "font/woff2", include_bytes!("../web/fonts/bricolage-grotesque-latin-800-normal.woff2")),
     ("fonts/instrument-sans-latin-400-normal.woff2", "font/woff2", include_bytes!("../web/fonts/instrument-sans-latin-400-normal.woff2")),
-    ("fonts/instrument-sans-latin-500-normal.woff2", "font/woff2", include_bytes!("../web/fonts/instrument-sans-latin-500-normal.woff2")),
     ("fonts/instrument-sans-latin-600-normal.woff2", "font/woff2", include_bytes!("../web/fonts/instrument-sans-latin-600-normal.woff2")),
-    // The picture shown when kaspass.app is shared in a chat or a post.
+    // The picture shown when kaspass.app is shared in a chat or a post, the icons, and a real
+    // screenshot of a membership page on a phone.
     ("og.png", "image/png", include_bytes!("../web/og.png")),
+    ("favicon-32.png", "image/png", include_bytes!("../web/favicon-32.png")),
+    ("apple-touch-icon.png", "image/png", include_bytes!("../web/apple-touch-icon.png")),
+    ("example-phone.webp", "image/webp", include_bytes!("../web/example-phone.webp")),
 ];
 
-async fn asset(axum::extract::Path(name): axum::extract::Path<String>) -> axum::response::Response {
+async fn asset(axum::extract::Path(name): axum::extract::Path<String>, headers: HeaderMap) -> axum::response::Response {
+    // Each file's fingerprint: a browser that already has it gets a short "not changed".
+    static TAGS: std::sync::LazyLock<HashMap<&'static str, String>> = std::sync::LazyLock::new(|| ASSETS.iter().map(|(n, _, b)| (*n, blake2b_simd::Params::new().hash_length(8).hash(b).to_hex().to_string())).collect());
     match ASSETS.iter().find(|(n, _, _)| *n == name) {
         Some((n, ty, body)) => {
+            let tag = format!("\"{}\"", TAGS[n]);
+            // Compression may add a suffix to the tag, so it's matched loosely.
+            if headers.get(header::IF_NONE_MATCH).and_then(|v| v.to_str().ok()).is_some_and(|v| v.contains(TAGS[n].as_str())) {
+                return (StatusCode::NOT_MODIFIED, [(header::ETAG, tag)]).into_response();
+            }
             // Fonts never change; scripts and styles follow the program, so they're re-checked.
             let cache = if n.starts_with("fonts/") { "public, max-age=31536000, immutable" } else { "no-cache" };
-            ([(header::CONTENT_TYPE, *ty), (header::CACHE_CONTROL, cache)], *body).into_response()
+            ([(header::CONTENT_TYPE, *ty), (header::CACHE_CONTROL, cache), (header::ETAG, tag.as_str())], *body).into_response()
         }
         None => (StatusCode::NOT_FOUND, "not found").into_response(),
     }
@@ -1233,8 +1294,15 @@ async fn guard(req: axum::extract::Request, next: axum::middleware::Next) -> axu
             return (StatusCode::TOO_MANY_REQUESTS, [(header::RETRY_AFTER, "10")], "too many requests; please wait a few seconds").into_response();
         }
     }
+    let api = req.uri().path().starts_with("/v1/");
     let mut res = next.run(req).await;
     let h = res.headers_mut();
+    // Browsers that have been here once use https from then on (the sites only run on https).
+    h.insert(header::STRICT_TRANSPORT_SECURITY, axum::http::HeaderValue::from_static("max-age=31536000"));
+    // API answers are about someone's wallet or a moment's price: never kept by the browser.
+    if api && !h.contains_key(header::CACHE_CONTROL) {
+        h.insert(header::CACHE_CONTROL, axum::http::HeaderValue::from_static("no-store"));
+    }
     match CSP_MODE.get().map(String::as_str).unwrap_or("on") {
         // A stricter policy a handler set itself (creator pictures) stays.
         "on" if !h.contains_key(header::CONTENT_SECURITY_POLICY) => {
@@ -1305,7 +1373,24 @@ async fn login(State(s): State<AppState>, Query(lq): Query<LevelQ>, headers: Hea
     let (active, passes) = passes_for(&s, &req.address).await?;
     let now_ms = s.snap.read().await.updated_ms;
     let session = s.sessions.lock().unwrap_or_else(|e| e.into_inner()).open(&req.address);
-    members::remember(&s.home, &req.address);
+    // Only wallets that hold (or held) a pass here go in the member list; anyone else is
+    // remembered when they buy, claim or link (signing in only needs a key pair).
+    let mut member = !passes.is_empty();
+    if !member {
+        if let Ok(h) = owner_hash_of(&req.address) {
+            let h = h.to_string();
+            for l in s.levels.iter() {
+                let snap = l.snap.read().await;
+                if snap.passes.iter().any(|p| p.owner_hash == h) || snap.events.iter().any(|e| e.owner_hash == h) {
+                    member = true;
+                    break;
+                }
+            }
+        }
+    }
+    if member {
+        members::remember(&s.home, &req.address);
+    }
     Ok(Json(LoginResponse { address: req.address, active, passes, session, now_ms }))
 }
 
@@ -2071,6 +2156,25 @@ pub fn short_of_balance(txid: &str, index: u32) -> Option<u64> {
     LOW_BALANCE.lock().unwrap_or_else(|e| e.into_inner()).get(&format!("{txid}:{index}")).copied()
 }
 
+/// Low-balance messages already sent: "level:owner:end" -> the pass's end (ms).
+const TOLD_LOW_FILE: &str = "low-balance-told.json";
+
+/// True the first time for `key` (and records it); entries go a week after the pass's end.
+fn told_first(home: &std::path::Path, key: &str, end_ms: i64) -> bool {
+    static L: Mutex<()> = Mutex::new(());
+    let _g = L.lock().unwrap_or_else(|e| e.into_inner());
+    let path = home.join(TOLD_LOW_FILE);
+    let mut all: HashMap<String, i64> = std::fs::read_to_string(&path).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default();
+    if all.contains_key(key) {
+        return false;
+    }
+    let now = wall_ms();
+    all.retain(|_, end| now - *end < 7 * 86_400_000);
+    all.insert(key.to_string(), end_ms);
+    let _ = crate::prices::write_atomic(&path, serde_json::to_string(&all).unwrap_or_default().as_bytes());
+    true
+}
+
 /// Passes that lapsed because no price was available ("txid:index"). A renewal moves the pass
 /// to a new coin, so the marker goes away by itself.
 const LAPSED_FILE: &str = "lapsed-no-price.json";
@@ -2160,7 +2264,8 @@ async fn v5_quote(s: &AppState, what: V5For<'_>) -> Result<Option<V5Quote>, ApiE
         w => (w, crate::Sale::Monthly),
     };
     let (ceiling, renew_ceiling, amount, founding, credit_kas, from) = match what {
-        V5For::Renew(p, _) => (p.rate_sompi, p.rate_sompi, price.amount, false, 0.0, None),
+        // A renewal keeps the old price while a rise's 30 days' notice runs.
+        V5For::Renew(p, _) => (p.rate_sompi, p.rate_sompi, price.renewal_amount(), false, 0.0, None),
         V5For::BuyKind(..) => unreachable!(),
         V5For::Buy(buyer) => {
             let lane = current_lane(s).await?;
@@ -2230,7 +2335,7 @@ async fn v5_quote(s: &AppState, what: V5For<'_>) -> Result<Option<V5Quote>, ApiE
     let bps = crate::prices::ppm_for(ceiling, kas_today, max_ppm);
     // Renewals (and prepaid balances) are measured against the monthly ceiling, whatever was bought.
     // (Renewals never get the sale, so prepaid balances are sized without it.)
-    let renew_ppm = crate::prices::ppm_for(renew_ceiling, plan_kas(&price, price.amount)? * renew_keep, max_ppm);
+    let renew_ppm = crate::prices::ppm_for(renew_ceiling, plan_kas(&price, price.renewal_amount())? * renew_keep, max_ppm);
     let from = from.filter(|_| credit > 0.0);
     Ok(Some(V5Quote { bps, renew_ppm, amount: (amount - credit).max(0.0) * keep, currency: price.currency, kas_today, founding, credit, from, holder_bps: holder }))
 }
@@ -2244,6 +2349,20 @@ struct PaymentsQuery {
 }
 
 /// "2026-11-02T07:00:29Z" for a time in ms since 1970 (UTC).
+/// "Dec 15, 2026" for a time in ms (UTC).
+fn iso_day(ms: i64) -> String {
+    let d = utc_iso(ms);
+    let (y, m, day) = (&d[0..4], d[5..7].parse::<usize>().unwrap_or(1), d[8..10].trim_start_matches('0'));
+    let names = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    format!("{} {day}, {y}", names[(m.clamp(1, 12)) - 1])
+}
+
+/// "month", "year", "week" or "day" for a plan's period.
+fn period_noun(ms: i64) -> &'static str {
+    let d = ms as f64 / 86_400_000.0;
+    if (360.0..=366.0).contains(&d) { "year" } else if d == 7.0 { "week" } else if d == 1.0 { "day" } else { "month" }
+}
+
 fn utc_iso(ms: i64) -> String {
     let secs = ms.div_euclid(1000);
     let (days, rem) = (secs.div_euclid(86_400), secs.rem_euclid(86_400));
@@ -2476,6 +2595,10 @@ fn v5_price_json(s: &AppState, ceiling_sompi: u64) -> Option<(serde_json::Value,
         "kas_ceiling": r2(ceiling_sompi as f64 / crate::SOMPI as f64),
         "source": "kraken",
     });
+    // A price rise in its 30 days' notice: renewals keep the old price until `from_ms`.
+    if p.renewal_amount() < p.amount {
+        price["rise"] = serde_json::json!({ "renews_at": p.renewal_amount(), "to": p.amount, "from_ms": p.notice.as_ref().map(|n| n.until_ms) });
+    }
     if let (Some(k), Some(r)) = (kas(p.amount), rates) {
         price["kas_today"] = serde_json::json!(k);
         price["quoted_at_ms"] = serde_json::json!(r.at_ms);
@@ -2785,16 +2908,24 @@ async fn price_alert_loop(s: AppState) {
     // The payments already checked, kept on disk so whatever lands while the server is down is
     // still checked when it comes back.
     let file = alerts_seen_file(&s);
-    let mut seen: Option<std::collections::HashSet<String>> = std::fs::read_to_string(&file).ok().and_then(|t| serde_json::from_str(&t).ok());
+    let text = std::fs::read_to_string(&file);
+    let mut seen: Option<std::collections::HashSet<String>> = text.as_ref().ok().and_then(|t| serde_json::from_str(&t).ok());
+    let unreadable = text.is_ok() && seen.is_none();
+    if unreadable {
+        eprintln!("price alert: {} can't be read; checking the last 29 days again", file.display());
+    }
+    // A brand-new plan has nothing to check. A server that has signed prices before (or whose file
+    // was damaged) checks every recent payment again instead of trusting an empty start.
+    let has_history = unreadable || s.home.join("signed-txids.json").exists();
     loop {
         tokio::time::sleep(std::time::Duration::from_secs(5)).await;
         let snap = s.snap.read().await;
         if !snap.synced {
             continue;
         }
-        // The very first start: everything already on chain is history, not news.
         let first = seen.is_none();
-        let known = seen.get_or_insert_with(|| snap.events.iter().map(|e| e.txid.clone()).collect());
+        let recent_from = wall_ms() - crate::shop::SIGNED_KEEP_MS + 24 * 3600 * 1000;
+        let known = seen.get_or_insert_with(|| snap.events.iter().filter(|e| !has_history || (e.time_ms > 0 && e.time_ms < recent_from)).map(|e| e.txid.clone()).collect());
         let fresh: Vec<Event> = snap.events.iter().filter(|e| !known.contains(&e.txid)).cloned().collect();
         drop(snap);
         let save = first || !fresh.is_empty();
@@ -2865,6 +2996,11 @@ async fn keeper_once(s: &AppState, tried: &mut HashMap<String, std::time::Instan
         if tried.contains_key(&key) {
             continue;
         }
+        // Ended because the balance was short: the member was told it simply ends, so it's left
+        // alone until they act (a top-up moves the pass to a new coin, which clears this).
+        if lapsed_in(&s.home, LAPSED_LOW_FILE, &p.txid, p.index) {
+            continue;
+        }
         // v5: today's price, signed by this server; no fresh price = wait and try again later.
         let mut note = None;
         let bps = match v5_quote(s, V5For::Renew(&p, None)).await {
@@ -2893,8 +3029,10 @@ async fn keeper_once(s: &AppState, tried: &mut HashMap<String, std::time::Instan
         if p.balance_sompi < due {
             // Not enough prepaid for this renewal: nothing is charged (no partial renewals). Tell
             // the member once; a top-up before the end date lets the next round renew it.
-            let first = LOW_BALANCE.lock().unwrap_or_else(|e| e.into_inner()).insert(key.clone(), due).is_none();
-            if first {
+            LOW_BALANCE.lock().unwrap_or_else(|e| e.into_inner()).insert(key.clone(), due);
+            // Told once per membership period, remembered on disk: adding a little to someone's
+            // pass (which moves it to a new coin) or a restart doesn't send it again.
+            if told_first(&s.home, &format!("{}:{}:{}", s.card.covenant_id, p.owner_hash, p.expiry_ms), p.expiry_ms) {
                 let text = format!(
                     "{} is due to renew ({}), but its prepaid balance ({} KAS) is less than today's renewal price ({} KAS), so nothing has been charged. Top up at least {} KAS at {} and it renews by itself. Otherwise it simply ends, and your balance stays yours to take back.",
                     your_pass(s),
@@ -3220,7 +3358,7 @@ struct PrepareRequest {
 }
 
 /// A cushion the member picked, or the default; anything else is refused.
-fn cushion(pct: Option<u64>) -> Result<u64, ApiError> {
+pub(crate) fn cushion(pct: Option<u64>) -> Result<u64, ApiError> {
     let c = pct.unwrap_or(crate::shop::DEFAULT_CUSHION);
     if crate::shop::CUSHIONS.contains(&c) { Ok(c) } else { Err(bad("the cushion can be 0%, 10% or 25%")) }
 }
@@ -3283,6 +3421,10 @@ async fn buy_prepare(State(s): State<AppState>, headers: HeaderMap, Query(lq): Q
     };
     if let Some(q) = &v5 {
         out["price"] = serde_json::json!({ "currency": q.currency, "amount": (q.amount * 100.0).round() / 100.0, "kas_today": (q.kas_today * 100.0).round() / 100.0, "founding": q.founding, "credit": (q.credit * 100.0).round() / 100.0 });
+        // A price rise in its notice period: renewals keep `renews_at` until `from_ms`.
+        if let Some(lp) = crate::prices::level_prices(&s.home).get(&s.card.covenant_id).filter(|lp| lp.renewal_amount() < lp.amount) {
+            out["price"]["rise"] = serde_json::json!({ "renews_at": lp.renewal_amount(), "to": lp.amount, "from_ms": lp.notice.as_ref().map(|n| n.until_ms) });
+        }
     }
     let id = store_quote(&s, quote);
     out["quote"] = serde_json::json!(id);
@@ -3363,7 +3505,7 @@ async fn pass_prepare(State(s): State<AppState>, headers: HeaderMap, Query(lq): 
     let add = match (req.periods, req.amount_kas) {
         // v5: renewals at today's price (plus the member's cushion for price moves); older plans at the locked rate.
         (Some(n), _) if (1..=36).contains(&n) => match &v5 {
-            Some(q) => n * shop.prepaid_with(crate::discounted_ppm(pass.rate_sompi, crate::prices::ppm_for(pass.rate_sompi, q.kas_today, s.card.settings.v4.as_ref().map(|v| v.max_discount_bps * 100).unwrap_or(0))), cushion(req.cushion_pct)?),
+            Some(q) => n * shop.prepaid_capped(crate::discounted_ppm(pass.rate_sompi, crate::prices::ppm_for(pass.rate_sompi, q.kas_today, s.card.settings.v4.as_ref().map(|v| v.max_discount_bps * 100).unwrap_or(0))), cushion(req.cushion_pct)?, pass.rate_sompi),
             None => n * pass.rate_sompi,
         },
         (_, Some(k)) if k > 0.0 && k <= 1e9 => (k * crate::SOMPI as f64).round() as u64,
@@ -3419,7 +3561,18 @@ struct SubmitRequest {
 /// gets the same answer instead of "expired".
 static SUBMITTED: std::sync::Mutex<Vec<(String, std::time::Instant, serde_json::Value)>> = std::sync::Mutex::new(Vec::new());
 
+/// Runs `f` in its own task and waits for it. The web library drops a request's work when the
+/// visitor hangs up, which could stop a payment or a free pass between "sent" and "written down";
+/// in its own task it always finishes.
+pub(crate) async fn detached<T: Send + 'static>(f: impl std::future::Future<Output = Result<T, ApiError>> + Send + 'static) -> Result<T, ApiError> {
+    tokio::spawn(f).await.unwrap_or_else(|e| Err((StatusCode::INTERNAL_SERVER_ERROR, format!("that stopped unexpectedly ({e})"))))
+}
+
 async fn buy_submit(State(s): State<AppState>, Json(req): Json<SubmitRequest>) -> Result<Json<serde_json::Value>, ApiError> {
+    detached(buy_submit_inner(s, req)).await
+}
+
+async fn buy_submit_inner(s: AppState, req: SubmitRequest) -> Result<Json<serde_json::Value>, ApiError> {
     {
         let mut done = SUBMITTED.lock().unwrap_or_else(|e| e.into_inner());
         done.retain(|(_, t, _)| t.elapsed() < QUOTE_TTL);
@@ -3610,6 +3763,10 @@ fn creator_of(s: &AppState, session: &str) -> Result<String, ApiError> {
     let address = s.sessions.lock().unwrap_or_else(|e| e.into_inner()).address_for(session).ok_or((StatusCode::UNAUTHORIZED, "please sign in again".to_string()))?;
     if RECORD_MOVED.load(std::sync::atomic::Ordering::Relaxed) {
         return Err((StatusCode::FORBIDDEN, "this site's owner record has moved to other wallets on chain, so the dashboard is locked until the server is updated".into()));
+    }
+    if s.shop.as_ref().is_some_and(|sh| sh.record_broken()) {
+        eprintln!("record.json can't be read: the dashboard is locked until it's fixed");
+        return Err((StatusCode::SERVICE_UNAVAILABLE, "the dashboard is locked: this site's owner record file can't be read. The server's operator needs to fix it.".into()));
     }
     if address != site_owner(s) {
         return Err((StatusCode::FORBIDDEN, "this dashboard is for the membership's creator".into()));
@@ -3825,7 +3982,7 @@ const DASHBOARD: &str = include_str!("../web/dashboard.html");
 
 async fn dashboard(headers: HeaderMap) -> impl IntoResponse {
     // On KasPass's own site, the membership page is at /demo.
-    ([(header::CACHE_CONTROL, "no-store")], Html(if home::is_home(&headers) { home::to_demo(DASHBOARD) } else { DASHBOARD.to_string() }))
+    ([(header::CACHE_CONTROL, "no-store"), (header::HeaderName::from_static("x-robots-tag"), "noindex")], Html(if home::is_home(&headers) { home::to_demo(DASHBOARD) } else { DASHBOARD.to_string() }))
 }
 
 // ---------------------------------------------------------------------------
@@ -4081,8 +4238,14 @@ const HELP_PAGE: &str = include_str!("../web/help.html");
 
 /// How to get Kaspire, sign in, buy, auto-renew, renew, upgrade and close (served as /help,
 /// so partner sites can link to steps that stay in step with the buy page).
-async fn help_page(headers: HeaderMap) -> impl IntoResponse {
-    ([(header::CACHE_CONTROL, "public, max-age=300"), (header::VARY, "Host")], Html(if home::is_home(&headers) { home::to_demo(HELP_PAGE) } else { HELP_PAGE.to_string() }))
+async fn help_page(State(s): State<AppState>, headers: HeaderMap) -> impl IntoResponse {
+    let html = if home::is_home(&headers) {
+        // On KasPass's own site: a way back to the home page, besides the example page.
+        home::to_demo(HELP_PAGE).replacen(r#"<a class="back" href="/demo">Back to the membership page</a>"#, r#"<a class="back" href="/">KasPass home</a><a class="back" href="/demo/podcast">Example page</a>"#, 1)
+    } else {
+        HELP_PAGE.to_string()
+    };
+    ([(header::CACHE_CONTROL, "public, max-age=300"), (header::VARY, "Host")], Html(home::fill_contact(&s.home, &html)))
 }
 
 /// The holder club's own page: sign in, see your standing, join the groups. No paid passes.

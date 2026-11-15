@@ -67,7 +67,8 @@ pub struct Claim {
     #[serde(default)]
     pub group: Vec<String>,
     /// "done"; "pending" (being sent) or "unsure" (sending reported an error, but it may have
-    /// gone through). Both count until UNSURE_MS passes without the pass showing up.
+    /// gone through). Without a txid (never handed to the network) it counts for UNSURE_MS; with
+    /// one, until the chain, read UNSURE_MS after the claim, shows its pass never arrived.
     #[serde(default = "done_status")]
     pub status: String,
 }
@@ -155,7 +156,8 @@ fn closed_reason(p: &Promo, claims: usize, now: i64) -> Option<&'static str> {
 /// One claim at a time, so two tabs (or two wallets with the same NFT) can't both get through.
 static CLAIMING: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 /// Told the creator the keeper ran low (once per campaign until it's topped up).
-static TOLD_LOW: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+/// Campaigns already told "the fees wallet is low" (cleared when a claim succeeds).
+static TOLD_LOW: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(Vec::new());
 
 /// The keeper's balance, read from the chain at most every 20 s for the public page (`fresh`
 /// reads it now: claims and the dashboard).
@@ -199,27 +201,74 @@ fn promo_ppm(s: &AppState, ceiling: u64) -> u64 {
     crate::prices::ppm_for(ceiling, CHARGE_KAS, max_ppm)
 }
 
-/// The campaign's claims that count: done ones, and pending or unsure ones until UNSURE_MS has
-/// passed without their pass showing up on chain.
+/// The campaign's claims that count. A claim's transaction id is written down before anything is
+/// sent, so a claim with no id never reached the network: it counts only while it may still be in
+/// progress (UNSURE_MS). A claim with an id counts until the chain, read well after the claim,
+/// shows its pass never arrived.
 async fn campaign_claims(s: &AppState, id: &str) -> Result<Vec<Claim>, String> {
-    let now = wall_ms();
     let mut out = Vec::new();
     for c in read_claims(&s.home)?.into_iter().filter(|c| c.campaign == id) {
-        if c.status == "done" || now - c.at_ms < UNSURE_MS || seen_on_chain(s, &c).await {
+        if still_counts(s, &c).await {
             out.push(c);
         }
     }
     Ok(out)
 }
 
-async fn seen_on_chain(s: &AppState, c: &Claim) -> bool {
+async fn still_counts(s: &AppState, c: &Claim) -> bool {
+    if c.status == "done" {
+        return true;
+    }
     if c.txid.is_empty() {
-        return false;
+        return wall_ms() - c.at_ms < UNSURE_MS;
     }
     let Some(l) = s.levels.iter().find(|l| l.card.covenant_id == c.level) else { return true };
     let snap = l.snap.read().await;
-    // Not read yet: keep counting it, to be safe.
-    !snap.synced || snap.events.iter().any(|e| e.txid == c.txid) || snap.passes.iter().any(|p| p.txid == c.txid)
+    if !snap.synced || snap.events.iter().any(|e| e.txid == c.txid) || snap.passes.iter().any(|p| p.txid == c.txid) {
+        return true;
+    }
+    // Not on chain: only free it once the chain has been read a while after the claim.
+    snap.read_at_ms < c.at_ms + UNSURE_MS
+}
+
+/// At start: a claim left "pending" or "unsure" by a crash or a restart becomes "done" when its pass
+/// is on chain, and is dropped when it provably never arrived. Others wait for the chain.
+pub async fn settle_claims(s: AppState) {
+    for _ in 0..60 {
+        tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+        let Ok(all) = read_claims(&s.home) else { return };
+        let open: Vec<Claim> = all.into_iter().filter(|c| c.status != "done").collect();
+        if open.is_empty() {
+            return;
+        }
+        let mut done = Vec::new();
+        let mut gone = Vec::new();
+        for c in &open {
+            let Some(l) = s.levels.iter().find(|l| l.card.covenant_id == c.level) else { continue };
+            let snap = l.snap.read().await;
+            if !snap.synced {
+                continue;
+            }
+            let on_chain = !c.txid.is_empty() && (snap.events.iter().any(|e| e.txid == c.txid) || snap.passes.iter().any(|p| p.txid == c.txid));
+            if on_chain {
+                done.push((c.txid.clone(), c.at_ms));
+            } else if (c.txid.is_empty() && wall_ms() - c.at_ms >= UNSURE_MS) || (!c.txid.is_empty() && snap.read_at_ms >= c.at_ms + UNSURE_MS) {
+                gone.push((c.wallet.clone(), c.at_ms));
+            }
+        }
+        if !done.is_empty() || !gone.is_empty() {
+            let keep = current_campaign(&s.home);
+            let _ = edit_claims(&s.home, &keep, |all| {
+                for c in all.iter_mut() {
+                    if c.status != "done" && done.iter().any(|(t, at)| *t == c.txid && *at == c.at_ms) {
+                        c.status = "done".into();
+                    }
+                }
+                all.retain(|c| c.status == "done" || !gone.iter().any(|(w, at)| *w == c.wallet && *at == c.at_ms));
+            });
+            println!("promo: settled {} unfinished claim(s) as sent and {} as never sent", done.len(), gone.len());
+        }
+    }
 }
 
 fn unreadable(e: String) -> ApiError {
@@ -382,6 +431,10 @@ fn nfts_to_use(p: &Promo, c: &crate::holdings::Checked) -> Vec<String> {
 /// `POST /v1/promo/claim {session}`: checks the member and, if they qualify, has the keeper buy
 /// their pass. Returns the txid.
 pub async fn claim(State(s): State<AppState>, Json(req): Json<SessionBody>) -> Result<Json<serde_json::Value>, ApiError> {
+    detached(claim_inner(s, req)).await
+}
+
+async fn claim_inner(s: AppState, req: SessionBody) -> Result<Json<serde_json::Value>, ApiError> {
     let p = read_promo(&s.home).ok_or((StatusCode::NOT_FOUND, "there's no promotion running".to_string()))?;
     let ls = s.at(Some(&p.level))?;
     let shop = shop_of(&ls)?;
@@ -444,14 +497,21 @@ async fn send_free_pass(s: &AppState, ls: &AppState, shop: &crate::shop::Shop, c
     if bal < cost + KEEPER_FLOOR {
         // Invite links share one "paused" message, not one per link.
         let key = if campaign.starts_with("invite:") { "invites" } else { campaign };
-        let first = TOLD_LOW.lock().unwrap_or_else(|e| e.into_inner()).replace(key.to_string()).as_deref() != Some(key);
+        let first = {
+            let mut told = TOLD_LOW.lock().unwrap_or_else(|e| e.into_inner());
+            let first = !told.iter().any(|k| k == key);
+            if first {
+                told.push(key.to_string());
+            }
+            first
+        };
         if first {
             let owner = owner_hash_of(&site_owner(ls)).map(|h| h.to_string()).unwrap_or_default();
             dm_owner(ls, &owner, &format!("Free passes (\"{label}\") are paused: the keeper wallet needs a top-up (each free pass uses about {} KAS). Its address is in your dashboard › Promotions.", kas4(cost))).await;
         }
         return Err((StatusCode::SERVICE_UNAVAILABLE, "free passes are paused for a moment while the site tops up. Try again later.".to_string()));
     }
-    *TOLD_LOW.lock().unwrap_or_else(|e| e.into_inner()) = None;
+    TOLD_LOW.lock().unwrap_or_else(|e| e.into_inner()).clear();
     let lane = current_lane(ls).await?;
     if lane.lane.remaining == 0 {
         return Err((StatusCode::CONFLICT, "this plan is sold out".to_string()));
@@ -465,7 +525,17 @@ async fn send_free_pass(s: &AppState, ls: &AppState, shop: &crate::shop::Shop, c
     let mine = |c: &Claim| c.campaign == campaign && c.wallet == wallet && c.at_ms == now && c.status == "pending";
     let res = {
         let mut chain = ls.chain.lock().await;
-        shop.promo_buy(&mut chain, wallet, &lane, ppm).await
+        // The id is written into the claim before sending: then a claim with no id provably never
+        // reached the network, and one with an id is settled by what the chain shows.
+        let note_id = |txid: &str| -> anyhow::Result<()> {
+            edit_claims(&s.home, &keep, |all| {
+                if let Some(c) = all.iter_mut().find(|c| mine(c)) {
+                    c.txid = txid.to_string();
+                }
+            })
+            .map_err(|e| anyhow::anyhow!(e))
+        };
+        shop.promo_buy(&mut chain, wallet, &lane, ppm, note_id).await
     };
     let (txid, charge) = match res {
         Ok(x) => x,
@@ -558,6 +628,13 @@ pub struct Invite {
     pub end_ms: i64,
     #[serde(default)]
     pub cancelled: bool,
+    /// Set once its free pass is sent: a second record of "used", besides the claims file.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub used_txid: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub used_by: String,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub used_ms: i64,
 }
 
 fn read_invites(home: &std::path::Path) -> Vec<Invite> {
@@ -573,9 +650,30 @@ fn invite_campaign(code: &str) -> String {
 }
 
 /// An invite's state: "open", "used", "ended" or "cancelled", and its claim when used.
+fn is_zero(n: &i64) -> bool {
+    *n == 0
+}
+
 async fn invite_state(s: &AppState, inv: &Invite) -> Result<(&'static str, Option<Claim>), ApiError> {
+    let all = read_claims(&s.home).map_err(unreadable)?;
+    invite_state_in(s, inv, &all).await
+}
+
+/// The same, from claims already read (the dashboard's list reads them once for every invite).
+async fn invite_state_in(s: &AppState, inv: &Invite, all: &[Claim]) -> Result<(&'static str, Option<Claim>), ApiError> {
     let ls = s.at(Some(&inv.level))?;
-    let used = campaign_claims(&ls, &invite_campaign(&inv.code)).await.map_err(unreadable)?.into_iter().next();
+    let campaign = invite_campaign(&inv.code);
+    let mut used = None;
+    for c in all.iter().filter(|c| c.campaign == campaign) {
+        if still_counts(&ls, c).await {
+            used = Some(c.clone());
+            break;
+        }
+    }
+    // Marked used in invites.json too: a lost or older claims file doesn't reopen it.
+    if used.is_none() && !inv.used_txid.is_empty() {
+        used = Some(Claim { campaign, wallet: inv.used_by.clone(), nfts: vec![], txid: inv.used_txid.clone(), at_ms: inv.used_ms, level: inv.level.clone(), charge_sompi: 0, group: vec![], status: "done".into(), label: inv.label.clone() });
+    }
     Ok(match (&used, inv.cancelled, wall_ms() >= inv.end_ms) {
         (Some(_), _, _) => ("used", used),
         (None, true, _) => ("cancelled", None),
@@ -634,6 +732,10 @@ pub struct InviteClaim {
 
 /// `POST /v1/invite/claim {session, code}`: uses the invite for the signed-in wallet.
 pub async fn invite_claim(State(s): State<AppState>, Json(req): Json<InviteClaim>) -> Result<Json<serde_json::Value>, ApiError> {
+    detached(invite_claim_inner(s, req)).await
+}
+
+async fn invite_claim_inner(s: AppState, req: InviteClaim) -> Result<Json<serde_json::Value>, ApiError> {
     let inv = find_invite(&s.home, &req.code).ok_or((StatusCode::NOT_FOUND, "this invite link isn't valid. Check you copied the whole link.".to_string()))?;
     let ls = s.at(Some(&inv.level))?;
     let shop = shop_of(&ls)?;
@@ -662,6 +764,15 @@ pub async fn invite_claim(State(s): State<AppState>, Json(req): Json<InviteClaim
     member(has_access(&ls, &inv.level, &group).await)?;
     no_duplicate(&ls, &wallet).await?;
     let (txid, until_ms) = send_free_pass(&s, &ls, &shop, &invite_campaign(&inv.code), &inv.label, &wallet, &group, &[]).await?;
+    let mut all = read_invites(&s.home);
+    if let Some(i) = all.iter_mut().find(|i| i.code == inv.code) {
+        i.used_txid = txid.clone();
+        i.used_by = wallet.clone();
+        i.used_ms = wall_ms();
+        if let Err(e) = save_invites(&s.home, &all) {
+            eprintln!("promo: couldn't mark the invite used in {INVITES_FILE} ({e:?}); the claims file still has it");
+        }
+    }
     Ok(Json(serde_json::json!({ "txid": txid, "level": inv.level, "until_ms": until_ms })))
 }
 
@@ -669,8 +780,9 @@ pub async fn invite_claim(State(s): State<AppState>, Json(req): Json<InviteClaim
 pub async fn invites_get(State(s): State<AppState>, Query(q): Query<SessionQuery>) -> Result<Json<serde_json::Value>, ApiError> {
     creator_of(&s, &q.session)?;
     let mut out = Vec::new();
+    let claims = read_claims(&s.home).map_err(unreadable)?;
     for inv in read_invites(&s.home).into_iter().rev() {
-        let (state, claim) = invite_state(&s, &inv).await?;
+        let (state, claim) = invite_state_in(&s, &inv, &claims).await?;
         let rank = s.levels.iter().position(|l| l.card.covenant_id == inv.level);
         out.push(serde_json::json!({
             "code": inv.code,
@@ -723,6 +835,7 @@ pub async fn invites_make(State(s): State<AppState>, Json(req): Json<InviteMake>
     if req.end_ms - now > 366 * 86_400_000 {
         return Err(bad("invites can last a year at most"));
     }
+    let _one = CLAIMING.lock().await;
     let mut all = read_invites(&s.home);
     if all.len() + req.notes.len() > MAX_INVITES {
         return Err(bad(format!("{MAX_INVITES} invites at most on a site")));
@@ -731,7 +844,7 @@ pub async fn invites_make(State(s): State<AppState>, Json(req): Json<InviteMake>
     for note in &req.notes {
         let note: String = note.chars().filter(|c| !c.is_control()).take(MAX_LABEL).collect::<String>().trim().to_string();
         let code: String = auth::random_token().chars().filter(|c| c.is_ascii_alphanumeric()).take(20).collect();
-        let inv = Invite { code, level: lv.card.covenant_id.clone(), label: label.clone(), note, created_ms: now, end_ms: req.end_ms, cancelled: false };
+        let inv = Invite { code, level: lv.card.covenant_id.clone(), label: label.clone(), note, created_ms: now, end_ms: req.end_ms, cancelled: false, used_txid: String::new(), used_by: String::new(), used_ms: 0 };
         made.push(inv.clone());
         all.push(inv);
     }

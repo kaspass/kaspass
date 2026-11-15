@@ -136,7 +136,7 @@ async function detectKaspire(timeoutMs = 3000) {
   if (window.kaspire?.isKaspire) return window.kaspire;
   return new Promise((resolve, reject) => {
     const t = setTimeout(() => reject(new Error(isPhone ? "On a phone, sign in with the Kaspire app. Tap the button below." : "We couldn't find the Kaspire wallet in this browser. Install it (free) from kaspire.kaslab.space, then reload this page. Or use the Kaspire app on your phone.")), timeoutMs);
-    window.addEventListener("kaspire#initialized", () => { clearTimeout(t); resolve(window.kaspire); }, { once: true });
+    window.addEventListener("kaspire#initialized", () => { if (window.kaspire && window.kaspire.isKaspire) { clearTimeout(t); resolve(window.kaspire); } });
   });
 }
 

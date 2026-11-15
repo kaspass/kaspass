@@ -59,6 +59,13 @@ fn claims_broken() -> ApiError {
     (StatusCode::SERVICE_UNAVAILABLE, "free trials are paused on this site right now. You can still join.".into())
 }
 
+/// Trial starts per visitor in a day, and the visitors seen (address bucket, when).
+const STARTS_PER_VISITOR: usize = 4;
+static STARTS: std::sync::Mutex<Vec<(String, i64)>> = std::sync::Mutex::new(Vec::new());
+
+/// A trial claim still "being sent" after this long, and not on chain, was cut off: it's released.
+const STALE_MS: i64 = 15 * 60_000;
+
 /// Trials prepared and waiting for the wallet's signature: txid -> (owner hash, level, when).
 static PENDING: std::sync::LazyLock<std::sync::Mutex<HashMap<String, (String, String, i64)>>> = std::sync::LazyLock::new(Default::default);
 
@@ -87,6 +94,9 @@ pub async fn reserve(s: &AppState, txid: &str) -> Result<(), ApiError> {
     let chain = trials_on_chain(s).await;
     let _g = LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let mut all = claims(&s.home).map_err(|_| claims_broken())?;
+    // A claim cut off mid-send long ago, whose trial never reached the chain, doesn't count.
+    let stale = |c: &Claim| c.pending && wall_ms() - c.at_ms > STALE_MS && !chain.iter().any(|(_, _, id, _)| *id == c.txid);
+    all.retain(|_, c| !stale(c));
     if all.get(&owner).is_some_and(|c| c.txid != txid) || chain.iter().any(|(o, _, _, _)| *o == owner) {
         return Err(bad("you've already had a free trial here"));
     }
@@ -125,8 +135,13 @@ pub fn release(home: &std::path::Path, txid: &str) {
     }
 }
 
-fn cancels(home: &std::path::Path) -> HashMap<String, i64> {
-    std::fs::read_to_string(home.join(CANCELS_FILE)).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default()
+/// The cancel records. None: the file is there but can't be read (then no unpaid trial is charged).
+fn cancels_read(home: &std::path::Path) -> Option<HashMap<String, i64>> {
+    match std::fs::read_to_string(home.join(CANCELS_FILE)) {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Some(HashMap::new()),
+        Err(_) => None,
+        Ok(t) => serde_json::from_str(&t).ok(),
+    }
 }
 
 /// The member pressed "Cancel my trial" (signed in as the pass's owner): from now on the keeper
@@ -134,9 +149,13 @@ fn cancels(home: &std::path::Path) -> HashMap<String, i64> {
 /// `false` takes it back (they added money to keep the plan after all).
 pub fn set_cancelled(home: &std::path::Path, level: &str, owner_hash: &str, on: bool) {
     let _g = LOCK.lock().unwrap_or_else(|e| e.into_inner());
-    let mut all = cancels(home);
+    let Some(mut all) = cancels_read(home) else {
+        eprintln!("trial: {CANCELS_FILE} can't be read; not changing it");
+        return;
+    };
     let now = wall_ms();
-    all.retain(|_, t| now - *t < 90 * DAY_MS);
+    // Kept well past any trial's end (a trial is shorter than its plan's period, a year at most).
+    all.retain(|_, t| now - *t < 400 * DAY_MS);
     let key = format!("{level}:{owner_hash}");
     let changed = if on { all.insert(key, now).is_none() } else { all.remove(&key).is_some() };
     if changed {
@@ -148,7 +167,13 @@ pub fn set_cancelled(home: &std::path::Path, level: &str, owner_hash: &str, on: 
 
 /// Whether the member cancelled this trial (the keeper skips it).
 pub fn cancelled(home: &std::path::Path, level: &str, owner_hash: &str) -> bool {
-    cancels(home).contains_key(&format!("{level}:{owner_hash}"))
+    match cancels_read(home) {
+        Some(all) => all.contains_key(&format!("{level}:{owner_hash}")),
+        None => {
+            eprintln!("trial: {CANCELS_FILE} can't be read; not charging unpaid trials until it's fixed");
+            true
+        }
+    }
 }
 
 /// From one page of the indexer's answer: Some(true) when `address` sent a payment before
@@ -282,8 +307,9 @@ async fn blocker(s: &AppState, address: &str) -> Option<(&'static str, String)> 
 
 /// Whether free trials can run on this plan at all right now (a reason when they can't).
 async fn plan_blocker(s: &AppState) -> Option<String> {
-    let lane = current_lane(s).await.ok()?;
-    if lane.lane.remaining > 0 {
+    let Ok(lane) = current_lane(s).await else { return Some("free trials aren't available on this plan right now".into()) };
+    // The same test as starting one: any limit (including sold out) means no trials.
+    if lane.lane.remaining >= 0 {
         return Some("free trials are off on this plan because it has a limited number of passes".into());
     }
     if s.card.settings.trial_ms <= charge_window_ms() {
@@ -378,6 +404,17 @@ pub async fn prepare(State(s): State<AppState>, headers: HeaderMap, Query(lq): Q
     }
     if let Some(why) = plan_blocker(&s).await {
         return Err(bad(why));
+    }
+    // A few trial starts a day from one visitor, so one person with many new wallets can't use up
+    // a plan's daily allowance (on test networks the wallet-age check is off).
+    if let Some(ip) = super::client_ip(&headers) {
+        let mut seen = STARTS.lock().unwrap_or_else(|e| e.into_inner());
+        let now = wall_ms();
+        seen.retain(|(_, t)| now - *t < DAY_MS);
+        if seen.iter().filter(|(i, _)| *i == ip).count() >= STARTS_PER_VISITOR {
+            return Err((StatusCode::TOO_MANY_REQUESTS, "you've started a few free trials from here today. Please try again tomorrow, or join now.".into()));
+        }
+        seen.push((ip, now));
     }
     if let Some((reason, text)) = blocker(&s, &address).await {
         if reason == "today" {

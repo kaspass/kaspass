@@ -125,7 +125,7 @@ pub const RECORD_FILE: &str = "record.json";
 
 /// v5: transactions this server signed a price for (txid -> when), so a payment that used a
 /// price approval it never made stands out (`signed-txids.json`; a txid doesn't cover signatures,
-/// so it's known before the buyer signs). Kept for 2 days.
+/// so it's known before the buyer signs). Kept for 30 days (SIGNED_KEEP_MS).
 pub const SIGNED_FILE: &str = "signed-txids.json";
 static SIGNED: std::sync::LazyLock<std::sync::Mutex<Option<std::collections::HashMap<String, i64>>>> = std::sync::LazyLock::new(Default::default);
 
@@ -164,7 +164,7 @@ fn note_prepared(txid: &str) {
     g.insert(txid.to_string(), std::time::Instant::now());
 }
 
-/// Whether this server signed a price for `txid` (in the last 2 days).
+/// Whether this server signed a price for `txid` (in the last 30 days).
 pub fn was_signed(dir: &Path, txid: &str) -> bool {
     let mut g = SIGNED.lock().unwrap_or_else(|e| e.into_inner());
     g.get_or_insert_with(|| signed_load(dir)).contains_key(txid)
@@ -270,6 +270,12 @@ impl Shop {
         if self.priced_in_kas() { per } else { per * (100 + cushion_pct) / 100 }
     }
 
+    /// The same, never more per renewal than the pass's KAS ceiling (a renewal can't cost more).
+    pub fn prepaid_capped(&self, per: u64, cushion_pct: u64, ceiling: u64) -> u64 {
+        let p = self.prepaid_with(per, cushion_pct);
+        if ceiling > 0 { p.min(ceiling.max(per)) } else { p }
+    }
+
     fn priced_in_kas(&self) -> bool {
         crate::prices::level_prices(&self.dir).get(&self.card.covenant_id).is_some_and(|p| p.currency == "KAS")
     }
@@ -300,6 +306,13 @@ impl Shop {
     /// v5: the owner record this site follows (record.json), if it has one.
     pub fn record(&self) -> Option<crate::RecordInfo> {
         std::fs::read_to_string(self.dir.join(RECORD_FILE)).ok().and_then(|t| serde_json::from_str(&t).ok())
+    }
+
+    /// record.json is there but can't be read: creator actions stay locked (rather than falling
+    /// back to the wallet that launched the plan, which may have handed it over since).
+    pub fn record_broken(&self) -> bool {
+        let p = self.dir.join(RECORD_FILE);
+        p.exists() && self.record().is_none()
     }
 
     fn quote_of(buyer: &str, tx: Transaction, entries: Vec<UtxoEntry>, unsigned: Vec<usize>, record: Option<crate::RecordInfo>) -> Quote {
@@ -596,7 +609,7 @@ impl Shop {
         }
         // Prepaid renewals cost what a renewal costs: today's price on v5 (a discount off the
         // ceiling, with the cushion the member picked for price moves), the locked rate otherwise.
-        let per = if self.is_v5() { self.prepaid_with(crate::discounted_ppm(lane.lane.price, renew_ppm.unwrap_or(bps)), cushion_pct) } else { lane.lane.price };
+        let per = if self.is_v5() { self.prepaid_capped(crate::discounted_ppm(lane.lane.price, renew_ppm.unwrap_or(bps)), cushion_pct, lane.lane.price) } else { lane.lane.price };
         let voucher = if self.is_v5() { self.voucher_for_v5(bps, lane.lane.voucher)?.filter(|v| v.bps > 0) } else { self.voucher_for(bps)? };
         let opts = SaleOpts { prepaid: prepaid_periods * per, voucher, periods: prepaid_periods, cushion_pct };
         self.prepare_for_opts(chain, buyer, buyer, kind, lane, opts).await
@@ -1172,24 +1185,24 @@ impl Shop {
     }
 
     /// What a pay-in purchase uses from the payment (price, bond, prepaid), as `prepare_v4` sizes it.
-    pub fn payin_buy_cost(&self, lane: &FoundLane, bps: u64, renew_ppm: u64, periods: u64) -> (u64, u64) {
+    pub fn payin_buy_cost(&self, lane: &FoundLane, bps: u64, renew_ppm: u64, periods: u64, cushion_pct: u64) -> (u64, u64) {
         let due = crate::discounted_ppm(lane.lane.price, bps);
-        let prepaid = periods * self.prepaid_margin(crate::discounted_ppm(lane.lane.price, renew_ppm));
+        let prepaid = periods * self.prepaid_capped(crate::discounted_ppm(lane.lane.price, renew_ppm), cushion_pct, lane.lane.price);
         (due, prepaid)
     }
 
     /// COMPLETE a pay-in order with a purchase: signed by this server's voucher key, checked
     /// like a node would, and sent. Returns the txid and what went to the creator.
     #[allow(clippy::too_many_arguments)]
-    pub async fn payin_buy(&self, chain: &mut Chain, buyer: &str, lane: &FoundLane, bps: u64, renew_ppm: u64, periods: u64, pin: crate::Compiled, refund: ScriptPublicKey, coin: crate::Utxo) -> Result<(String, u64)> {
+    pub async fn payin_buy(&self, chain: &mut Chain, buyer: &str, lane: &FoundLane, bps: u64, renew_ppm: u64, periods: u64, cushion_pct: u64, pin: crate::Compiled, refund: ScriptPublicKey, coin: crate::Utxo) -> Result<(String, u64)> {
         if periods > 36 {
             bail!("prepay at most 36 periods");
         }
-        let (_, prepaid) = self.payin_buy_cost(lane, bps, renew_ppm, periods);
+        let (_, prepaid) = self.payin_buy_cost(lane, bps, renew_ppm, periods, cushion_pct);
         let voucher = self.voucher_for_v5(bps, lane.lane.voucher)?.filter(|v| v.bps > 0);
         let owner_id = owner_hash_of(buyer.trim())?;
         let live = Live { txid: lane.txid.clone(), index: lane.index, value: lane.value };
-        let opts = SaleOpts { prepaid, voucher, periods, cushion_pct: DEFAULT_CUSHION };
+        let opts = SaleOpts { prepaid, voucher, periods, cushion_pct };
         let payer = Payer::PayIn(crate::PayInCoin { pin, coin, refund });
         let b = sale_tx_full(&self.creator()?, chain, self.tier(), lane.lane, &live, self.cov()?, Sale::Monthly, false, owner_id, buyer.trim(), payer, None, None, opts).await?;
         verify_all(&b.tx, &b.entries)?;
@@ -1204,7 +1217,9 @@ impl Shop {
     /// this server, checked like a node would, and sent. Returns the txid and what went to the vault.
     /// On failure, the txid comes back too when the transaction was built and handed to the
     /// network (it may have gone through); None means nothing was sent.
-    pub async fn promo_buy(&self, chain: &mut Chain, member: &str, lane: &FoundLane, bps: u64) -> std::result::Result<(String, u64), (Option<String>, anyhow::Error)> {
+    /// `before_send` gets the transaction id once it's final and before anything is sent, so the
+    /// caller can write it down first; an error there sends nothing.
+    pub async fn promo_buy(&self, chain: &mut Chain, member: &str, lane: &FoundLane, bps: u64, before_send: impl FnOnce(&str) -> Result<()>) -> std::result::Result<(String, u64), (Option<String>, anyhow::Error)> {
         let ns = |e: anyhow::Error| (None, e);
         let keeper = self.keeper.clone().ok_or_else(|| ns(anyhow!("this server has no keeper wallet")))?;
         if !self.is_v5() {
@@ -1220,6 +1235,7 @@ impl Shop {
         let b = sale_tx_full(&self.creator().map_err(ns)?, chain, self.tier(), lane.lane, &live, self.cov().map_err(ns)?, Sale::Monthly, false, owner_id, member.trim(), Payer::Key(keeper), None, None, SaleOpts { voucher, ..Default::default() }).await.map_err(ns)?;
         verify_all(&b.tx, &b.entries).map_err(ns)?;
         let txid = b.tx.id().to_string();
+        before_send(&txid).map_err(ns)?;
         note_signed(&self.dir, &txid);
         let id = chain.submit(&b.tx, &b.entries).await.map_err(|e| (Some(txid.clone()), e))?;
         Ok((id.to_string(), b.charge))
@@ -1466,7 +1482,7 @@ impl Shop {
                 if f.term_amount.is_some() && !(2..=120).contains(&f.term_periods) {
                     bail!("a commitment term runs 2 to 120 periods");
                 }
-                Some(crate::prices::LevelPrice { currency: cur.clone(), amount, founding, lifetime: f.lifetime_amount, term: f.term_amount })
+                Some(crate::prices::LevelPrice { currency: cur.clone(), amount, founding, lifetime: f.lifetime_amount, term: f.term_amount, notice: None })
             }
             _ => bail!("choose the plan's currency and price"),
         };

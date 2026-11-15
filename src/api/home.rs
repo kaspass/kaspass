@@ -9,7 +9,7 @@ const HOME_PAGE: &str = include_str!("../../web/home.html");
 const CREATORS_PAGE: &str = include_str!("../../web/creators.html");
 /// Notes sent through the "Get your own page" form, newest last.
 const CONTACT_FILE: &str = "contact-requests.json";
-const CONTACT_KEEP: usize = 300;
+const CONTACT_KEEP: usize = 1000;
 
 /// Is this request for KasPass's own website?
 pub fn is_home(headers: &HeaderMap) -> bool {
@@ -92,8 +92,59 @@ fn home_page(s: &AppState) -> String {
         }
     }
     out.push_str(rest);
-    // With the demo gone, "Get your own page" becomes the main button.
-    out.replacen(r#"<a class="btn ghost" href="/creators">"#, r#"<a class="btn" href="/creators">"#, 1)
+    out
+}
+
+/// How people can reach KasPass's own site owner, from `contact.json` next to the data
+/// (`{"telegram": "handle", "email": "hello@example.com"}`, either or both). Kept out of the code
+/// so nothing personal sits in the repository.
+const CONTACT_SETTINGS: &str = "contact.json";
+
+fn contact_html(home: &std::path::Path) -> Option<String> {
+    let v: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(home.join(CONTACT_SETTINGS)).ok()?).ok()?;
+    let ok = |t: &str, extra: &str| !t.is_empty() && t.len() <= 80 && t.chars().all(|c| c.is_ascii_alphanumeric() || "_.-".contains(c) || extra.contains(c));
+    let tg = v["telegram"].as_str().map(|t| t.trim().trim_start_matches('@').to_string()).filter(|t| ok(t, ""));
+    let mail = v["email"].as_str().map(|t| t.trim().to_string()).filter(|t| ok(t, "@+") && t.contains('@'));
+    let parts: Vec<String> = [
+        tg.map(|t| format!(r#"<a href="https://t.me/{t}" rel="noopener">@{t} on Telegram</a>"#)),
+        mail.map(|m| format!(r#"<a href="mailto:{m}">{m}</a>"#)),
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
+    (!parts.is_empty()).then(|| parts.join(" or "))
+}
+
+/// Keeps `<!--contact-->…<!--/contact-->` (with `{contact}` filled in) when there's a contact,
+/// and `<!--nocontact-->…<!--/nocontact-->` when there isn't; drops the other.
+pub fn fill_contact(home: &std::path::Path, html: &str) -> String {
+    let c = contact_html(home);
+    let (keep, drop) = if c.is_some() { ("contact", "nocontact") } else { ("nocontact", "contact") };
+    let html = strip_blocks(html, drop);
+    html.replace(&format!("<!--{keep}-->"), "").replace(&format!("<!--/{keep}-->"), "").replace("{contact}", c.as_deref().unwrap_or(""))
+}
+
+fn strip_blocks(html: &str, name: &str) -> String {
+    let (open, close) = (format!("<!--{name}-->"), format!("<!--/{name}-->"));
+    let mut out = String::with_capacity(html.len());
+    let mut rest = html;
+    while let Some(i) = rest.find(&open) {
+        out.push_str(&rest[..i]);
+        match rest[i..].find(&close) {
+            Some(j) => rest = &rest[i + j + close.len()..],
+            None => {
+                rest = "";
+                break;
+            }
+        }
+    }
+    out.push_str(rest);
+    out
+}
+
+/// " (about $0.25 today)" for a KAS amount, from the last rate read (empty before there is one).
+fn usd_hint(kas: f64) -> String {
+    crate::prices::last().filter(|r| r.kas_usd > 0.0).map(|r| format!(" (about US${:.2} today)", kas * r.kas_usd)).unwrap_or_default()
 }
 
 /// On KasPass's own site the membership page lives at /demo: its links to "/" follow it there.
@@ -104,11 +155,14 @@ pub fn to_demo(html: &str) -> String {
 /// `/`: KasPass's home page on its own host names, the membership page everywhere else.
 pub async fn root(State(s): State<AppState>, headers: HeaderMap, uri: axum::http::Uri) -> axum::response::Response {
     if is_home(&headers) {
-        // Older links to the membership page (`/?level=...`, `?return=...`) keep working.
-        if let Some(q) = uri.query().filter(|q| !q.is_empty()) {
+        // Older links to the membership page (`/?level=...`, `?return=...`) keep working; other
+        // queries (`?utm_source=`, `?fbclid=`) just show the home page.
+        const PAGE_KEYS: [&str; 6] = ["level=", "return=", "invite=", "do=", "theme=", "k="];
+        if let Some(q) = uri.query().filter(|q| q.split('&').any(|kv| PAGE_KEYS.iter().any(|k| kv.starts_with(k)))) {
             return axum::response::Redirect::to(&format!("/demo?{q}")).into_response();
         }
-        return ([(header::CACHE_CONTROL, "public, max-age=60")], Html(home_page(&s))).into_response();
+        let html = fill_contact(&s.home, &home_page(&s)).replace("{kas1}", &usd_hint(1.0)).replace("{kas25}", &usd_hint(25.0)).replace("{kas200}", &usd_hint(200.0));
+        return ([(header::CACHE_CONTROL, "public, max-age=60")], Html(html)).into_response();
     }
     membership_page(&s, &headers, &uri, fill_site(&s))
 }
@@ -160,11 +214,68 @@ pub async fn visibility_set(State(s): State<AppState>, Json(req): Json<Visibilit
 }
 
 /// `/creators`: "Get your own page", on KasPass's own site only.
-pub async fn creators(headers: HeaderMap) -> axum::response::Response {
+pub async fn creators(State(s): State<AppState>, headers: HeaderMap) -> axum::response::Response {
     if !is_home(&headers) {
         return (StatusCode::NOT_FOUND, "Not found").into_response();
     }
-    ([(header::CACHE_CONTROL, "public, max-age=300")], Html(CREATORS_PAGE)).into_response()
+    let page = fill_contact(&s.home, CREATORS_PAGE);
+    // The form carries the moment the page was made, signed by this server: a note must come at
+    // least a few seconds later (people take that long to type; scripts posting straight away don't).
+    let page = page.replacen(r#"<input id="cT" name="t" type="hidden" value="">"#, &format!(r#"<input id="cT" name="t" type="hidden" value="{}">"#, form_stamp(wall_ms())), 1);
+    ([(header::CACHE_CONTROL, "no-cache")], Html(page)).into_response()
+}
+
+const PRIVACY_PAGE: &str = include_str!("../../web/privacy.html");
+const TERMS_PAGE: &str = include_str!("../../web/terms.html");
+
+/// `/privacy` and `/terms`, on KasPass's own site only.
+pub async fn privacy(State(s): State<AppState>, headers: HeaderMap) -> axum::response::Response {
+    legal(&s, &headers, PRIVACY_PAGE)
+}
+
+pub async fn terms(State(s): State<AppState>, headers: HeaderMap) -> axum::response::Response {
+    legal(&s, &headers, TERMS_PAGE)
+}
+
+fn legal(s: &AppState, headers: &HeaderMap, page: &str) -> axum::response::Response {
+    if !is_home(headers) {
+        return (StatusCode::NOT_FOUND, "Not found").into_response();
+    }
+    ([(header::CACHE_CONTROL, "public, max-age=300")], Html(fill_contact(&s.home, page))).into_response()
+}
+
+/// `/robots.txt`: KasPass's own site lists its pages; creators' sites keep the dashboard and API out.
+pub async fn robots(headers: HeaderMap) -> axum::response::Response {
+    let mut t = String::from("User-agent: *\nDisallow: /dashboard\nDisallow: /club\nDisallow: /v1/\n");
+    if is_home(&headers) {
+        t.push_str("Disallow: /demo\nSitemap: https://kaspass.app/sitemap.xml\n");
+    }
+    ([(header::CONTENT_TYPE, "text/plain; charset=utf-8"), (header::CACHE_CONTROL, "public, max-age=3600")], t).into_response()
+}
+
+/// `/sitemap.xml`, on KasPass's own site only.
+pub async fn sitemap(headers: HeaderMap) -> axum::response::Response {
+    if !is_home(&headers) {
+        return (StatusCode::NOT_FOUND, "Not found").into_response();
+    }
+    let urls = ["", "creators", "help", "privacy", "terms"].iter().map(|p| format!("  <url><loc>https://kaspass.app/{p}</loc></url>\n")).collect::<String>();
+    let x = format!("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n{urls}</urlset>\n");
+    ([(header::CONTENT_TYPE, "application/xml; charset=utf-8"), (header::CACHE_CONTROL, "public, max-age=3600")], x).into_response()
+}
+
+/// A secret made at start, for signing the form's time stamp.
+static FORM_KEY: std::sync::LazyLock<[u8; 32]> = std::sync::LazyLock::new(secp256k1::rand::random);
+
+fn form_stamp(ms: i64) -> String {
+    let mac = blake2b_simd::Params::new().hash_length(16).key(&*FORM_KEY).hash(ms.to_string().as_bytes());
+    format!("{ms}.{}", mac.to_hex())
+}
+
+/// How old a valid stamp is (ms), or None when it isn't one of ours.
+fn stamp_age(t: &str) -> Option<i64> {
+    let (ms, _) = t.split_once('.')?;
+    let ms: i64 = ms.parse().ok()?;
+    (form_stamp(ms) == t).then(|| wall_ms() - ms)
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -187,10 +298,16 @@ fn save_notes(home: &std::path::Path, all: &[ContactNote]) -> std::io::Result<()
 }
 
 /// Recent notes, for a simple limit on how many can arrive (whoever sends them).
-static RECENT: std::sync::LazyLock<Mutex<Vec<(i64, String)>>> = std::sync::LazyLock::new(|| Mutex::new(Vec::new()));
+/// (when, visitor, text, looked like junk), for the last day.
+static RECENT: std::sync::LazyLock<Mutex<Vec<(i64, String, String, bool)>>> = std::sync::LazyLock::new(|| Mutex::new(Vec::new()));
 static LAST_DM: Mutex<i64> = Mutex::new(0);
-const PER_VISITOR_HOUR: usize = 3;
-const PER_HOUR: usize = 20;
+/// Notes kept per visitor in a day, and site-wide in an hour (a safety net only).
+const PER_VISITOR_DAY: usize = 3;
+const PER_HOUR: usize = 60;
+/// Notes that look like junk (no words, only a link, or the same text again): a small site-wide allowance.
+const JUNK_PER_HOUR: usize = 5;
+/// Where to write instead, shown when the form can't take a note.
+const OTHER_WAY: &str = "You can also reach us on Telegram or by email (see the bottom of this page).";
 
 #[derive(Deserialize)]
 pub struct ContactRequest {
@@ -203,6 +320,9 @@ pub struct ContactRequest {
     /// A box people never see: anything in it means a bot filled in the form.
     #[serde(default)]
     website: String,
+    /// The page's signed time stamp.
+    #[serde(default)]
+    t: String,
 }
 
 /// Plain text only, without control characters, at most `max` characters.
@@ -226,28 +346,40 @@ pub async fn contact(State(s): State<AppState>, headers: HeaderMap, Json(req): J
     if message.chars().count() < 10 {
         return Err(bad("please say a little about what you'd like to sell"));
     }
+    match stamp_age(&req.t) {
+        None => return Err(bad(format!("this page is out of date. Please reload it and send your note again. {OTHER_WAY}"))),
+        Some(age) if age < 4_000 => return Err(bad("that was very quick. Please check your note and press Send again.")),
+        Some(age) if age > 2 * 86_400_000 => return Err(bad("this page has been open a long time. Please reload it and send your note again.")),
+        Some(_) => {}
+    }
     let now = wall_ms();
     let ip = super::client_ip(&headers).unwrap_or_default();
+    let junk = !message.chars().any(char::is_alphabetic) || (message.starts_with("http") && !message.trim().contains(' '));
     {
         let mut recent = RECENT.lock().unwrap_or_else(|e| e.into_inner());
-        recent.retain(|(t, _)| now - t < 3_600_000);
-        // A few notes an hour from one visitor, and a cap for everyone together.
-        if !ip.is_empty() && recent.iter().filter(|(_, i)| *i == ip).count() >= PER_VISITOR_HOUR {
-            return Err((StatusCode::TOO_MANY_REQUESTS, "thanks, your notes arrived; please wait a while before sending another".into()));
+        recent.retain(|r| now - r.0 < 86_400_000);
+        let again = recent.iter().any(|r| r.2 == message);
+        let junk = junk || again;
+        let last_hour = recent.iter().filter(|r| now - r.0 < 3_600_000);
+        if !ip.is_empty() && recent.iter().filter(|r| r.1 == ip).count() >= PER_VISITOR_DAY {
+            return Err((StatusCode::TOO_MANY_REQUESTS, "thanks, your notes arrived. Please wait until tomorrow before sending another.".into()));
         }
-        if recent.len() >= PER_HOUR {
-            return Err((StatusCode::TOO_MANY_REQUESTS, "lots of notes are arriving right now; please try again in a while".into()));
+        if junk && last_hour.clone().filter(|r| r.3).count() >= JUNK_PER_HOUR {
+            return Err((StatusCode::TOO_MANY_REQUESTS, format!("we couldn't take that note right now. Please add a few words about what you'd like to sell. {OTHER_WAY}")));
         }
-        recent.push((now, ip));
+        if last_hour.count() >= PER_HOUR {
+            return Err((StatusCode::TOO_MANY_REQUESTS, format!("lots of notes are arriving right now; please try again in a while. {OTHER_WAY}")));
+        }
+        recent.push((now, ip, message.clone(), junk));
     }
     let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.subsec_nanos()).unwrap_or(0);
     let note = ContactNote { id: format!("{now:x}{nanos:08x}"), at_ms: now, name: name.clone(), reach: reach.clone(), message };
     let mut all = notes(&s.home);
-    all.push(note);
-    if all.len() > CONTACT_KEEP {
-        let extra = all.len() - CONTACT_KEEP;
-        all.drain(..extra);
+    // Never push out a note the owner hasn't dealt with: when the inbox is full, refuse new ones.
+    if all.len() >= CONTACT_KEEP {
+        return Err((StatusCode::SERVICE_UNAVAILABLE, format!("our inbox is full right now. {OTHER_WAY}")));
     }
+    all.push(note);
     save_notes(&s.home, &all).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("couldn't save the note: {e}")))?;
     println!("website: a note from the \"Get your own page\" form");
     // At most one message to the owner every 10 minutes, however many notes arrive.

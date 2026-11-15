@@ -74,7 +74,7 @@ async function detectKaspire(timeoutMs = 3000) {
   if (window.kaspire?.isKaspire) return window.kaspire;
   return new Promise((resolve, reject) => {
     const t = setTimeout(() => reject(new Error(window.KaspireMobile && window.KaspireMobile.isPhone ? "On a phone, sign in with the Kaspire app. Tap the button below." : "We couldn't find the Kaspire wallet in this browser. Install it (free) from kaspire.kaslab.space, then reload this page. Or use the Kaspire app on your phone.")), timeoutMs);
-    window.addEventListener("kaspire#initialized", () => { clearTimeout(t); resolve(window.kaspire); }, { once: true });
+    window.addEventListener("kaspire#initialized", () => { if (window.kaspire && window.kaspire.isKaspire) { clearTimeout(t); resolve(window.kaspire); } });
   });
 }
 
@@ -425,7 +425,8 @@ $("vpGo").onclick = async () => {
       ...(!$("vpTermBox").classList.contains("hidden") && Number($("vpTerm").value) > 0 ? { term_amount: Number($("vpTerm").value) } : {}) }) });
   if (!r.ok) { plainSay("vpErr", await r.text()); return; }
   const j = await r.json();
-  say("vpMsg", j.warning ? "Saved. " + j.warning : "Saved. Members see the new price now.");
+  const notice = j.notice_until_ms ? ` New members pay it now. Members who prepaid renewals keep the old price (${j.renews_at}) until ${new Date(j.notice_until_ms).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}, and the ones who linked Telegram or Discord get a message.` : "";
+  say("vpMsg", (j.warning ? "Saved. " + j.warning : "Saved. Members see the new price now.") + notice);
 };
 // What members will see: "CA$160 a month, about 580 KAS today".
 let VP_RATE = null;

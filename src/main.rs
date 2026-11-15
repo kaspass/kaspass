@@ -2745,7 +2745,7 @@ async fn simulate() -> Result<()> {
                     std::fs::write(site.join(&file), serde_json::to_string_pretty(&ix.card)?)?;
                     files.push(file);
                     names.insert(ix.card.covenant_id.clone(), serde_json::json!(name));
-                    prices.insert(ix.card.covenant_id.clone(), prices::LevelPrice { currency: cur.into(), amount: cad, founding: founding.map(|a| prices::Founding { amount: a, until_ms: founding_until }), lifetime: life_amt, term: term_amt });
+                    prices.insert(ix.card.covenant_id.clone(), prices::LevelPrice { currency: cur.into(), amount: cad, founding: founding.map(|a| prices::Founding { amount: a, until_ms: founding_until }), lifetime: life_amt, term: term_amt, notice: None });
                     let mut shop = shop::Shop::open(&site, &ix.card);
                     shop.no_fee = true;
                     shop.voucher = Some(voucher.clone());
@@ -2788,7 +2788,7 @@ async fn simulate() -> Result<()> {
                     names.insert(ix.card.covenant_id.clone(), serde_json::json!(["Bronze", "Silver", "Gold", "Platinum", "Diamond"][i as usize]));
                 }
                 let kas = |x: u64| (10 * x * k) as f64;
-                prices.insert(ix.card.covenant_id.clone(), prices::LevelPrice { currency: "KAS".into(), amount: kas(1), founding: None, lifetime: Some(kas(10)), term: Some(kas(10)) });
+                prices.insert(ix.card.covenant_id.clone(), prices::LevelPrice { currency: "KAS".into(), amount: kas(1), founding: None, lifetime: Some(kas(10)), term: Some(kas(10)), notice: None });
                 let mut shop = shop::Shop::open(&site, &ix.card);
                 shop.fee_address = Some(cx.fee.addr.to_string());
                 shop.voucher = Some(voucher.clone());
@@ -3071,6 +3071,15 @@ async fn main() -> Result<()> {
     if let Cmd::Serve { card, port, fee_address, allow_return, csp, creator_only_launch, network, creator, no_fee, cross_check } = &cli.cmd {
         api::set_return_origins(allow_return)?;
         api::set_csp_mode(csp)?;
+        // The data folder holds live invite codes, claims, notes and member addresses: only this
+        // service may read it, whoever started it (the setup script also sets UMask=0077).
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let dir = if cli.home.as_os_str().is_empty() { std::path::PathBuf::from(".") } else { cli.home.clone() };
+            if let Err(e) = std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700)) {
+                eprintln!("warning: couldn't make the data folder {} private ({e})", dir.display());
+            }
+        }
         api::set_creator_only_launch(*creator_only_launch);
         if *creator_only_launch {
             println!("Launching new levels: creator wallet only.");

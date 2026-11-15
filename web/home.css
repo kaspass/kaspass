@@ -5,7 +5,6 @@
 @font-face { font-family: "Bricolage Grotesque"; font-style: normal; font-weight: 600; font-display: swap; src: url(/assets/fonts/bricolage-grotesque-latin-600-normal.woff2) format("woff2"); }
 @font-face { font-family: "Bricolage Grotesque"; font-style: normal; font-weight: 800; font-display: swap; src: url(/assets/fonts/bricolage-grotesque-latin-800-normal.woff2) format("woff2"); }
 @font-face { font-family: "Instrument Sans"; font-style: normal; font-weight: 400; font-display: swap; src: url(/assets/fonts/instrument-sans-latin-400-normal.woff2) format("woff2"); }
-@font-face { font-family: "Instrument Sans"; font-style: normal; font-weight: 500; font-display: swap; src: url(/assets/fonts/instrument-sans-latin-500-normal.woff2) format("woff2"); }
 @font-face { font-family: "Instrument Sans"; font-style: normal; font-weight: 600; font-display: swap; src: url(/assets/fonts/instrument-sans-latin-600-normal.woff2) format("woff2"); }
 
 :root {
@@ -23,6 +22,8 @@
   --glow: #49d9c8;
   --stamp: #e9a93b;
   --focus: #0b7a6e;
+  --field: #6a827e;
+  --bad: #b3261e;
   --display: "Bricolage Grotesque", "Instrument Sans", system-ui, sans-serif;
   --body: "Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   color-scheme: light;
@@ -39,6 +40,8 @@
     --link: #6fe3d5;
     --pass: #15332f;
     --focus: #49d9c8;
+    --field: #6b8a85;
+    --bad: #ff8a7a;
     color-scheme: dark;
   }
 }
@@ -78,14 +81,14 @@ p { margin: 0; }
 .btns { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 32px; }
 
 /* ---- Header -------------------------------------------------------------- */
-.top { position: sticky; top: 0; z-index: 5; background: color-mix(in srgb, var(--paper) 90%, transparent); backdrop-filter: saturate(1.4) blur(10px); -webkit-backdrop-filter: saturate(1.4) blur(10px); border-bottom: 1px solid var(--line); }
+.top { position: sticky; top: 0; z-index: 5; background: var(--paper); background: color-mix(in srgb, var(--paper) 90%, transparent); backdrop-filter: saturate(1.4) blur(10px); -webkit-backdrop-filter: saturate(1.4) blur(10px); border-bottom: 1px solid var(--line); }
 .top .wrap { display: flex; align-items: center; gap: 20px; min-height: 68px; }
 .logo { display: inline-flex; align-items: center; gap: 10px; color: var(--ink); text-decoration: none; font: 800 21px/1 var(--display); letter-spacing: -0.02em; }
 .logo svg { width: 30px; height: 30px; }
 .logo .ms { stroke: var(--teal); }
 .logo .mf { fill: var(--teal); }
 nav.main { margin-left: auto; display: flex; align-items: center; gap: 2px; }
-nav.main a:not(.btn) { color: var(--ink); text-decoration: none; font-weight: 500; font-size: 15px; padding: 8px 12px; border-radius: 999px; }
+nav.main a:not(.btn) { color: var(--ink); text-decoration: none; font-weight: 600; font-size: 15px; padding: 8px 12px; border-radius: 999px; }
 nav.main a:not(.btn):hover { background: var(--paper-2); }
 nav.main .btn { margin-left: 8px; }
 @media (max-width: 880px) { nav.main a.opt { display: none; } }
@@ -268,12 +271,42 @@ nav.main .btn { margin-left: 8px; }
 .form { max-width: 640px; position: relative; }
 .form label { display: block; margin-top: 22px; font-weight: 600; font-size: 16px; }
 .form label small { font-weight: 400; color: var(--ink-2); font-size: 15px; }
-.form input, .form textarea { display: block; width: 100%; margin-top: 8px; padding: 14px 16px; font: 400 17px/1.4 var(--body); color: var(--ink); background: var(--paper); border: 2px solid var(--line); border-radius: 14px; }
-.form input:focus-visible, .form textarea:focus-visible { border-color: var(--teal); outline: none; }
+.form input, .form textarea { display: block; width: 100%; margin-top: 8px; padding: 14px 16px; font: 400 17px/1.4 var(--body); color: var(--ink); background: var(--paper); border: 2px solid var(--field); border-radius: 14px; }
+.form input:focus-visible, .form textarea:focus-visible { border-color: var(--teal); outline: 3px solid var(--focus); outline-offset: 2px; }
+.form .hint { margin-top: 6px; font-size: 15px; color: var(--ink-2); }
+.form [aria-invalid="true"] { border-color: var(--bad); }
 .form textarea { min-height: 150px; resize: vertical; }
-.form .btn { margin-top: 26px; }
-.form .msg { margin-top: 16px; padding: 12px 16px; border-radius: 12px; font-weight: 500; }
+.form .btn { margin-top: 16px; }
+.form .msg { margin-top: 16px; padding: 12px 16px; border-radius: 12px; font-weight: 600; }
 .form .msg.ok { background: color-mix(in srgb, var(--teal) 14%, transparent); border: 1px solid var(--teal); }
-.form .msg.bad { background: color-mix(in srgb, #d4543c 12%, transparent); border: 1px solid #d4543c; }
+.form .msg.bad { background: color-mix(in srgb, var(--bad) 12%, transparent); border: 1px solid var(--bad); }
 .form .fine { margin-top: 14px; }
 .hp { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+
+/* A real screenshot of a membership page, in a phone frame. */
+.shot { margin: 0 auto; width: min(100%, 300px); }
+.shot img { width: 100%; border-radius: 40px; border: 10px solid var(--ink); height: auto; background: var(--pass); box-shadow: 0 30px 60px -30px rgba(6, 30, 27, .5); }
+.shot figcaption { margin-top: 12px; font-size: 14px; color: var(--ink-2); text-align: center; }
+
+.faq + .more { margin-top: 24px; }
+
+/* "What you'll need", as a list with the details in it. */
+.needlist { margin: 20px 0 0; padding-left: 22px; max-width: 40em; display: grid; gap: 10px; color: var(--ink-2); }
+.needlist b { color: var(--ink); font-weight: 600; }
+
+/* Privacy and terms. */
+.prose { padding-top: 48px; padding-bottom: 72px; max-width: 760px; }
+.prose h1 { font-size: clamp(34px, 4.6vw, 48px); }
+.prose .lead { margin-top: 16px; }
+.prose h2 { font-size: 24px; margin-top: 36px; }
+.prose p { margin-top: 10px; color: var(--ink-2); max-width: 40em; }
+
+/* In dark mode the pass turns light, so it stays the loud thing on the page. */
+@media (prefers-color-scheme: dark) {
+  .pass { background: #e8f3f1; color: #0f2321; box-shadow: 0 30px 70px -30px rgba(0, 0, 0, .8); }
+  .pass .who, .pass dt { color: #3b514e; }
+  .pass .state, .pass .stub b { color: #0a6b60; }
+  .pass .state::before { background: #0a6b60; box-shadow: 0 0 0 4px rgba(10, 107, 96, .2); }
+  .pass .stub { border-left-color: rgba(15, 35, 33, .28); }
+  .pass .stamp { border-color: #8a5200; color: #8a5200; }
+}

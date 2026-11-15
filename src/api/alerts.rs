@@ -84,7 +84,7 @@ fn kas_short(sompi: u64) -> String {
     if k >= 100.0 { format!("{k:.0}") } else { format!("{k:.2}") }
 }
 
-fn money_str(currency: &str, amount: f64) -> String {
+pub(crate) fn money_str(currency: &str, amount: f64) -> String {
     match currency {
         "CAD" => format!("CA${amount:.2}"),
         "USD" => format!("US${amount:.2}"),

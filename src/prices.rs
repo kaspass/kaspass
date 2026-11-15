@@ -217,8 +217,13 @@ fn load_last(site: &std::path::Path) -> Option<Rates> {
     (r.kas_usd > 0.0 && fx_in_range(&r) && wall_ms() - r.at_ms < SAVED_MAX_AGE_MS).then_some(r)
 }
 
-fn save_last(site: &std::path::Path, r: &Rates) {
-    let v = serde_json::json!({ "kas_usd": r.kas_usd, "usd_cad": r.usd_cad, "eur_usd": r.eur_usd, "at_ms": r.at_ms });
+fn load_second_seen(site: &std::path::Path) -> Option<i64> {
+    let v: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(site.join(LAST_FILE)).ok()?).ok()?;
+    v["second_seen_ms"].as_i64().or_else(|| v["at_ms"].as_i64())
+}
+
+fn save_last(site: &std::path::Path, r: &Rates, second_seen_ms: i64) {
+    let v = serde_json::json!({ "kas_usd": r.kas_usd, "usd_cad": r.usd_cad, "eur_usd": r.eur_usd, "at_ms": r.at_ms, "second_seen_ms": second_seen_ms });
     let _ = write_atomic(&site.join(LAST_FILE), v.to_string().as_bytes());
 }
 
@@ -252,6 +257,13 @@ pub fn start(site: std::path::PathBuf, sim: bool) {
         let mut failing = false;
         let mut pending: Option<(f64, i64)> = None;
         let mut guard = Guard::new(if sim { None } else { load_last(&site) }, wall_ms());
+        // When the second source last answered, kept across restarts: a restart doesn't give
+        // Kraken alone a fresh 15 minutes.
+        if !sim {
+            if let Some(ms) = load_second_seen(&site) {
+                guard.second_seen_ms = ms;
+            }
+        }
         let mut said = String::new();
         loop {
             let got = if sim {
@@ -303,7 +315,7 @@ pub fn start(site: std::path::PathBuf, sim: bool) {
                         failing = false;
                         if !sim {
                             guard.last = Some(r);
-                            save_last(&site, &r);
+                            save_last(&site, &r, guard.second_seen_ms);
                         }
                         *RATES.write().unwrap_or_else(|e| e.into_inner()) = Some(r);
                     }
@@ -338,6 +350,28 @@ pub struct LevelPrice {
     /// The commitment term (its length is fixed in the sales lane), in the same currency.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub term: Option<f64>,
+    /// After a price rise: renewals keep the old, lower price until `until_ms` (30 days' notice).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub notice: Option<Notice>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct Notice {
+    pub amount: f64,
+    pub until_ms: i64,
+}
+
+/// How long a price rise waits before it reaches renewals.
+pub const NOTICE_MS: i64 = 30 * 86_400_000;
+
+impl LevelPrice {
+    /// What a renewal costs today in the plan's currency: the old price while a rise's notice runs.
+    pub fn renewal_amount(&self) -> f64 {
+        match &self.notice {
+            Some(n) if wall_ms() < n.until_ms && n.amount < self.amount => n.amount,
+            _ => self.amount,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]

@@ -51,7 +51,7 @@ const rateWord = () => (isV5() ? "today's price" : "your locked rate");
 const unitNow = () => unitOf(card ? card.settings.period_ms : 0);
 const prepayName = () => `Prepay future ${unitNow()}s (auto-renew)`;
 const prepayLine = () => isV5()
-  ? `Each ${unitNow()} is charged at that ${unitNow()}'s KAS price. Cancel any time and the unused KAS comes back to your wallet.`
+  ? `Each ${unitNow()} is charged at that ${unitNow()}'s KAS price. If the creator raises the price, you're told and your renewals keep the old price for 30 days. Cancel any time and the unused KAS comes back to your wallet.`
   : `Each ${unitNow()} is charged at your locked rate. Cancel any time and the unused KAS comes back to your wallet.`;
 // The cushion on prepaid renewals (plans priced in a currency): what each choice protects against.
 const cushionOn = () => isV5() && !!(offer && offer.price && offer.price.currency !== "KAS");
@@ -228,7 +228,7 @@ async function detectKaspire(timeoutMs = 3000) {
   if (window.kaspire?.isKaspire) return window.kaspire;
   return new Promise((resolve, reject) => {
     const t = setTimeout(() => reject(new Error(/Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ? "On a phone, sign in with the Kaspire app. Tap the button below." : "We couldn't find the Kaspire wallet in this browser. Install it (free) from kaspire.kaslab.space, then reload this page. Or use the Kaspire app on your phone.")), timeoutMs);
-    window.addEventListener("kaspire#initialized", () => { clearTimeout(t); resolve(window.kaspire); }, { once: true });
+    window.addEventListener("kaspire#initialized", () => { if (window.kaspire && window.kaspire.isKaspire) { clearTimeout(t); resolve(window.kaspire); } });
   });
 }
 
@@ -836,7 +836,12 @@ async function loadPromo() {
 let INVITE = null, INVITE_CODE = null, inviting = false, INVITE_FOR;
 try {
   INVITE_CODE = new URLSearchParams(location.search).get("invite") || sessionStorage.getItem("kp_invite");
-  if (INVITE_CODE) sessionStorage.setItem("kp_invite", INVITE_CODE);
+  if (INVITE_CODE) {
+    sessionStorage.setItem("kp_invite", INVITE_CODE);
+    // Kept for this tab; out of the address bar and the browser's history.
+    const u = new URL(location.href);
+    if (u.searchParams.has("invite") && sessionStorage.getItem("kp_invite") === INVITE_CODE) { u.searchParams.delete("invite"); history.replaceState(null, "", u.pathname + u.search + u.hash); }
+  }
 } catch {}
 async function loadInvite() {
   if (!INVITE_CODE) return;
@@ -861,7 +866,7 @@ function renderInvite() {
   const t = (title, text) => { $("invTitle").textContent = title; $("invText").textContent = text; };
   const b = $("invClaim");
   show("invClaim", false);
-  if (INVITE.error) return t("This invite link doesn't work", plainError(INVITE.error, "Check you copied the whole link, or ask the person who sent it."));
+  if (INVITE.error) return t("This invite link doesn't work", plainError(INVITE.error, "Check you copied the whole link, or ask the person who sent it.").text);
   if (INVITE.state === "mine") return t("It's yours", `Your free ${u} of ${INVITE.level_name || "this plan"} is in your wallet.`);
   if (INVITE.state === "used") return t("This invite has already been used", "Each invite link works once. If it was yours, you're all set: sign in to see your membership.");
   if (INVITE.state === "cancelled" || INVITE.state === "ended") return t(INVITE.state === "ended" ? "This invite has expired" : "This invite was cancelled", "Ask the person who sent it for a new one.");
@@ -1289,6 +1294,8 @@ function renderPassActions(p) {
     if (short) line("bs warn", `Less than today's renewal price (${kas(p.renewal_due_sompi)}). Top up at least ${kas(p.renewal_due_sompi - p.balance_sompi)} before ${fmtDate(p.expiry_ms)}, or it ends then. Your KAS stays yours either way.`);
     else if (n === 0) line("bs warn", `Not enough for the next renewal (about ${kas(renewPrice(p))}). Top up before ${fmtDate(p.expiry_ms)}, or it ends then.`);
     else line("bs", `About ${n} ${unitNow()}${n === 1 ? "" : "s"}${isV5() ? " at today's price" : ""}. Next renewal shortly before ${fmtDate(p.expiry_ms)} (about ${kas(renewPrice(p))}${isV5() ? ", at that day's price" : ""}).`);
+    const rise = offer && offer.price && offer.price.rise;
+    if (rise && rise.from_ms) line("bs", `The price goes up to ${money(offer.price.currency, rise.to)} a ${unitNow()} on ${fmtDate(rise.from_ms)}. Until then your renewals are charged the old price, ${money(offer.price.currency, rise.renews_at)}.`);
     line("bs", `It's held in your ${pw()}'s own contract on the Kaspa blockchain, not by KasPass or the creator. Nobody else can take it out: it can only pay your renewals, one at a time, and you can take the rest back any time.`);
     line("bs muted", "Only keep enough here for your renewals. It isn't a bank account.");
     const r = document.createElement("div"); r.className = "row";
@@ -1443,7 +1450,7 @@ function renderWelcome() {
     : phone
     ? `It's free. Get the <a href="${appLink()}" target="_blank" rel="noopener">Kaspire app</a>.`
     : `It's free. Add <a href="${KASPIRE_SITE}" target="_blank" rel="noopener">Kaspire</a> to your browser (on a phone, get the Kaspire app instead).`;
-  $("wStep1").innerHTML = `${get}${test ? " Switch it to <b>Testnet-10</b>." : ""} Write down the recovery words it gives you and keep them safe. <a href="/help">Step-by-step help</a>.`;
+  $("wStep1").innerHTML = `${get}${test ? " Switch it to <b>Testnet-10</b>." : ""} Write down the recovery words it gives you and keep them safe. The wallet takes about five minutes; buying KAS for the first time can take longer. <a href="/help">Step-by-step help</a>.`;
   $("wStep2").innerHTML = test
     ? `This site uses test KAS, which is free: get some from the <a href="https://faucet-testnet.kaspanet.io" target="_blank" rel="noopener">test faucet</a>. Nothing here costs real money.`
     : `KAS is the Kaspa coin. Buy it on an exchange and send it to your Kaspire address. You need a little more than the ${escH(lw())}'s price. <a href="/help#kas">Where to buy KAS</a>.`;
@@ -2193,7 +2200,7 @@ async function startQr(q, periods) {
   $("qrGo").disabled = true;
   try {
     const action = q.action === "renew" ? "renew" : "buy";
-    const r = await fetch(withLevel("/v1/payin/order", PAY), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ address, action, periods }) });
+    const r = await fetch(withLevel("/v1/payin/order", PAY), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ address, action, periods, ...(periods ? { cushion_pct: cushionOf("autoCushion") } : {}) }) });
     if (!r.ok) throw new Error(await r.text());
     const o = await r.json();
     QR = { id: o.id, level: PAY, action, amount: o.amount_kas };

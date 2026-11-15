@@ -396,7 +396,7 @@
     <p class="muted small panehint" id="pricesHint">Price and sales are set for each plan: pick the plan at the top.</p>
     <section class="panel hidden" id="v5PriceBox">
       <h2>Price</h2>
-      <p class="muted small">Buyers pay this in KAS at today's rate. A new price applies to new members straight away, and current members pay it at their next renewal.</p>
+      <p class="muted small">Buyers pay this in KAS at today's rate. A new price applies to new members straight away. A lower price reaches current members at their next renewal; a higher one only after 30 days, and members with prepaid renewals are told.</p>
       <div class="grid">
         <label>Currency<select id="vpCur"><option>CAD</option><option>USD</option><option>EUR</option><option value="KAS">KAS</option></select></label>
         <label>Price each period<input id="vpAmount" type="number" min="0.5" step="any"></label>
@@ -799,6 +799,6 @@
 </div>
 
 <script src="/assets/kaspire-mobile.js?v=2"></script>
-<script src="/assets/dashboard.js?v=70"></script>
+<script src="/assets/dashboard.js?v=71"></script>
 </body>
 </html>

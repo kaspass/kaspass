@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Get your own membership page · KasPass</title>
-<meta name="description" content="Sell memberships for your community, app or content, paid in KAS straight to your wallet. Tell us what you'd like to sell and we'll set up your page with you.">
+<meta name="description" content="Sell memberships for your podcast, community, newsletter or app, paid in KAS to a vault only you can open. Tell us what you'd like to sell.">
 <link rel="canonical" href="https://kaspass.app/creators">
 <meta name="theme-color" content="#f2f5f4" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0b1615" media="(prefers-color-scheme: dark)">
@@ -14,12 +14,17 @@
 <meta property="og:description" content="Sell memberships, paid in KAS straight to your own vault. We set up your page with you, in your own look.">
 <meta property="og:url" content="https://kaspass.app/creators">
 <meta property="og:image" content="https://kaspass.app/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="A KasPass membership pass sitting in a wallet">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/assets/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
 <link rel="preload" href="/assets/fonts/bricolage-grotesque-latin-800-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/assets/fonts/instrument-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="/assets/home.css?v=3">
-<script src="/assets/home.js?v=2" defer></script>
+<link rel="stylesheet" href="/assets/home.css?v=4">
+<script src="/assets/home.js?v=3" defer></script>
 </head>
 <body>
 <a class="skip" href="#main">Skip to the content</a>
@@ -43,12 +48,12 @@
   <div class="wrap">
     <div>
       <h1>Get your own membership page.</h1>
-      <p class="lead">Sell memberships for your community, app or content, paid in KAS straight to your own vault. Tell us what you'd like to sell, and we'll set up your page with you, in your own look. We usually reply within a couple of days.</p>
+      <p class="lead">Sell memberships for your podcast, community, newsletter or app, paid in KAS straight to a vault only you can open. Tell us what you'd like to sell, and we'll set up your page with you, in your own look. Setup is free, and we reply within a couple of days.</p>
       <div class="btns">
         <a class="btn" href="#contact">Get in touch</a>
         <a class="btn ghost" href="/demo/podcast">See an example page</a>
       </div>
-      <p class="fine">KasPass takes 2% of each payment, and nothing on payments under 25 KAS. No monthly fee.</p>
+      <p class="fine">KasPass keeps 2% of each payment, and nothing on payments under 25 KAS. No setup fee, no monthly fee.</p>
     </div>
   </div>
 </section>
@@ -60,7 +65,7 @@
     <ol class="setup">
       <li><h3>Tell us about your plans</h3><p>What you'd like to sell, your prices, what each plan includes, and your website, so your page can match it.</p></li>
       <li><h3>Approve the setup in Kaspire</h3><p>Your wallet creates your vault and your plans. You approve each step, so everything belongs to your wallet from the start.</p></li>
-      <li><h3>Share your link</h3><p>Put it on your website, in your app or in your posts. Members join in about a minute.</p></li>
+      <li><h3>Share your link</h3><p>Put it on your website, in your app or in your posts. Members who already have a Kaspa wallet join in about a minute.</p></li>
     </ol>
   </div>
 </section>
@@ -68,11 +73,12 @@
 <section class="sec">
   <div class="wrap">
     <h2>What you'll need</h2>
-    <ul class="needs">
-      <li>The free Kaspire wallet</li>
-      <li>A few KAS for setup deposits and fees</li>
-      <li>Your name and logo</li>
-      <li>Your plans and prices</li>
+    <ul class="needlist">
+      <li><b>The free Kaspire wallet</b>, on a computer with Chrome or on an Android phone. You sign in and get paid with it.</li>
+      <li><b>A second wallet as a backup</b>, used only if you ever lose the first. We'll show you how to make one.</li>
+      <li><b>A few KAS</b> for setup: small deposits that stay yours, tiny network fees, and some for your fees wallet, which pays the network fee when a membership renews itself.</li>
+      <li><b>Your name, logo and colors</b>, or just your website's address: we can copy the look from it.</li>
+      <li><b>Your plans</b>: what each is called, what it includes, and what it costs a month or a year.</li>
     </ul>
   </div>
 </section>
@@ -84,14 +90,16 @@
       <p class="intro">A few lines is plenty. We'll reply with the next steps.</p>
       <label for="cName">Your name or project</label>
       <input id="cName" name="name" maxlength="80" autocomplete="organization" required>
-      <label for="cReach">How to reach you <small>(Telegram, X, email or Discord)</small></label>
-      <input id="cReach" name="reach" maxlength="120" required>
+      <label for="cReach">How to reach you</label>
+      <input id="cReach" name="reach" maxlength="120" required autocapitalize="off" autocomplete="off" aria-describedby="cReachHint">
+      <p class="hint" id="cReachHint">Say where, for example "@marie on Telegram" or "marie@example.com".</p>
       <label for="cMsg">What would you like to sell? <small>(plans, prices, your website)</small></label>
       <textarea id="cMsg" name="message" maxlength="2000" required></textarea>
+      <input id="cT" name="t" type="hidden" value="">
       <div class="hp" aria-hidden="true"><label for="cWebsite">Leave this empty</label><input id="cWebsite" name="website" tabindex="-1" autocomplete="off"></div>
-      <button class="btn" type="submit" id="cGo">Send</button>
       <div class="msg hidden" id="cMsgOut" role="status" aria-live="polite"></div>
-      <p class="fine">We only use what you send here to reply to you.</p>
+      <button class="btn" type="submit" id="cGo">Send</button>
+      <p class="fine">Your note goes to the person who runs KasPass and is used only to reply to you. We keep it until your question is settled, then delete it, and sooner if you ask.<!--contact--> Rather not use the form? Write to {contact}.<!--/contact--> <a href="/privacy">Privacy</a></p>
     </form>
   </div>
 </section>
@@ -99,8 +107,8 @@
 
 <footer class="foot">
   <div class="wrap">
-    <span>KasPass: memberships on Kaspa.</span>
-    <span class="links"><a href="/">Home</a><a href="/demo/podcast">Demo</a><a href="/help">Help</a><a href="https://github.com/kaspass/kaspass" rel="noopener">Source code</a></span>
+    <span>KasPass: memberships on Kaspa.<!--contact--> Write to {contact}.<!--/contact--></span>
+    <span class="links"><a href="/">Home</a><a href="/demo/podcast">Example</a><a href="/help">Help</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="https://github.com/kaspass/kaspass" rel="noopener">Source code</a></span>
   </div>
 </footer>
 </body>

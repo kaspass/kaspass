@@ -9,12 +9,16 @@ if (f) {
     const name = document.getElementById("cName").value.trim();
     const reach = document.getElementById("cReach").value.trim();
     const message = document.getElementById("cMsg").value.trim();
-    if (!name || !reach) { say("Please add your name and how to reach you.", false); return; }
-    if (message.length < 10) { say("Please say a little about what you'd like to sell.", false); return; }
+    // Point at the box that needs fixing.
+    const fail = (id, text) => { const el = document.getElementById(id); el.setAttribute("aria-invalid", "true"); say(text, false); el.focus(); };
+    for (const id of ["cName", "cReach", "cMsg"]) document.getElementById(id).removeAttribute("aria-invalid");
+    if (!name) return fail("cName", "Please add your name or your project's name.");
+    if (!reach) return fail("cReach", "Please say how we can reach you.");
+    if (message.length < 10) return fail("cMsg", "Please say a little about what you'd like to sell.");
     const go = document.getElementById("cGo");
     go.disabled = true; go.textContent = "Sending…";
     try {
-      const r = await fetch("/v1/contact", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name, reach, message, website: document.getElementById("cWebsite").value }) });
+      const r = await fetch("/v1/contact", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name, reach, message, website: document.getElementById("cWebsite").value, t: document.getElementById("cT").value }) });
       if (!r.ok) throw new Error((await r.text()) || "Something went wrong");
       f.reset();
       say("Thanks! Your note was sent. We'll reply through the contact you gave.", true);

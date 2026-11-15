@@ -3,15 +3,15 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>KasPass · Memberships on Kaspa</title>
-<meta name="description" content="Sell memberships and get paid in KAS, straight to your own wallet. Members pay from their own Kaspa wallet, and their membership stays there. No card, no account, no password.">
+<title>KasPass: sell memberships, get paid in KAS (Kaspa)</title>
+<meta name="description" content="Sell memberships and get paid in KAS, the Kaspa coin, straight to a vault only you can open. Members pay from their own wallet. No card, no account.">
 <link rel="canonical" href="https://kaspass.app/">
 <meta name="theme-color" content="#f2f5f4" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0b1615" media="(prefers-color-scheme: dark)">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="KasPass">
 <meta property="og:title" content="KasPass: sell memberships, get paid in KAS">
-<meta property="og:description" content="Members pay from their own Kaspa wallet, and their membership stays there. Payments go straight to your own vault.">
+<meta property="og:description" content="Members pay from their own Kaspa wallet, and the money lands in a vault only you can open.">
 <meta property="og:url" content="https://kaspass.app/">
 <meta property="og:image" content="https://kaspass.app/assets/og.png">
 <meta property="og:image:width" content="1200">
@@ -19,9 +19,23 @@
 <meta property="og:image:alt" content="A KasPass membership pass sitting in a wallet">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/assets/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
 <link rel="preload" href="/assets/fonts/bricolage-grotesque-latin-800-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/assets/fonts/instrument-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="/assets/home.css?v=3">
+<link rel="stylesheet" href="/assets/home.css?v=4">
+<script type="application/ld+json">
+{"@context":"https://schema.org","@graph":[
+ {"@type":"Organization","@id":"https://kaspass.app/#org","name":"KasPass","url":"https://kaspass.app/","logo":"https://kaspass.app/assets/apple-touch-icon.png","sameAs":["https://github.com/kaspass/kaspass"]},
+ {"@type":"WebSite","url":"https://kaspass.app/","name":"KasPass","publisher":{"@id":"https://kaspass.app/#org"}},
+ {"@type":"FAQPage","mainEntity":[
+  {"@type":"Question","name":"What is a membership on KasPass?","acceptedAnswer":{"@type":"Answer","text":"A small coin in the member's Kaspa wallet that records which plan they have and until when. Your site checks it to let them in."}},
+  {"@type":"Question","name":"Can members cancel?","acceptedAnswer":{"@type":"Answer","text":"Yes, any time. Nothing renews unless they've set KAS aside for it, and whatever isn't used goes back to their wallet."}},
+  {"@type":"Question","name":"How do I get my money, and turn it into dollars?","acceptedAnswer":{"@type":"Answer","text":"Press Withdraw in your dashboard and approve it in Kaspire: everything in your vault moves to your wallet. To turn it into dollars, send it to an exchange that trades KAS and sell it there."}},
+  {"@type":"Question","name":"What if KasPass shuts down?","acceptedAnswer":{"@type":"Answer","text":"Your vault and your members' memberships are on the Kaspa blockchain, not on our server, so they stay. The code is public, so anyone can run the same site from it."}}
+ ]}
+]}
+</script>
 </head>
 <body>
 <a class="skip" href="#main">Skip to the content</a>
@@ -34,7 +48,7 @@
     <nav class="main" aria-label="Main">
       <a href="#how">How it works</a>
       <a class="opt" href="#money">Where the money goes</a>
-      <!--demo--><a class="opt" href="#demo">Demo</a><!--/demo-->
+      <a class="opt" href="#cost">Price</a>
       <a class="opt" href="#questions">Questions</a>
       <a class="btn small" href="/creators">Get your own page</a>
     </nav>
@@ -45,28 +59,28 @@
 <section class="hero">
   <div class="wrap">
     <div>
-      <h1>Sell memberships. Get paid in KAS, straight to your wallet.</h1>
-      <p class="lead">KasPass gives your community, app or content a membership page. Members pay from their own Kaspa wallet, and their membership stays in that wallet. No card, no account, no password.</p>
+      <h1>Sell memberships. Get paid in KAS, straight to you.</h1>
+      <p class="lead">KasPass gives your podcast, community, newsletter or app a membership page. Members pay from their own Kaspa wallet, and the money lands in a vault only you can open. No card, no account, no password.</p>
       <div class="btns">
-        <!--demo--><a class="btn" href="#demo">Try the demo</a><!--/demo-->
-        <a class="btn ghost" href="/creators">Get your own page</a>
+        <a class="btn" href="/creators">Get your own page</a>
+        <!--demo--><a class="btn ghost" href="/demo/podcast">See an example page</a><!--/demo-->
       </div>
-      <p class="fine">KasPass takes 2% of each payment, and nothing on payments under 25 KAS. No monthly fee.</p>
+      <p class="fine">KAS is the coin of the Kaspa network. KasPass keeps 2% of each payment. No setup fee, no monthly fee.</p>
     </div>
-    <div class="stage" role="img" aria-label="A membership pass sliding into a wallet: Hollow Pine Radio, Supporter plan, active, renewed from its prepaid balance.">
+    <div class="stage" role="img" aria-label="A membership pass sliding into a wallet: Hollow Pine Radio, Supporter plan, 5 dollars a month, active, and it renews only if the member chooses.">
       <div class="pass" aria-hidden="true">
         <div class="main">
           <div class="who">Hollow Pine Radio</div>
           <div class="plan">Supporter</div>
           <div class="state">Active</div>
           <dl>
-            <dt>Renews</dt><dd>Dec 14</dd>
-            <dt>Prepaid</dt><dd>2 months</dd>
-            <dt>Deposit</dt><dd>1 KAS</dd>
+            <dt>Price</dt><dd>$5/month</dd>
+            <dt>Until</dt><dd>the 14th</dd>
+            <dt>Renews</dt><dd>only if they choose</dd>
           </dl>
         </div>
         <div class="stub"><b>MEMBER</b></div>
-        <div class="stamp">Renewed<br>by itself</div>
+        <div class="stamp">Paid<br>in KAS</div>
       </div>
       <div class="pocket" aria-hidden="true">
         <span><svg viewBox="0 0 24 24"><path d="M4 7.5A2.5 2.5 0 0 1 6.5 5H18v3" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><rect x="4" y="8" width="16" height="11" rx="2.5" fill="none" stroke-width="1.8"/><circle cx="16" cy="13.5" r="1.3" fill="none" stroke-width="1.8"/></svg>In the member's own Kaspa wallet</span>
@@ -75,72 +89,69 @@
   </div>
 </section>
 
-<section class="sec alt" id="how">
+<section class="sec alt" id="example">
+  <div class="wrap split">
+    <div>
+      <h2>Live on Kaspa: Kaspa Vision</h2>
+      <p class="intro">Kaspa Vision, a Kaspa portfolio and tax app, sells its memberships with KasPass, in its own colors and logo, so members never feel they've left.</p>
+      <ul class="ticks">
+        <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>Paid in real KAS on Kaspa's main network</li>
+        <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>Priced in Canadian dollars, paid in KAS</li>
+        <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>Members go straight back to the app once they've paid</li>
+      </ul>
+      <div class="btns"><a class="btn ghost" href="https://pass.kaspa.vision" rel="noopener">Visit pass.kaspa.vision</a></div>
+    </div>
+    <figure class="shot">
+      <img src="/assets/example-phone.webp" width="300" height="620" loading="lazy" decoding="async" alt="A KasPass membership page on a phone: the example podcast Hollow Pine Radio in its own colors, with its banner, a short description and its price">
+      <figcaption>A KasPass membership page on a phone (the example creator Hollow Pine Radio)</figcaption>
+    </figure>
+  </div>
+</section>
+
+<section class="sec" id="how">
   <div class="wrap">
-    <h2>Joining takes about a minute</h2>
-    <p class="intro">This is what your members do. They never make an account or type a card number.</p>
+    <h2>Joining takes about a minute, once they have a wallet</h2>
+    <p class="intro">This is what your members do. They never make an account or type a card number. Someone new to Kaspa first gets the free Kaspire wallet and buys some KAS. Our <a href="/help">help page</a> walks them through it.</p>
     <ol class="steps">
-      <li><h3>Get the Kaspire wallet</h3><p>It's free, for your browser or your Android phone. Our help page shows how to get some KAS.</p></li>
-      <li><h3>Sign in with Kaspire</h3><p>Kaspire asks them to approve a short message. That proves the wallet is theirs. It's free and sends nothing.</p></li>
-      <li><h3>Pick a plan and approve</h3><p>Kaspire shows the exact amount before they say yes. The membership lands in their wallet straight away.</p></li>
+      <li><h3>Get the Kaspire wallet</h3><p>It's free: an add-on for Chrome on a computer, or an app on an Android phone. There's no iPhone app yet, so iPhone owners join from a computer.</p></li>
+      <li><h3>Sign in with Kaspire</h3><p>Kaspire asks them to approve a short message, which proves the wallet is theirs. It costs nothing and moves no money.</p></li>
+      <li><h3>Pick a plan and approve</h3><p>Kaspire shows the exact amount before they say yes. The membership is in their wallet a few seconds later.</p></li>
     </ol>
   </div>
 </section>
 
-<section class="sec" id="money">
+<section class="sec alt" id="money">
   <div class="wrap">
     <h2>Where the money goes</h2>
     <p class="intro">Straight to you. KasPass never holds your earnings or your members' money: the rules are part of each membership on the Kaspa blockchain.</p>
     <div class="flow">
-      <div class="place"><h3>Your member's wallet</h3><p>They approve each payment in Kaspire. Nothing is ever taken without their yes.</p></div>
+      <div class="place"><h3>Your member's wallet</h3><p>They approve each payment in Kaspire. Renewals only come out of KAS they chose to set aside, and they can take that back any time.</p></div>
       <div class="arrow"><b>Pays the price</b><i aria-hidden="true"></i><small>in KAS, at today's rate</small></div>
       <div class="place vault"><h3>Your vault</h3><p>Every payment lands here, on the Kaspa blockchain. Only your wallet can take money out.</p></div>
       <div class="arrow"><b>You withdraw</b><i aria-hidden="true"></i><small>whenever you like</small></div>
       <div class="place"><h3>Your wallet</h3><p>One approval in Kaspire moves everything from the vault to you.</p></div>
     </div>
     <div class="flownote">
-      <div><b>The 1 KAS deposit</b><span>Each membership holds a small deposit. It belongs to the member and comes back when they close it.</span></div>
+      <div><b>The 1 KAS deposit</b><span>Each membership holds 1 KAS{kas1}. It belongs to the member and comes back when they end it.</span></div>
       <div><b>Prepaid months</b><span>Members can set KAS aside for renewals. It stays in their own membership and pays one month at a time. They can take the rest back any time.</span></div>
-      <div><b>KasPass's 2%</b><span>Comes out of your share, never added to the member's price. Payments under 25 KAS pay nothing.</span></div>
+      <div><b>KasPass's 2%</b><span>It comes out of your share, never added to the member's price. Example: a member pays 200 KAS{kas200}. You receive 196 and KasPass receives 4. Payments under 25 KAS{kas25} pay nothing.</span></div>
     </div>
   </div>
 </section>
 
-<section class="sec alt" id="creators">
+<section class="sec" id="creators">
   <div class="wrap">
     <h2>Everything you need to run a membership</h2>
     <p class="intro">One dashboard, signed in with your wallet. Anything that moves money asks for your approval first.</p>
     <div class="gets">
       <div><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3" fill="none" stroke-width="1.8"/><path d="M3 10h18" fill="none" stroke-width="1.8"/></svg><h3>A page in your own look</h3><p>Your colors, fonts, logo and banner, with day and night modes. Copy them from your website in one click.</p></div>
-      <div><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" fill="none" stroke-width="1.8"/><path d="M12 8v4l3 2" fill="none" stroke-width="1.8" stroke-linecap="round"/></svg><h3>Prices that hold steady</h3><p>Set prices in Canadian or US dollars, euros or KAS. Members pay the KAS amount for that price today.</p></div>
+      <div><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" fill="none" stroke-width="1.8"/><path d="M12 8v4l3 2" fill="none" stroke-width="1.8" stroke-linecap="round"/></svg><h3>Prices that hold steady</h3><p>Set a price in Canadian or US dollars, or euros, and it stays that price. Members pay the matching amount of KAS on the day. You can price in KAS too.</p></div>
       <div><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h10M4 17h6" fill="none" stroke-width="1.8" stroke-linecap="round"/></svg><h3>Plans, trials and sales</h3><p>Several plans, monthly or yearly, with free trials, founding prices, sales and auto-renew.</p></div>
-      <div><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12v8H4v-8M2 7h20v5H2zM12 20V7M12 7H8a2 2 0 1 1 0-4c3 0 4 4 4 4zM12 7h4a2 2 0 1 0 0-4c-3 0-4 4-4 4z" fill="none" stroke-width="1.8" stroke-linejoin="round"/></svg><h3>Free months and invite links</h3><p>Give a free month to NFT or token holders, or send a one-time link to the people you choose.</p></div>
+      <div><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12v8H4v-8M2 7h20v5H2zM12 20V7M12 7H8a2 2 0 1 1 0-4c3 0 4 4 4 4zM12 7h4a2 2 0 1 0 0-4c-3 0-4 4-4 4z" fill="none" stroke-width="1.8" stroke-linejoin="round"/></svg><h3>Free months and invite links</h3><p>Give a free month to NFT or token holders, or send a one-time link to the people you choose. Each one costs you about 1 KAS.</p></div>
       <div><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 5L3 11.5l6 2.2M21 5l-3.5 14-8.5-5.3M21 5L9 13.7V19l3-3" fill="none" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/></svg><h3>Your Telegram or Discord group</h3><p>Members get into your private group automatically, and leave it when their membership ends. Get a message for each new member.</p></div>
-      <div><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4l-4 8 4 8M16 4l4 8-4 8" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><h3>A check for your own site</h3><p>One simple call tells your website or app whether a wallet is a member, and of which plan.</p></div>
-    </div>
-  </div>
-</section>
-
-<section class="sec" id="example">
-  <div class="wrap split">
-    <div>
-      <h2>Live on Kaspa: Kaspa Vision</h2>
-      <p class="intro">Kaspa Vision is a Kaspa portfolio and tax app. Its memberships run on KasPass, in its own colors and logo, so members never feel they've left.</p>
-      <ul class="ticks">
-        <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>Paid in real KAS on Kaspa's main network</li>
-        <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>Members return to the app as soon as they've paid</li>
-        <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>The app checks each member's plan with one call</li>
-      </ul>
-      <div class="btns"><a class="btn ghost" href="https://pass.kaspa.vision" rel="noopener">Visit pass.kaspa.vision</a></div>
-    </div>
-    <div class="phone" role="img" aria-label="Illustration: a membership page on a phone, in the creator's own colors, with two plans to choose from">
-      <div class="bar" aria-hidden="true"><span>Memberships by KasPass</span><span>Sign in</span></div>
-      <div aria-hidden="true">
-        <div class="t">Kaspa Vision</div>
-        <div class="s">Choose your plan</div>
-        <div class="plan"><b>Monthly</b><span>Priced in dollars, paid in KAS</span><div class="go">Choose monthly</div></div>
-        <div class="plan"><b>Kaspa Vision + KasTax</b><span>Everything in Monthly, plus tax reports</span><div class="go">See what's included</div></div>
-      </div>
+      <div><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4l-4 8 4 8M16 4l4 8-4 8" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><h3>A check for your own site</h3><p>Once a visitor has signed in with their wallet, one simple call tells your website or app whether they're a member, and of which plan.</p></div>
+      <div><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l4 4v14H6z" fill="none" stroke-width="1.8" stroke-linejoin="round"/><path d="M9 12h7M9 16h7M9 8h4" fill="none" stroke-width="1.8" stroke-linecap="round"/></svg><h3>A payments file for your taxes</h3><p>Download every payment for a year: the date, the plan, the KAS paid and the price at the time.</p></div>
+      <div><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 3v5c0 4.5-3 8.5-7 10-4-1.5-7-5.5-7-10V6z" fill="none" stroke-width="1.8" stroke-linejoin="round"/></svg><h3>Public code</h3><p>Anyone can read how KasPass works on <a href="https://github.com/kaspass/kaspass" rel="noopener">GitHub</a>, including what you have to trust us with.</p></div>
     </div>
   </div>
 </section>
@@ -148,35 +159,36 @@
 <!--demo--><section class="sec alt" id="demo">
   <div class="wrap split">
     <div>
-      <h2>Try the demo, free</h2>
-      <p class="intro">Pick an example creator to see what your page could look like. They're made up, and they run on Kaspa's test network, where KAS is free and a "month" lasts 10 minutes, so you can watch a renewal happen.</p>
+      <h2>See an example, then try it for free</h2>
+      <p class="intro">Pick an example creator to see what your page could look like. You can look around without a wallet. To try paying, the examples run on Kaspa's test network, where KAS is free and a "month" lasts 10 minutes, so you can watch a renewal happen.</p>
       <ol class="demohow">
         <li>Switch Kaspire to Testnet-10.</li>
-        <li>Get free test KAS from the <a href="https://faucet-testnet.kaspanet.io" rel="noopener">faucet</a>.</li>
+        <li>Get free test KAS from the <a href="https://faucet-testnet.kaspanet.io" rel="noopener">test faucet</a>, a site that hands out test coins.</li>
         <li>Join a plan, then renew, top up or cancel it.</li>
       </ol>
-      <div class="btns"><a class="btn" href="/demo/podcast">Open the demo</a></div>
+      <div class="btns"><a class="btn" href="/demo/podcast">Open the example</a></div>
     </div>
-    <div class="tickets" aria-label="Example creators">
+    <nav class="tickets" aria-label="Example creators">
       <a href="/demo/podcast"><span><small>Podcast</small><b>Hollow Pine Radio</b></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
       <a href="/demo/nft"><span><small>NFT community</small><b>Lantern Moths</b></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
       <a href="/demo/coffee"><span><small>Coffee club</small><b>Driftwood Roasters</b></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
       <a href="/demo/newsletter"><span><small>Newsletter</small><b>The Slow Ledger</b></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
-    </div>
+    </nav>
   </div>
 </section><!--/demo-->
 
 <section class="sec" id="cost">
   <div class="wrap cost">
     <div>
-      <h2 class="big" aria-label="2% of each payment">2%<small>of each payment</small></h2>
+      <h2 class="big">2%<small>of each payment</small></h2>
       <p class="under">That's all KasPass takes. It comes out of your share, so your members pay exactly the price you set.</p>
     </div>
     <ul>
-      <li><b>No monthly fee</b><span>You pay nothing until someone pays you.</span></li>
-      <li><b>Nothing on payments under 25 KAS</b><span>Small payments are free of the 2%.</span></li>
-      <li><b>A few KAS to set up</b><span>Deposits that stay yours, plus tiny network fees.</span></li>
-      <li><b>For members: a 1 KAS deposit</b><span>Held in their membership, and back to them when they close it.</span></li>
+      <li><b>No setup fee, no monthly fee</b><span>You pay nothing until someone pays you.</span></li>
+      <li><b>Nothing on payments under 25 KAS{kas25}</b><span>Small payments are free of the 2%.</span></li>
+      <li><b>A few KAS to set up</b><span>Small deposits that stay yours, tiny network fees, and some KAS in your fees wallet, which pays the network fee each time a membership renews itself.</span></li>
+      <li><b>Free months and invite links: about 1 KAS each</b><span>That's the new member's deposit, paid from your fees wallet, plus a tiny network fee.</span></li>
+      <li><b>For members: a 1 KAS deposit</b><span>Held in their membership, and back to them when they end it.</span></li>
     </ul>
   </div>
 </section>
@@ -186,23 +198,27 @@
     <h2>Questions</h2>
     <div class="faq">
       <details open><summary>What is a membership on KasPass?</summary><p>A small coin in the member's Kaspa wallet that records which plan they have and until when. Your site checks it to let them in. Because it's in their wallet, nobody can take it away, and there's no account to lose.</p></details>
-      <details><summary>Do my members need to know about crypto?</summary><p>They need the free Kaspire wallet and some KAS. The membership page walks them through it, and our help page explains each step in plain words.</p></details>
-      <details><summary>Can members cancel?</summary><p>Yes, any time. Nothing renews unless they've set KAS aside for it, and whatever isn't used goes back to their wallet. Closing a membership also gives back its 1 KAS deposit.</p></details>
-      <details><summary>What happens if KAS goes up or down?</summary><p>If you price in dollars or euros, members pay the KAS amount for that price on the day they pay. Your price stays steady; the KAS amount changes with the rate.</p></details>
-      <details><summary>Which wallets work?</summary><p>Kaspire, as a browser extension or the Android app. On an iPhone, members can sign in from a computer for now.</p></details>
+      <details><summary>Do my members need to know about crypto?</summary><p>They need the free Kaspire wallet and some KAS. The membership page walks them through it, and our help page explains each step in plain words. Buying KAS for the first time is the slowest part: an exchange can take a day or two to open an account.</p></details>
+      <details><summary>Can members cancel?</summary><p>Yes, any time. Nothing renews unless they've set KAS aside for it, and whatever isn't used goes back to their wallet. Ending a membership also gives back its 1 KAS deposit.</p></details>
+      <details><summary>What happens if KAS goes up or down?</summary><p>If you price in dollars or euros, members pay the KAS amount for that price on the day they pay. Your price stays steady; the KAS amount changes with the rate. If you raise a price, members who prepaid keep the old one for 30 days and are told.</p></details>
+      <details><summary>How do I get my money, and turn it into dollars?</summary><p>Press Withdraw in your dashboard and approve it in Kaspire: everything in your vault moves to your wallet. To turn it into dollars, send it to an exchange that trades KAS and sell it there. KAS goes up and down, so it can be worth more or less by the time you sell. Your dashboard has a payments file you can download for your records.</p></details>
+      <details><summary>What do I have to trust KasPass with?</summary><p>Never your money: payments go from the member's wallet to your vault, and only your wallet can take them out. You do rely on our server for three things: showing your page, working out today's KAS amount for a price in dollars (up to a limit fixed when the plan is made), and running auto-renewals and group access. The full list is in <a href="https://github.com/kaspass/kaspass/blob/main/SECURITY.md" rel="noopener">SECURITY.md</a>.</p></details>
+      <details><summary>What if KasPass shuts down?</summary><p>Your vault and your members' memberships are on the Kaspa blockchain, not on our server, so they stay. The code is public, so you or anyone else can run the same site from it and withdraw as before. While no server is running, the membership page, sales at today's price, auto-renewals and the Telegram and Discord checks stop.</p></details>
+      <details><summary>Which wallets work?</summary><p>Kaspire, as an add-on for Chrome or the Android app. On an iPhone, members can sign in from a computer for now.</p></details>
+      <details><summary>Who runs KasPass?</summary><p>KasPass is a small independent project, built in the open on GitHub. <!--contact-->Write to {contact} and you'll get an answer from the person who built it.<!--/contact--><!--nocontact-->Use the <a href="/creators#contact">contact form</a> and you'll get an answer from the person who built it.<!--/nocontact--></p></details>
       <details><summary>Is it ready, and is it safe?</summary><p>KasPass is new. It's live on Kaspa's main network for Kaspa Vision, and new creators are set up with us, by hand. Your earnings and your members' memberships are on the Kaspa blockchain, not on our servers. The code is public on GitHub and has had AI security reviews, but not yet an outside audit.</p></details>
     </div>
-    <p class="fine" style="margin-top:24px">More answers on the <a href="/help">help page</a>.</p>
+    <p class="fine more">Questions your members will have are on the <a href="/help">help page</a>.</p>
   </div>
 </section>
 
 <section class="close">
   <div class="wrap">
     <h2>Ready to sell memberships in KAS?</h2>
-    <p>Tell us what you'd like to sell. We'll set up your page with you, in your own look.</p>
+    <p>Tell us what you'd like to sell. We'll set up your page with you, in your own look. Setup is free.</p>
     <div class="btns">
       <a class="btn" href="/creators">Get your own page</a>
-      <!--demo--><a class="btn ghost" href="/demo/podcast">Try the demo</a><!--/demo-->
+      <!--demo--><a class="btn ghost" href="/demo/podcast">See an example page</a><!--/demo-->
     </div>
   </div>
 </section>
@@ -210,8 +226,8 @@
 
 <footer class="foot">
   <div class="wrap">
-    <span>KasPass: memberships on Kaspa.</span>
-    <span class="links"><!--demo--><a href="/demo/podcast">Demo</a><!--/demo--><a href="/creators">Get your own page</a><a href="/help">Help</a><a href="https://github.com/kaspass/kaspass" rel="noopener">Source code</a></span>
+    <span>KasPass: memberships on Kaspa.<!--contact--> Write to {contact}.<!--/contact--></span>
+    <span class="links"><!--demo--><a href="/demo/podcast">Example</a><!--/demo--><a href="/creators">Get your own page</a><a href="/help">Help</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="https://github.com/kaspass/kaspass/blob/main/SECURITY.md" rel="noopener">Security</a><a href="https://github.com/kaspass/kaspass" rel="noopener">Source code</a></span>
   </div>
 </footer>
 </body>

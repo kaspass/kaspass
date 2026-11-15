@@ -146,6 +146,7 @@
   .exbar .exlinks { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
   .exbar a { color: #e8f1f0; text-decoration: none; border: 1px solid #2c4442; border-radius: 999px; padding: 4px 12px; }
   .exbar a.exabout { border: 0; text-decoration: underline; color: #cfe3e0; padding: 4px 0; }
+  .exbar a.exabout + a.exabout { margin-left: 12px; }
   .exbar a[aria-current="page"] { background: #49d9c8; color: #031312; border-color: #49d9c8; font-weight: 600; }
   .lvl .promo { border: 1px dashed var(--teal, #49d9c8); border-radius: 12px; padding: 10px 12px; margin: 0 0 12px; text-align: left; }
   .lvl .promo .pl { font-weight: 600; }
@@ -197,6 +198,7 @@
   .steps li { display: grid; grid-template-columns: 30px 1fr; gap: 10px; align-items: start; }
   .steps li::before { counter-increment: s; content: counter(s); width: 26px; height: 26px; border-radius: 50%; background: color-mix(in srgb, var(--teal) 14%, transparent); color: var(--teal); font-weight: 700; font-size: 14px; display: grid; place-items: center; }
   .steps b.t { display: block; }
+  .steps b.t span { color: inherit; font-size: inherit; }
   .steps span { color: var(--muted); font-size: 14px; }
   .welcome .foot { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; margin-top: 16px; }
   .welcome .close { background: none; border: 0; color: var(--muted); padding: 4px 0; font-weight: 500; font-size: 13px; text-decoration: underline; }
@@ -205,6 +207,7 @@
   .kpstrip { background: var(--strip); border-bottom: 1px solid var(--line); color: var(--muted); font-size: 12.5px; }
   .kpstrip .in { max-width: 720px; margin: 0 auto; padding: 7px 16px; display: flex; gap: 8px 16px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
   .kpstrip .kpmark { display: inline-flex; gap: 7px; align-items: center; color: var(--muted); text-decoration: none; }
+  .kpstrip .kpmark svg { color: var(--teal); }
   .kpstrip .kpmark b { color: var(--text); font-weight: 600; }
   .kpstrip svg { width: 15px; height: 15px; }
   .kpstrip .net { margin-left: 0; }
@@ -239,7 +242,7 @@
   .by { margin: -4px 0 10px; color: var(--muted); font-weight: 600; }
   h1.page { font: 800 clamp(26px, 5.5vw, 40px)/1.12 var(--font-head); letter-spacing: -0.6px; margin: 0 0 8px; min-height: 1.15em; }
   .powered { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); text-decoration: none; }
-  .powered svg { width: 16px; height: 16px; }
+  .powered svg { width: 16px; height: 16px; color: var(--teal); }
 
   a { color: var(--teal); }
   /* Wallet line at the top: who is signed in, and their plan. */
@@ -354,7 +357,7 @@
 <link rel="stylesheet" href="/brand/theme.css?v=0">
 </head>
 <body>
-<div class="kpstrip"><div class="in"><a class="kpmark" href="https://github.com/kaspass/kaspass" target="_blank" rel="noopener"><svg viewBox="0 0 512 512" aria-hidden="true"><rect width="512" height="512" rx="112" fill="currentColor" opacity=".9"/><path transform="translate(-16 0)" fill-rule="evenodd" fill="var(--strip)" d="M150 110 H290 A104 104 0 0 1 290 318 H240 V402 H150 Z M150 194 H278 V160 L340 214 L278 268 V234 H150 Z"/></svg><span>Memberships by <b>KasPass</b></span></a><span class="net" id="net">Testnet-10</span></div></div>
+<div class="kpstrip"><div class="in"><a class="kpmark" href="https://kaspass.app/" target="_blank" rel="noopener"><svg viewBox="0 0 32 32" aria-hidden="true"><rect x="3" y="7" width="26" height="18" rx="4" fill="none" stroke="currentColor" stroke-width="2.4"/><path d="M11 12v8M11 16l5-4M11 16l5 4" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="22.5" cy="16" r="2.3" fill="currentColor"/></svg><span>Memberships by <b>KasPass</b></span></a><span class="net" id="net">Testnet-10</span></div></div>
 <div class="wrap">
   <header class="brandbar">
     <a class="brandname" href="/"><img id="brandLogo" class="hidden" alt=""><span id="brandName"></span></a>
@@ -395,7 +398,7 @@
 
   <section class="panel hidden" id="comingSoon"><h2>Coming soon</h2><p class="muted">Nothing is on sale here yet. Check back soon.</p></section>
   <section class="panel welcome hidden" id="welcome">
-    <h2>New to Kaspa? Setting up takes about five minutes</h2>
+    <h2>New to Kaspa? Here's how to get set up</h2>
     <p class="muted lead" id="wLead">When you join, your <span data-pw="">membership</span> lives in your own Kaspa wallet: nobody can take it away, and there's no card to enter.</p>
     <ol class="steps">
       <li><div><b class="t">Get the Kaspire wallet</b><span id="wStep1"></span></div></li>
@@ -602,10 +605,10 @@
   </section>
 
 
-  <footer><a class="powered" href="https://github.com/kaspass/kaspass" target="_blank" rel="noopener"><svg viewBox="0 0 512 512" aria-hidden="true"><rect width="512" height="512" rx="112" fill="#49d9c8"/><path transform="translate(-16 0)" fill-rule="evenodd" fill="#050808" d="M150 110 H290 A104 104 0 0 1 290 318 H240 V402 H150 Z M150 194 H278 V160 L340 214 L278 268 V234 H150 Z"/></svg>Powered by KasPass</a><br><span id="clubLink" class="hidden">NFT holder? <a href="/club" id="clubLinkA">Join the holder club</a> · </span><a href="/help">Help</a> · Creator? <a href="/dashboard">Open your dashboard</a> · <span id="netNote">Test network only. New software, not yet reviewed by an outside security firm.</span> <a href="https://github.com/kaspass/kaspass" target="_blank" rel="noopener">github.com/kaspass/kaspass</a></footer>
+  <footer><a class="powered" href="https://kaspass.app/" target="_blank" rel="noopener"><svg viewBox="0 0 32 32" aria-hidden="true"><rect x="3" y="7" width="26" height="18" rx="4" fill="none" stroke="currentColor" stroke-width="2.4"/><path d="M11 12v8M11 16l5-4M11 16l5 4" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="22.5" cy="16" r="2.3" fill="currentColor"/></svg>Powered by KasPass</a><br><span id="clubLink" class="hidden">NFT holder? <a href="/club" id="clubLinkA">Join the holder club</a> · </span><a href="/help">Help</a> · Creator? <a href="/dashboard">Open your dashboard</a> · <span id="netNote">Test network only. New software, not yet reviewed by an outside security firm.</span> <a href="https://github.com/kaspass/kaspass" target="_blank" rel="noopener">github.com/kaspass/kaspass</a></footer>
 </div>
 
 <script src="/assets/qrcode.js?v=31"></script>
-<script src="/assets/index.js?v=70"></script>
+<script src="/assets/index.js?v=71"></script>
 </body>
 </html>

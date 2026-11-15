@@ -43,6 +43,8 @@ promo.json
 promo-claims.json
 invites.json
 invite-return.json
+low-balance-told.json
+contact.json
 signed-txids.json
 price-alerts.json
 price-alerts-seen*.json

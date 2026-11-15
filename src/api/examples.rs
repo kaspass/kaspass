@@ -214,12 +214,13 @@ pub async fn page(State(s): State<AppState>, headers: HeaderMap, axum::extract::
         .iter()
         .map(|(x, label, _)| format!(r#"<a href="/demo/{x}"{}>{label}</a>"#, if *x == id { r#" aria-current="page""# } else { "" }))
         .collect();
-    let bar = format!(r#"<nav class="exbar" aria-label="Example creators"><span>Example creators, made up for this demo on Kaspa's test network (memberships cost free test KAS). Just looking? You can browse without a wallet.</span><span class="exlinks">{tabs}</span><a class="exabout" href="/">About KasPass</a></nav>"#);
+    let bar = format!(r#"<nav class="exbar" aria-label="Example creators"><span>Example creators, made up for this demo on Kaspa's test network (memberships cost free test KAS). Just looking? You can browse without a wallet.</span><span class="exlinks">{tabs}</span><a class="exabout" href="/creators">Get your own page</a><a class="exabout" href="/">About KasPass</a></nav>"#);
     let html = html
         .replace(r#"href="/""#, &format!(r#"href="/demo/{id}""#))
         .replacen("<head>", &format!(r#"<head><meta name="kp-example" content="{id}">"#), 1)
         .replacen("/brand/fonts.css?v=", &format!("/brand/fonts.css?ex={id}&v="), 1)
         .replacen("/brand/theme.css?v=", &format!("/brand/theme.css?ex={id}&v="), 1)
         .replacen("<body>", &format!("<body>{bar}"), 1);
-    ([(header::CACHE_CONTROL, "no-store")], Html(html)).into_response()
+    // Made-up creators: kept out of search results.
+    ([(header::CACHE_CONTROL, "no-store"), (header::HeaderName::from_static("x-robots-tag"), "noindex")], Html(html)).into_response()
 }
