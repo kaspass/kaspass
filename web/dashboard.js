@@ -1175,14 +1175,19 @@ function renderV4() {
   const k = v4.keeper;
   const low = k && k.balance_sompi < KAS;
   const unit = card && card.network === "mainnet" ? "KAS" : "test KAS";
-  $("keeperInfo").innerHTML = (k
-    ? `<b>Fees wallet</b><br>When a member's ${escHtml(data.pass_word ? data.pass_word.one : "membership")} renews itself, nobody is there to approve it, so this small wallet sends the renewal and pays its tiny network fee (about 0.03 ${unit} each). The renewal itself is paid from the member's own balance and can only go to you; this wallet can't move anyone's money.` +
-      `<br><span class="mono">${escHtml(k.address)}</span> <button class="ghost" id="keeperCopy" style="padding:4px 10px;font-size:12px">Copy</button>` +
-      `<br>Balance <b>${kas(k.balance_sompi)}</b>, enough for about ${Math.floor(Number(k.balance_sompi) / 3000000).toLocaleString()} renewals.` +
-      (low ? ` <span style="color:var(--bad)">Send it 2 ${unit} from any wallet (that covers about 60 renewals) so auto-renew can run.</span>` : "")
-    : "Auto-renew isn't switched on for your site yet. Message KasPass and we'll turn it on.") +
-    `<br>${v4.auto_renewing} member${v4.auto_renewing === 1 ? "" : "s"} on auto-renew, ${kas(v4.prepaid_sompi)} paid ahead (theirs until it's used).`;
-  if ($("keeperCopy")) $("keeperCopy").onclick = () => { navigator.clipboard.writeText(k.address).then(() => { $("keeperCopy").textContent = "Copied"; setTimeout(() => ($("keeperCopy").textContent = "Copy"), 1500); }).catch(() => {}); };
+  show("kOff", !k);
+  show("kOn", !!k);
+  if (k) {
+    $("kBal").textContent = kas(k.balance_sompi);
+    $("kRen").textContent = Math.floor(Number(k.balance_sompi) / 3000000).toLocaleString();
+    $("kAddr").textContent = k.address;
+    $("kWhat").textContent = `What it's for: when a member's ${data.pass_word ? data.pass_word.one : "membership"} renews itself, nobody is there to approve it, so this small wallet sends the renewal and pays its tiny network fee (about 0.03 ${unit} each). It also pays for free months (promotions and invite links). The renewal itself is paid from the member's own balance and can only go to you; this wallet can't move anyone's money.`;
+    $("kLow").textContent = low ? `Running low. Send it 2 ${unit} or more from any wallet (that covers about 60 renewals) so auto-renew can run.` : "";
+    show("kLow", low);
+    $("keeperCopy").onclick = () => { navigator.clipboard.writeText(k.address).then(() => { $("keeperCopy").textContent = "Copied"; setTimeout(() => ($("keeperCopy").textContent = "Copy"), 1500); }).catch(() => {}); };
+  }
+  $("kAuto").textContent = String(v4.auto_renewing);
+  $("kAhead").textContent = `${kas(v4.prepaid_sompi)} paid ahead (theirs until it's used)`;
   show("discountBox", v4.max_discount_bps > 0);
   if (document.activeElement !== $("dPct")) $("dPct").value = v4.holder_bps / 100;
   $("dPct").max = v4.max_discount_bps / 100;
@@ -1946,7 +1951,8 @@ async function loadInvites() {
     const row = document.createElement("div");
     row.className = "invrow";
     const st = i.state === "used" ? `Claimed by ${escHtml(short(i.claimed_by))} on ${escHtml(when(i.claimed_ms))}` : i.state === "open" ? `Not used yet · works until ${escHtml(when(i.end_ms))}` : i.state === "ended" ? "Expired" : "Cancelled";
-    row.innerHTML = `<div><b>${escHtml(i.note || "Invite")}</b> <span class="muted small">${escHtml(i.level_name || "")} · ${escHtml(i.label)}</span></div><div class="small">${st}</div>`;
+    const cls = i.state === "used" ? "used" : i.state === "open" ? "" : "gone";
+    row.innerHTML = `<div><b class="invname">${escHtml(i.note || "Invite")}</b> <span class="muted small">${escHtml(i.level_name || "")} · ${escHtml(i.label)}</span></div><div class="small invst ${cls}">${st}</div>`;
     if (i.state === "open") {
       const r = document.createElement("div");
       r.className = "row";
@@ -2026,10 +2032,10 @@ function renderPromo() {
   const tokenRule = [...$("prNeeds").querySelectorAll(".prKind")].some((x) => x.value === "token" || x.value === "kcc20");
   $("prCost").textContent = (tokenRule ? "Tokens can be moved to a new wallet to claim again, so a token requirement needs a limit. " : "") + `Each free month: about ${kas(vault)} goes into your vault (so it comes back to you), ${kas(PR.deposit_sompi)} becomes the member's refundable deposit, plus a tiny network fee. Your fees wallet pays it, and keeps ${kas(PR.spare_sompi)} spare for fees.`;
   const bal = PR.keeper_sompi;
-  $("prKeeper").innerHTML = `<b>Fees wallet</b> (it sends the free months and pays auto-renewal fees)<br><span class="mono">${escHtml(PR.keeper)}</span> <button class="ghost" id="prCopy" style="padding:4px 10px;font-size:12px">Copy</button>` +
-    `<br>Balance <b>${bal == null ? "unknown" : kas(bal)}</b>${bal != null ? `, enough for about ${PR.claims_affordable} free month${PR.claims_affordable === 1 ? "" : "s"}` : ""} (${kas(PR.keeper_floor_sompi)} always stays for auto-renewal fees). To top it up, send ${unit} to this address from your wallet (for example ${Math.ceil((per * 25 + PR.keeper_floor_sompi) / KAS)} ${unit} for 25 free months). Claims pause by themselves when it runs low, and you get a message.` +
+  // The fees wallet itself is the first panel on this tab; here, just what it means for free months.
+  $("prKeeper").innerHTML = `Paid from your <b>fees wallet</b> (top of this tab): balance <b>${bal == null ? "unknown" : kas(bal)}</b>${bal != null ? `, enough for about <b>${PR.claims_affordable}</b> free month${PR.claims_affordable === 1 ? "" : "s"}` : ""}. ${kas(PR.keeper_floor_sompi)} always stays for auto-renewal fees. For 25 free months, send it about ${Math.ceil((per * 25 + PR.keeper_floor_sompi) / KAS)} ${unit}. Claims pause by themselves when it runs low, and you get a message.` +
     (PR.can_discount ? "" : `<br><span style="color:var(--bad)">Free months can't be turned on for your plans yet. Message KasPass.</span>`);
-  $("prCopy").onclick = () => navigator.clipboard.writeText(PR.keeper).then(() => { $("prCopy").textContent = "Copied"; setTimeout(() => ($("prCopy").textContent = "Copy"), 1500); }).catch(() => {});
+  if (bal != null) { $("kFree").textContent = Number(PR.claims_affordable).toLocaleString(); show("kFreeBox", true); }
   const t = $("prClaims");
   t.replaceChildren();
   if (PR.claims.length) {

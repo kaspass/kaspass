@@ -1114,6 +1114,14 @@ const ASSETS: &[(&str, &str, &[u8])] = &[
     ("fonts/inter-latin-700-normal.woff2", "font/woff2", include_bytes!("../web/fonts/inter-latin-700-normal.woff2")),
     ("fonts/montserrat-latin-600-normal.woff2", "font/woff2", include_bytes!("../web/fonts/montserrat-latin-600-normal.woff2")),
     ("fonts/montserrat-latin-800-normal.woff2", "font/woff2", include_bytes!("../web/fonts/montserrat-latin-800-normal.woff2")),
+    // kaspass.app's own typefaces (SIL Open Font License): Bricolage Grotesque and Instrument Sans.
+    ("fonts/bricolage-grotesque-latin-600-normal.woff2", "font/woff2", include_bytes!("../web/fonts/bricolage-grotesque-latin-600-normal.woff2")),
+    ("fonts/bricolage-grotesque-latin-800-normal.woff2", "font/woff2", include_bytes!("../web/fonts/bricolage-grotesque-latin-800-normal.woff2")),
+    ("fonts/instrument-sans-latin-400-normal.woff2", "font/woff2", include_bytes!("../web/fonts/instrument-sans-latin-400-normal.woff2")),
+    ("fonts/instrument-sans-latin-500-normal.woff2", "font/woff2", include_bytes!("../web/fonts/instrument-sans-latin-500-normal.woff2")),
+    ("fonts/instrument-sans-latin-600-normal.woff2", "font/woff2", include_bytes!("../web/fonts/instrument-sans-latin-600-normal.woff2")),
+    // The picture shown when kaspass.app is shared in a chat or a post.
+    ("og.png", "image/png", include_bytes!("../web/og.png")),
 ];
 
 async fn asset(axum::extract::Path(name): axum::extract::Path<String>) -> axum::response::Response {

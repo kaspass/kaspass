@@ -8,15 +8,16 @@
 <style>
   :root {
     --bg: #07060c;
-    --panel: #100e19;
-    --line: #26223a;
+    --panel: #14111f;
+    --line: #2b2742;
     --text: #e8f1f0;
-    --muted: #8aa09d;
+    --muted: #93a8a5;
     --teal: #a99bff;
     --teal-dim: #48407e;
     --bad: #ff8a7a;
     --line2: #3a3552;
     --good: #5fd6a0;
+    --label: #c9d4d2;
   }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.55 Inter, system-ui, sans-serif; }
@@ -50,7 +51,10 @@
   input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
   textarea { background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 11px 12px; font: 14px/1.5 Inter, sans-serif; resize: vertical; }
   input[type="checkbox"] { accent-color: var(--teal); width: 18px; height: 18px; }
-  label { display: block; font-size: 13px; color: var(--muted); }
+  /* A setting's name is brighter and heavier than the explanation under it, so the two never blur. */
+  label { display: block; font-size: 13px; font-weight: 600; color: var(--label); }
+  /* Amounts and names inside explanations stand out from the grey text around them. */
+  .muted b, .small b, .muted strong, .small strong { color: var(--text); }
   label > input, label > select { margin-top: 4px; }
   .grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
   /* Boxes in a row line up at the bottom, however many lines their labels take. */
@@ -130,6 +134,19 @@
   .bpv-btn { align-self: flex-start; font-size: 12px; font-weight: 600; padding: 7px 12px; border-radius: var(--pv-rb); background: var(--pv-accent); color: var(--pv-ink); }
   .statround { display: inline-flex; gap: 6px; align-items: center; margin-top: 8px; color: var(--muted); }
   .stat .l { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  /* A key figure: its name small above, the figure large below. */
+  .fact .k { font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+  .fact .v { font: 800 clamp(20px, 2.6vw, 26px)/1.2 Montserrat, sans-serif; color: var(--text); overflow-wrap: anywhere; margin-top: 2px; }
+  .fact .v.accent { color: var(--teal); }
+  .fact .l { font-size: 13px; color: var(--muted); margin-top: 2px; }
+  .facts { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); margin: 4px 0 16px; }
+  .facts .fact { background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 14px; min-width: 0; }
+  /* A wallet address: in its own box, with Copy beside it. */
+  .addrrow { display: flex; gap: 8px; align-items: stretch; flex-wrap: wrap; margin: 6px 0 14px; }
+  .addrrow .chip { flex: 1 1 260px; min-width: 0; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 9px 12px; font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; word-break: break-all; color: var(--text); }
+  .addrrow button { padding: 8px 14px; font-size: 13px; }
+  .subhead { font: 600 13px Inter, sans-serif; letter-spacing: .05em; text-transform: uppercase; color: var(--teal); margin: 22px 0 8px; padding-top: 18px; border-top: 1px solid var(--line); }
+  .warnbox { border: 1px solid color-mix(in srgb, var(--bad) 55%, transparent); background: color-mix(in srgb, var(--bad) 10%, transparent); color: var(--text); border-radius: 10px; padding: 10px 12px; font-size: 14px; margin: 0 0 14px; }
   table { width: 100%; border-collapse: collapse; font-size: 14px; }
   th { text-align: left; color: var(--muted); font-weight: 500; font-size: 12px; padding: 6px 8px; border-bottom: 1px solid var(--line); }
   td { padding: 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
@@ -226,6 +243,10 @@
   a { color: var(--teal); }
   .invrow { border-top: 1px solid var(--line, #2a3a36); padding: 10px 0; }
   .invrow .row { margin-top: 6px; flex-wrap: wrap; gap: 6px; }
+  .invrow .invname { color: var(--teal); font-size: 16px; }
+  .invrow .invst { margin-top: 2px; }
+  .invrow .invst.used { color: var(--good); }
+  .invrow .invst.gone { color: var(--muted); }
   .invlink { flex: 1 1 220px; min-width: 0; font-size: 12px; }
   .salebox { border: 1px solid rgba(242,200,107,.4); background: rgba(242,200,107,.08); color: #f2c86b; border-radius: 12px; padding: 12px 14px; margin-bottom: 12px; font-weight: 600; }
   .salebox .sub { color: var(--muted, #8aa09d); font-weight: 400; font-size: 13px; margin-top: 4px; }
@@ -420,6 +441,34 @@
 
     <div class="pane hidden" data-pane="promos">
     <p class="muted small panehint">Give free months: to holders of an NFT or token (Holder promotion), or to people you choose (Invite links).</p>
+    <section class="panel hidden" id="v4Panel">
+      <h2>Fees wallet</h2>
+      <div id="keeperInfo">
+        <div class="hidden" id="kOff"><p class="small">Auto-renew isn't switched on for your site yet. Message KasPass and we'll turn it on.</p></div>
+        <div id="kOn">
+          <div class="warnbox hidden" id="kLow"></div>
+          <div class="facts">
+            <div class="fact"><div class="k">Balance</div><div class="v accent" id="kBal">…</div></div>
+            <div class="fact hidden" id="kFreeBox"><div class="k">Free months it covers</div><div class="v" id="kFree">…</div><div class="l">about, at today's price</div></div>
+            <div class="fact"><div class="k">Renewal fees it covers</div><div class="v" id="kRen">…</div><div class="l">about 0.03 each</div></div>
+            <div class="fact"><div class="k">Members on auto-renew</div><div class="v" id="kAuto">…</div><div class="l" id="kAhead"></div></div>
+          </div>
+          <label>Its address (send KAS here to top it up)</label>
+          <div class="addrrow"><span class="chip" id="kAddr"></span><button class="ghost" id="keeperCopy">Copy</button></div>
+          <p class="muted small" id="kWhat"></p>
+        </div>
+      </div>
+      <div id="discountBox">
+        <div class="subhead">Holder discount</div>
+        <div class="grid">
+          <label>Holder discount (%, 0 = off)<input id="dPct" type="number" min="0" step="1"></label>
+        </div>
+        <p class="muted small" id="dNote"></p>
+        <button id="dGo">Save discount</button>
+        <div class="small hidden" id="dStatus" style="margin-top:10px"></div>
+        <div class="err hidden" id="dErr"></div>
+      </div>
+    </section>
     <section class="panel hidden" id="promoPanel">
       <h2>Holder promotion</h2>
       <p class="muted small">A free month on one plan for people who hold an NFT or token, for example "NACHO holders: your first month is free". The holder presses "Claim" and gets it straight away. Your fees wallet pays for it: the price goes into your own vault (so it comes back to you), plus a 1 KAS deposit and a tiny network fee.</p>
@@ -441,7 +490,7 @@
       <div class="row"><button id="prGo">Start promotion</button><button id="prEndGo" class="ghost hidden">End it now</button></div>
       <div class="small hidden" id="prStatus" style="margin-top:10px"></div>
       <div class="err hidden" id="prErr"></div>
-      <div class="small" id="prKeeper" style="margin-top:14px"></div>
+      <p class="muted small" id="prKeeper" style="margin-top:14px"></p>
       <div class="tablewrap"><table id="prClaims"></table></div>
     </section>
     <section class="panel hidden" id="invPanel">
@@ -463,19 +512,6 @@
       <button id="ivMake">Make the links</button>
       <div class="err small hidden" id="ivErr"></div>
       <div id="ivList" style="margin-top:14px"></div>
-    </section>
-    <section class="panel hidden" id="v4Panel">
-      <h2>Fees wallet and holder discount</h2>
-      <div class="small" id="keeperInfo"></div>
-      <div id="discountBox" style="margin-top:14px">
-        <div class="grid">
-          <label>Holder discount (%, 0 = off)<input id="dPct" type="number" min="0" step="1"></label>
-        </div>
-        <p class="muted small" id="dNote"></p>
-        <button id="dGo">Save discount</button>
-        <div class="small hidden" id="dStatus" style="margin-top:10px"></div>
-        <div class="err hidden" id="dErr"></div>
-      </div>
     </section>
     </div>
 
@@ -571,14 +607,14 @@
         <button id="recGo">Turn on payouts</button> <span class="muted small">Costs 1 KAS once, plus a tiny network fee. Kaspire will ask you to approve.</span>
       </div>
       <div id="recInfo" class="hidden">
-        <div><div class="muted small">Ready to withdraw</div><div id="vaultBal" style="font:700 26px/1.2 var(--font-head, Montserrat, sans-serif);margin:2px 0">…</div><div class="muted small" id="vaultCount"></div></div>
+        <div class="fact"><div class="k">Ready to withdraw</div><div class="v accent" id="vaultBal">…</div><div class="l" id="vaultCount"></div></div>
         <p style="margin-top:12px"><button id="vaultGo">Withdraw to your wallet</button></p>
         <p class="muted small" style="margin-top:4px">Everything in the vault comes to this wallet. Withdraw as often as you like; each time costs a tiny network fee.</p>
         <details class="adv"><summary>Show addresses</summary>
         <div class="grid" style="margin-top:10px">
-          <div><div class="muted small">Owner (this wallet)</div><div class="mono small" id="recOwner"></div></div>
-          <div><div class="muted small">Backup wallet</div><div class="mono small" id="recRec"></div></div>
-          <div><div class="muted small">Payout vault</div><div class="mono small" id="vaultAddr"></div></div>
+          <div class="fact"><div class="k">Owner (this wallet)</div><div class="addrrow" style="margin:4px 0 0"><span class="chip" id="recOwner"></span></div></div>
+          <div class="fact"><div class="k">Backup wallet</div><div class="addrrow" style="margin:4px 0 0"><span class="chip" id="recRec"></span></div></div>
+          <div class="fact"><div class="k">Payout vault</div><div class="addrrow" style="margin:4px 0 0"><span class="chip" id="vaultAddr"></span></div></div>
         </div>
         </details>
         <div class="row" style="margin-top:16px"><select id="payYear"></select> <button id="payCsv" class="ghost">Download payments (CSV)</button></div><p class="muted small" style="margin-top:6px">Every member payment, for your taxes: date, plan, KAS paid and the price quoted. No member addresses.</p>
@@ -763,6 +799,6 @@
 </div>
 
 <script src="/assets/kaspire-mobile.js?v=2"></script>
-<script src="/assets/dashboard.js?v=68"></script>
+<script src="/assets/dashboard.js?v=70"></script>
 </body>
 </html>
