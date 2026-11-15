@@ -53,6 +53,13 @@ const prepayName = () => `Prepay future ${unitNow()}s (auto-renew)`;
 const prepayLine = () => isV5()
   ? `Each ${unitNow()} is charged at that ${unitNow()}'s KAS price. If the creator raises the price, you're told and your renewals keep the old price for 30 days. Cancel any time and the unused KAS comes back to your wallet.`
   : `Each ${unitNow()} is charged at your locked rate. Cancel any time and the unused KAS comes back to your wallet.`;
+// The plan details' auto-renew line. It depends on the plan's price (today's price or a locked
+// rate), which arrives after the details, so loadOffer() writes it again.
+const prepayRowText = () => `Optional: ${prepayName().replace(" (auto-renew)", "")}. Set some KAS aside in your ${pw()}'s own contract and it renews itself before it runs out. ${prepayLine()}`;
+function syncPrepayRow() {
+  const dt = [...$("tier").querySelectorAll("dt")].find((x) => x.textContent === "Auto-renew");
+  if (dt && dt.nextElementSibling) dt.nextElementSibling.textContent = prepayRowText();
+}
 // The cushion on prepaid renewals (plans priced in a currency): what each choice protects against.
 const cushionOn = () => isV5() && !!(offer && offer.price && offer.price.currency !== "KAS");
 const cushionOf = (id) => (cushionOn() ? Number($(id).value) : 0);
@@ -194,7 +201,7 @@ async function loadTier() {
       ["Creator", card.creator_address, true],
       ...(testing() ? [[`Length of a ${u}`, `${mins(t.period_ms)} (shortened for testing)`]] : u === "period" ? [["Renews every", mins(t.period_ms)]] : []),
       ...(t.trial_ms > 0 ? [["Free trial", mins(t.trial_ms)]] : []),
-      ...(t.v4 ? [["Auto-renew", `Optional: ${prepayName().replace(" (auto-renew)", "")}. Set some KAS aside in your ${pw()}'s own contract and it renews itself before it runs out. ${prepayLine()}`]] : []),
+      ...(t.v4 ? [["Auto-renew", prepayRowText()]] : []),
       ...(t.v4 && t.v4.max_discount_bps > 0 && !t.v4.record_id ? [["Holder discount", `NFT holders can pay up to ${t.v4.max_discount_bps / 100}% less.`]] : []),
       ["Refundable deposit", `${kas(t.bond)}, held in your ${pw()} and returned when you end it`],
       ["Passing it on", t.resellable ? `You can sell or give your ${pw()} to someone else${t.royalty > 0 ? `; the creator gets a ${kas(t.royalty)} royalty` : ""}` : `${pw({ cap: true, many: true })} stay with the wallet that bought them`],
@@ -1121,6 +1128,7 @@ async function loadOffer() {
     const dd = document.createElement("dd"); dd.innerHTML = html; dd.dataset.price = "1";
     tier.prepend(dt, dd);
   }
+  syncPrepayRow();
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -1804,12 +1812,18 @@ function foldCard(d, l) {
     t.innerHTML = `${open ? "Hide details" : "What's included"} <span aria-hidden="true">${open ? "▴" : "▾"}</span>`;
     if (open) OPEN.add(l.level); else OPEN.delete(l.level);
   };
-  t.onclick = (e) => { e.stopPropagation(); set(det.hidden); };
+  // Opening a plan also makes it the one "Plan details" below describes.
+  const toggle = () => {
+    const open = det.hidden;
+    set(open);
+    if (open && LEVEL !== l.level) selectLevel(l.level, { quiet: true });
+  };
+  t.onclick = (e) => { e.stopPropagation(); toggle(); };
   det.before(t);
   set(!det.hidden);
   d.addEventListener("click", (e) => {
     if (e.target.closest("button, a, input, select, label, .promo")) return;
-    set(det.hidden);
+    toggle();
   });
 }
 
