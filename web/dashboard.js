@@ -92,6 +92,8 @@ function setAddress(a) {
   $("wcGo").classList.toggle("ghost", !phone);
   show("wcOtherLine", !!session && !!MOBILE);
   show("logout", !!session);
+  $("sideAddr").textContent = a ? (session ? `Signed in, wallet ending ${a.slice(-4)}` : `Wallet ending ${a.slice(-4)}, not signed in`) : "Not signed in";
+  $("sideAddr").title = a || "";
   // Signed in: the sign-in panel shrinks to one line.
   $("signPanel").classList.toggle("in", !!session);
   show("signTitle", !session);
@@ -101,21 +103,50 @@ function setAddress(a) {
 // ---- Tabs ------------------------------------------------------------------
 // One job per screen. "#all" shows everything on one page.
 const TABS = ["overview", "page", "levels", "members", "prices", "promos", "groups", "payouts", "settings"];
-function showTab(name) {
+const TITLES = { overview: "Overview", page: "Your page", levels: "Plans", members: "Members", prices: "Prices & sales", promos: "Promotions", groups: "Groups", payouts: "Payouts", settings: "Settings", all: "Everything" };
+function showTab(name, sub) {
   if (name !== "all" && !TABS.includes(name)) name = "overview";
   document.querySelectorAll(".pane").forEach((p) => p.classList.toggle("hidden", name !== "all" && p.dataset.pane !== name));
   document.querySelectorAll("#tabs button").forEach((b) => b.classList.toggle("on", b.dataset.tab === name));
-  // The tier picker only matters on tabs about one tier.
-  $("levelPick").classList.toggle("offtab", !["levels", "members", "prices", "all"].includes(name));
-  if (name === "all") showLaunch(true);
-  try { history.replaceState(null, "", "#" + name); } catch {}
+  document.documentElement.dataset.tab = name;
+  $("phTitle").textContent = name === "levels" ? cap(levelWord().many) : TITLES[name];
+  // The plan picker only matters on tabs about one plan. It moves into that tab's header.
+  const pick = $("levelPick"), on = ["levels", "members", "prices"].includes(name);
+  pick.classList.toggle("offtab", !on && name !== "all");
+  if (on) { const slot = document.querySelector(`[data-pane="${name}"] .pickslot`); if (slot && pick.parentElement !== slot) slot.append(pick); }
+  else if (name === "all" && pick.parentElement !== $("creatorArea")) $("creatorArea").prepend(pick);
+  // "#all" shows every section of every tab.
+  if (name === "all") { document.querySelectorAll(".subpane").forEach((s) => s.classList.remove("hidden")); showLaunch(true); }
+  else if (sub) showSub(name, sub);
+  else { const p = document.querySelector(`[data-pane="${name}"] .subtabs`); if (p) showSub(name, (p.querySelector("button.on") || p.querySelector("button")).dataset.sub); }
+  closeSheet();
+  const on2 = name !== "all" && document.querySelector(`[data-pane="${name}"] .subtabs button.on`);
+  const s = on2 ? "/" + on2.dataset.sub : "";
+  try { history.replaceState(null, "", "#" + name + s); } catch {}
 }
-document.querySelectorAll("#tabs button").forEach((b) => (b.onclick = () => showTab(b.dataset.tab)));
+// Sections inside a tab (Your page: words or look; Settings: general, theme, technical).
+function showSub(pane, sub) {
+  const p = document.querySelector(`[data-pane="${pane}"]`); if (!p) return;
+  const subs = [...p.querySelectorAll(".subpane")].map((s) => s.dataset.subpane);
+  if (!subs.includes(sub)) sub = subs[0];
+  p.querySelectorAll(".subtabs button").forEach((b) => b.classList.toggle("on", b.dataset.sub === sub));
+  p.querySelectorAll(".subpane").forEach((s) => s.classList.toggle("hidden", s.dataset.subpane !== sub));
+}
+document.querySelectorAll("#tabs button").forEach((b) => (b.onclick = () => { showTab(b.dataset.tab); window.scrollTo({ top: 0 }); }));
+document.querySelectorAll(".subtabs").forEach((n) => n.querySelectorAll("button").forEach((b) => (b.onclick = () => {
+  showSub(n.dataset.subs, b.dataset.sub);
+  try { history.replaceState(null, "", "#" + n.dataset.subs + "/" + b.dataset.sub); } catch {}
+})));
 document.addEventListener("click", (e) => {
   const a = e.target.closest("[data-go]");
-  if (a) { e.preventDefault(); showTab(a.dataset.go); window.scrollTo({ top: 0 }); }
+  if (a) { e.preventDefault(); showTab(a.dataset.go, a.dataset.sub); window.scrollTo({ top: 0 }); }
 });
-const startTab = (location.hash || "").slice(1);
+// Phone: the sidebar opens as a sheet from "More" in the bottom bar.
+function closeSheet() { $("side").classList.remove("open"); $("scrim").classList.remove("open"); $("moreBtn").setAttribute("aria-expanded", "false"); }
+$("moreBtn").onclick = () => { const o = !$("side").classList.contains("open"); $("side").classList.toggle("open", o); $("scrim").classList.toggle("open", o); $("moreBtn").setAttribute("aria-expanded", String(o)); };
+$("scrim").onclick = closeSheet;
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeSheet(); });
+const [startTab, startSub] = (location.hash || "").slice(1).split("/");
 let tabShown = false;
 
 // What the creator calls levels ("level", "tier", "plan").
@@ -123,7 +154,9 @@ const levelWord = () => (data && data.level_word) || { one: "plan", many: "plans
 const cap = (t) => t.charAt(0).toUpperCase() + t.slice(1);
 function applyLevelWord() {
   const w = levelWord();
-  const tab = document.querySelector('#tabs [data-tab="levels"]'); if (tab) tab.textContent = cap(w.many);
+  const tab = document.querySelector('#tabs [data-tab="levels"] .tl'); if (tab) tab.textContent = cap(w.many);
+  $("plansTitle").textContent = cap(w.many);
+  if (document.documentElement.dataset.tab === "levels") $("phTitle").textContent = cap(w.many);
   $("lvAdd").textContent = `Add a ${w.one}`;
   $("levelPick").querySelector("span").textContent = cap(w.one);
   document.querySelectorAll(".lw1").forEach((e) => (e.textContent = w.one));
@@ -223,7 +256,10 @@ async function renderSetup() {
   if (pageCfg && !pageCfg.intro_html) items.push(["Write an intro for your page", "page"]);
   if (data.v4 && data.v4.keeper && data.v4.keeper.balance_sompi < KAS) items.push([`Turn on auto-renew: send 2 ${card && card.network === "mainnet" ? "KAS" : "test KAS"} to your fees wallet. It pays the tiny network fee each time a member's plan renews itself (2 KAS covers about 60 renewals).`, "promos"]);
   if (!(data.totals && data.totals.active > 0)) items.push(["Share your page link to get your first member", "page"]);
-  $("setupList").innerHTML = items.map(([t, tab]) => `<div class="setup"><span>${escHtml(t)}</span><button class="ghost" data-go="${tab}">Open</button></div>`).join("");
+  // Progress: six things to set up in all.
+  const all = 6, done = Math.max(0, all - items.length);
+  $("setupList").innerHTML = `<p class="muted small" style="margin:0">${done} of ${all} done</p><div class="meter" role="progressbar" aria-valuemin="0" aria-valuemax="${all}" aria-valuenow="${done}"><i style="width:${Math.round((done / all) * 100)}%"></i></div>` +
+    items.map(([t, tab]) => `<div class="setup"><i class="ring" aria-hidden="true"></i><span class="t">${escHtml(t)}</span><button class="ghost sm" data-go="${tab}">Open</button></div>`).join("");
   show("setupPanel", items.length > 0);
 }
 
@@ -267,7 +303,10 @@ $("logout").onclick = () => {
   endSession(session);
   session = null; MOBILE = null;
   try { sessionStorage.removeItem("kaspass.dash"); sessionStorage.removeItem("kaspass.mobile"); } catch {}
-  setAddress(address); ["creatorArea", "notCreator", "launch"].forEach((id) => show(id, false));
+  if (window.kpTheme) kpTheme.signedOut();
+  themeFor = null;
+  closeSheet(); $("phTitle").textContent = "Creator dashboard";
+  setAddress(address); ["creatorArea", "notCreator", "launch", "whoBox"].forEach((id) => show(id, false));
 };
 
 // Kaspire mobile: pair (QR on a computer, a button on a phone), then the same sign-in as above.
@@ -377,16 +416,21 @@ let HAS_RECORD = false;
 function renderSteps3() {
   const isNew = !!(card && card.placeholder && session && address === card.creator_address);
   show("steps3", isNew);
-  if (!isNew) return;
+  if (!isNew) { show("payTitle", false); return; }
   const done = [HAS_RECORD || SITE_V5, false, false];
   const now = done.indexOf(false);
   document.querySelectorAll("#s3List li").forEach((li, i) => { li.classList.toggle("done", done[i]); li.classList.toggle("now", i === now); });
   $("payTitle").textContent = HAS_RECORD || SITE_V5 ? "Step 1 done: payouts are on" : "Step 1. Turn on payouts";
+  show("payTitle", true);
   $("launchTitle").textContent = "Step 2. Create your first plan";
 }
+let FX = null, PLAN_CUR = null;
 fetch("/v1/levels").then((r) => r.json()).then((j) => {
+  FX = j.fx || null;
+  PLAN_CUR = ((j.levels || []).map((l) => l.price && l.price.currency).find((c) => c && c !== "KAS")) || null;
+  if (VAULT != null) drawVault();
   applyV5(!!j.v5);
-  if (j.launch_no_fee) $("lFeeNote").textContent = "No KasPass fee: every payment goes to you in full.";
+  if (j.launch_no_fee) { $("lFeeNote").textContent = "No KasPass fee: every payment goes to you in full."; $("ovFee").textContent = $("payFee").textContent = "None"; }
   if (j.launch_open === false) { $("signHint").textContent = "Sign in with the wallet that created this membership to manage it."; LAUNCH_OPEN = false; if (card && !card.placeholder) showLaunch(false); }
 }).catch(() => {});
 
@@ -436,7 +480,8 @@ function vpPreview() {
   const per = card ? dur(card.settings.period_ms).replace(/^1 /, "") : "period";
   const amt = cur === "KAS" ? `${a.toLocaleString()} KAS` : new Intl.NumberFormat(undefined, { style: "currency", currency: cur, maximumFractionDigits: 0 }).format(a);
   const kasToday = cur !== "KAS" && VP_RATE && VP_RATE.cur === cur ? ` , about ${Math.round(a * VP_RATE.kasPer).toLocaleString()} KAS today` : "";
-  $("vpPreview").textContent = `Members will see: ${amt} a ${card && card.settings.period_ms < 86400000 ? "month" : per}${kasToday.replace(" ,", ",")}.`;
+  const every = card && card.settings.period_ms < 86400000 ? "a month" : /^\d/.test(per) ? "every " + per : "a " + per;
+  $("vpPreview").textContent = `Members will see: ${amt} ${every}${kasToday.replace(" ,", ",")}.`;
 }
 $("vpAmount").addEventListener("input", vpPreview);
 $("vpCur").addEventListener("change", vpPreview);
@@ -485,18 +530,50 @@ async function loadRecord() {
     VAULT = j.record ? Number(j.vault_balance_sompi || 0) : null;
     renderSteps3();
     if (data && card) render();
+    VAULT_N = j.record ? Number(j.vault_payments || 0) : 0;
+    // Progress and errors show right under the vault (or under the setup form before it exists).
+    const at = j.record ? $("payVault") : $("recSetup");
+    if (at.nextElementSibling !== $("recStatus")) at.after($("recStatus"), $("recErr"));
+    drawVault();
     if (j.record) {
-      $("vaultBal").textContent = kas(j.vault_balance_sompi);
-      $("vaultCount").textContent = j.vault_payments ? `${j.vault_payments} payment${j.vault_payments === 1 ? "" : "s"} ready to withdraw` : "Nothing to withdraw yet";
+      $("vaultCount").textContent = String(VAULT_N);
       $("recOwner").textContent = j.record.owner;
       $("recRec").textContent = j.record.recovery;
       $("vaultAddr").textContent = j.vault_address;
-      $("vaultGo").disabled = !j.vault_balance_sompi;
+      $("vaultGo").disabled = !j.vault_balance_sompi || txBusy;
     }
     return j;
   } catch { return null; }
 }
-let VAULT = null;
+let VAULT = null, VAULT_N = 0;
+// About how much that is in the creator's own currency, at today's rate.
+function fiatOf(sompi) {
+  if (!FX || !PLAN_CUR || !FX.kas_usd) return "";
+  const usd = (Number(sompi) / KAS) * FX.kas_usd;
+  if ((PLAN_CUR === "CAD" && !FX.usd_cad) || (PLAN_CUR === "EUR" && !FX.eur_usd)) return "";
+  const v = PLAN_CUR === "CAD" ? usd * FX.usd_cad : PLAN_CUR === "EUR" ? usd / FX.eur_usd : usd;
+  const sym = { CAD: "CA$", USD: "US$", EUR: "€" }[PLAN_CUR] || "";
+  return v > 0 ? `about ${sym}${v < 10 ? v.toFixed(2) : Math.round(v).toLocaleString()} today` : "";
+}
+// The vault block, on Overview and in Payouts, and its amount beside Payouts in the menu.
+function drawVault() {
+  const on = VAULT != null, empty = !VAULT;
+  show("ovVault", on);
+  if (!on) { $("navVault").textContent = ""; return; }
+  const round = Math.round(VAULT / KAS).toLocaleString(), exact = (VAULT / KAS).toLocaleString(undefined, { maximumFractionDigits: 2 });
+  $("ovVaultAmt").textContent = statExact ? exact : round;
+  $("vaultBal").innerHTML = `${escHtml(exact)}<small>KAS</small>`;
+  const about = empty ? "Nothing to withdraw yet. New payments land here as members pay." : fiatOf(VAULT);
+  $("ovVaultAbout").textContent = about;
+  $("payAbout").textContent = about;
+  $("ovVaultCount").textContent = String(VAULT_N);
+  const to = address ? `…${address.slice(-4)}` : "this one";
+  $("ovEarned").textContent = to; $("payTo").textContent = to;
+  $("ovVaultBtn").textContent = empty ? "See payouts" : "Withdraw";
+  document.querySelectorAll(".vault").forEach((v) => v.classList.toggle("is-empty", empty));
+  $("vaultGo").disabled = empty || txBusy;
+  $("navVault").textContent = empty ? "" : round + " KAS";
+}
 $("recGo").onclick = () => {
   if (!$("recRecovery").value.trim()) { say("recErr", "Paste your backup wallet's address first."); $("recRecovery").focus(); return; }
   if ($("recRecovery").value.trim() === address) { say("recErr", "That's the wallet you're signed in with. The backup must be a second wallet of yours."); return; }
@@ -513,11 +590,15 @@ $("recGo").onclick = () => {
 $("vaultGo").onclick = () => runPaid({
   url: "/v1/creator/withdraw", body: {}, statusId: "recStatus", errId: "recErr", button: $("vaultGo"),
   after: async (out) => {
+    const amount = VAULT;
     busy("recStatus", "Sent. Waiting for the network to confirm…");
     for (let i = 0; i < 30; i++) { await sleep(2000); const j = await loadRecord(); if (j && !j.vault_balance_sompi) break; }
-    say("recStatus", "Done: withdrawn to your wallet.");
+    const box = $("recStatus");
+    box.innerHTML = `<div class="ok-box" role="status"><svg class="i"><use href="#i-check"/></svg><div><b>Withdrawn.</b> <span></span></div></div>`;
+    box.querySelector("span").textContent = `${amount ? kas(amount) + " is" : "It's"} in your wallet ending ${address.slice(-4)}.`;
+    show("recStatus", true);
   },
-});
+}).then(() => { $("vaultGo").disabled = !VAULT; });
 // ---- Payments export (v5): one CSV for the year, for taxes ----------------
 (() => {
   const sel = $("payYear");
@@ -604,6 +685,7 @@ $("hoGo").onclick = () => {
   });
 };
 
+let themeFor = null;
 async function refresh() {
   const isCreator = address === card.creator_address;
   // The recovery wallet only gets the handover form.
@@ -614,6 +696,8 @@ async function refresh() {
     if (rec) { show("notCreator", false); show("creatorArea", false); show("launch", false); return; }
   } else {
     show("recoveryArea", false);
+    // The creator's dashboard theme follows them between devices.
+    if (window.kpTheme && session && themeFor !== session) { themeFor = session; kpTheme.signedIn(session); }
     loadRecord();
     loadKey();
     loadNotes();
@@ -634,7 +718,7 @@ async function refresh() {
     show("lNameBox", false); show("lPerksBox", false); show("lAboutBox", false);
     // Payouts first: with an owner record, plans are priced in CAD, USD or EUR and pay into a vault.
     if (isCreator) {
-      const pay = document.querySelector('[data-pane="payouts"] section');
+      const pay = $("payPanel");
       if (pay && pay.parentElement !== $("launchHome")) $("launchHome").prepend(pay);
     }
     renderSteps3();
@@ -643,10 +727,11 @@ async function refresh() {
   show("notCreator", !isCreator);
   $("creatorAddr").textContent = card.creator_address;
   show("creatorArea", isCreator);
+  show("whoBox", isCreator);
   showLaunch(startTab === "all");
   if (!isCreator) return;
   // The first time in, open the tab the link asked for (dashboard#prices), else Overview.
-  if (!tabShown) { tabShown = true; showTab(startTab || "overview"); }
+  if (!tabShown) { tabShown = true; showTab(startTab || "overview", startSub); }
   const r = await fetch(L("/v1/creator?session=" + encodeURIComponent(session)));
   if (!r.ok) { setError(await r.text()); return; }
   data = await r.json();
@@ -678,15 +763,28 @@ async function loadAllTotals() {
   try {
     const each = await Promise.all(lv.map((l) => fetch("/v1/creator?level=" + encodeURIComponent(l.covenant_id) + "&session=" + encodeURIComponent(session)).then((r) => (r.ok ? r.json() : null)).catch(() => null)));
     const t = { earned_sompi: 0, active: 0, renewals: 0, upgrades: 0, autorenewals: 0, sales: 0, trials: 0, auto_renewing: 0 }, ev = [];
+    const per = [];
     for (const d of each) {
       if (!d) continue;
+      per.push({ name: d.name || "", active: Number(d.totals.active || 0) });
       for (const k of ["earned_sompi", "active", "renewals", "upgrades", "autorenewals", "sales", "trials"]) t[k] += Number(d.totals[k] || 0);
       t.auto_renewing += d.v4 ? Number(d.v4.auto_renewing || 0) : 0;
       for (const e of d.events || []) ev.push({ ...e, plan: d.name || "" });
     }
-    ALL = { totals: t, events: ev.sort((a, b) => (a.at_ms || 0) - (b.at_ms || 0)) };
+    ALL = { totals: t, per, events: ev.sort((a, b) => (a.at_ms || 0) - (b.at_ms || 0)) };
   } catch { ALL = null; }
   render();
+}
+
+// Members by plan: one bar split by plan, with a key. Only with two or more plans.
+function renderByPlan() {
+  const per = (ALL && ALL.per) || [], total = per.reduce((a, p) => a + p.active, 0);
+  show("byPlanPanel", per.length > 1 && total > 0);
+  if (!(per.length > 1 && total > 0)) return;
+  const col = (i) => `var(--chart-${(i % 4) + 1})`;
+  $("byPlanBar").innerHTML = per.map((p, i) => (p.active ? `<i style="flex:${p.active};background:${col(i)}"></i>` : "")).join("");
+  $("byPlanBar").setAttribute("aria-label", per.map((p) => `${p.name}: ${p.active}`).join(", "));
+  $("byPlanKey").innerHTML = per.map((p, i) => `<li><i style="background:${col(i)}"></i><span>${escHtml(p.name)}</span><span class="n">${p.active}</span></li>`).join("");
 }
 
 // ---- Tiers on this site ----------------------------------------------------
@@ -1021,8 +1119,8 @@ function renderFixed(lane) {
     ["Free trial", s.trial_ms > 0 ? dur(s.trial_ms) : "none"],
     ["Renew early", `up to ${dur(s.max_ahead_ms)} before a membership ends`],
     ["Deposit per member", `${kas(s.bond)}, returned when a member ends their membership`],
-    ["Supply", lane ? (lane.remaining < 0 ? "unlimited" : `${lane.remaining} left`) : "?"],
-    ["Resale", s.resellable ? `allowed, ${kas(s.royalty)} to you each time` : "not allowed"],
+    ["How many can join", lane ? (lane.remaining < 0 ? "unlimited" : `${lane.remaining} left`) : "?"],
+    ["Selling it on", s.resellable ? `allowed, ${kas(s.royalty)} to you each time` : "not allowed"],
   ];
   if (s.v4) {
     rows.push(["Auto-renew", `in the last ${dur(s.v4.auto_window_ms)} of each period`]);
@@ -1046,7 +1144,6 @@ function render() {
   const any = t.sales + t.renewals + t.upgrades + t.trials + t.active > 0;
   $("stats").innerHTML = !any ? "" : [
     stat(kasStat(t.earned_sompi), "Earned so far"),
-    ...(VAULT != null ? [stat(kasStat(VAULT), `Ready to withdraw${VAULT > 0 ? ' <a href="#payouts" data-go="payouts">Withdraw</a>' : ""}`)] : []),
     stat(`${t.active}`, "Members now"),
     stat(`${t.renewals}`, `Renewals${t.autorenewals ? ` (${t.autorenewals} by auto-renew)` : ""}`),
     stat(`${t.upgrades}`, "Upgrades"),
@@ -1055,12 +1152,18 @@ function render() {
   ].join("");
   show("stats", any);
   show("statsNone", !any);
+  show("statsNoneBox", !any);
+  $("navMembers").textContent = t.active ? String(t.active) : "";
+  $("navPlans").textContent = data.levels && data.levels.length > 1 ? String(data.levels.length) : "";
+  if (VAULT != null) drawVault();
+  renderByPlan();
   renderV4();
   $("tierTitle").textContent = data.name || "This membership";
   if (document.activeElement !== $("tName")) $("tName").value = data.name || "";
   // The tax-year tip is for names that already use {…}.
   show("taxTip", /[{}]/.test($("tName").value + " " + $("perks").value));
   if (document.activeElement !== $("cName")) $("cName").value = data.creator_name || "";
+  $("whoName").textContent = data.creator_name || data.club_name || "Your membership";
   if (document.activeElement !== $("pWord")) $("pWord").value = data.pass_word && data.pass_word.one !== "membership" ? data.pass_word.one : "";
 
   const lane = (data.lanes.find((l) => l.lane.remaining !== 0) || data.lanes[0] || {}).lane;
@@ -1511,8 +1614,8 @@ function makeEditor(mountId, labelId, placeholder) {
   return ed;
 }
 const pgIntro = makeEditor("pgIntroEd", "pgIntroL", "Who you are and what members get. For example: 7 years in crypto, no hype, just research. Use Heading for section titles and lists for what's included.");
-const lvAbout = makeEditor("lvAboutEd", "lvAboutL", "What this tier is, who it's for and what members get, in as much detail as you like.");
-const lAbout = makeEditor("lAboutEd", "lAboutL", "What this tier is, who it's for and what members get. You can also add this later.");
+const lvAbout = makeEditor("lvAboutEd", "lvAboutL", "What this plan is, who it's for and what members get, in as much detail as you like.");
+const lAbout = makeEditor("lAboutEd", "lAboutL", "What this plan is, who it's for and what members get. You can also add this later.");
 
 // ---- Your page: tagline, intro, links and how the tiers show ---------------------
 const LINK_KINDS = ["website", "x", "tiktok", "youtube", "instagram", "telegram", "discord"];
@@ -1627,7 +1730,7 @@ addTips();
 
 (async () => {
   card = await (await fetch("/v1/tier")).json();
-  $("net").textContent = card.network === "testnet-10" ? "Testnet-10" : card.network === "mainnet" ? "Mainnet" : card.network;
+  $("net").textContent = $("netPh").textContent = card.network === "testnet-10" ? "Testnet-10" : card.network === "mainnet" ? "Mainnet" : card.network;
   // The create form starts from sensible settings: a month, no trial, renew up to a week ahead on
   // mainnet; short test periods (minutes) on a test network so renewals can be watched.
   if (card.network === "mainnet") { setDur("lPeriod", 30 * 86400000); $("lTrialU").value = "0"; setDur("lAhead", 7 * 86400000); }
@@ -1751,6 +1854,9 @@ function fillPictures() {
 }
 async function loadBrand() {
   try { brand = await (await fetch("/v1/brand", { cache: "no-store" })).json(); } catch { return; }
+  if (window.kpTheme) kpTheme.pageLook(brand, data && (data.club_name || data.creator_name));
+  if (brand.photo || brand.logo) $("whoPhoto").src = brand.photo || brand.logo;
+  show("whoPhoto", !!(brand.photo || brand.logo));
   if (!brandFilled) {
     brandFilled = true;
     $("bColorsOn").checked = !!(brand.light || brand.dark);
@@ -2175,3 +2281,10 @@ $("visPublic").onchange = () => setVis(false);
 $("visPrivate").onchange = () => setVis(true);
 $("visNew").onclick = () => setVis(true, true);
 $("visCopy").onclick = () => navigator.clipboard.writeText($("visLink").textContent).then(() => { $("visCopy").textContent = "Copied"; setTimeout(() => ($("visCopy").textContent = "Copy"), 1500); }).catch(() => {});
+
+// Copy the membership page's link from the Overview header.
+$("copyPage").onclick = () => {
+  const url = location.origin + "/", label = $("copyPage").querySelector("span");
+  const done = () => { label.textContent = "Copied"; setTimeout(() => (label.textContent = "Copy my page link"), 1400); };
+  try { navigator.clipboard.writeText(url).then(done, () => { label.textContent = url; }); } catch { label.textContent = url; }
+};

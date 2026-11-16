@@ -966,7 +966,7 @@ pub async fn creator_set(State(s): State<AppState>, Json(req): Json<PromoRequest
         return Err(bad("this site has no keeper wallet to pay for free passes"));
     }
     if !can_give(&lv) {
-        return Err(bad("this server doesn't hold the price-approval key this plan trusts, so it can't give free passes (see Settings › Server key)"));
+        return Err(bad("this server doesn't hold the price-approval key this plan trusts, so it can't give free passes (see Payouts, Advanced: server key)"));
     }
     let needs = req.needs.checked().map_err(bad)?;
     if needs.list.iter().any(|n| n.kind == "token" || n.kind == "kcc20") && req.max_claims == 0 {

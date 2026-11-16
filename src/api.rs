@@ -15,6 +15,7 @@
 use std::sync::Arc;
 mod payin;
 mod brand;
+mod prefs;
 mod home;
 mod promo;
 mod trial;
@@ -574,7 +575,7 @@ pub async fn serve(setups: Vec<LevelSetup>, chain: Chain, port: u16, members_htm
         .route("/v1/handover/prepare", post(handover_prepare));
     // The simulator's stand-in phone wallet exists only in the simulator.
     let app = if crate::test_switch("KASPASS_SIM_SERVE").is_some() { app.route("/v1/sim/pay", post(payin::sim_pay)) } else { app };
-    let app = brand::routes(app)
+    let app = prefs::routes(brand::routes(app))
         // Pages send the session in a header (never in a link); handlers still read `session`.
         .layer(axum::middleware::from_fn(session_header))
         // Any website may read the public API (GET); nothing cross-site may write.
@@ -1166,6 +1167,9 @@ const ASSETS: &[(&str, &str, &[u8])] = &[
     // bundled with esbuild. Loaded only when someone presses "Use Kaspire mobile".
     ("walletconnect.js", "text/javascript; charset=utf-8", include_bytes!("../web/walletconnect.js")),
     ("dashboard.js", "text/javascript; charset=utf-8", include_bytes!("../web/dashboard.js")),
+    // The creator dashboard's themes: the saved colours painted before the page shows, then the picker.
+    ("dash-theme-boot.js", "text/javascript; charset=utf-8", include_bytes!("../web/dash-theme-boot.js")),
+    ("dash-theme.js", "text/javascript; charset=utf-8", include_bytes!("../web/dash-theme.js")),
     ("club.js", "text/javascript; charset=utf-8", include_bytes!("../web/club.js")),
     ("help.js", "text/javascript; charset=utf-8", include_bytes!("../web/help.js")),
     ("fonts.css", "text/css; charset=utf-8", include_bytes!("../web/fonts.css")),
