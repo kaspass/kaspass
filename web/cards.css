@@ -32,13 +32,15 @@
 :root[data-cards="kaspa-vision"] a { color: var(--teal); }
 
 /* The plans get the page's full width (up to about 1200 px), straight on the background. */
-.cards-open #levelsBox { margin-inline: calc(50% - min(600px, 50vw - 16px)); background: transparent; border: 0; padding: 8px 0; }
+.cards-open .wrap { max-width: 900px; }
+.cards-open #levelsBox { background: transparent; border: 0; padding: 8px 0; }
 .cards-open #levelsBox h2 { font-size: 26px; }
-.cards-open .levels { grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 24px; align-items: stretch; margin-top: 24px; }
-@media (max-width: 1100px) { .cards-open .levels { grid-template-columns: minmax(0, 1fr); max-width: 520px; margin-inline: auto; } }
+.cards-open .levels { grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 20px; align-items: stretch; margin-top: 20px; }
+.cards-open #levelCards.focus { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; }
+@media (max-width: 760px) { .cards-open .levels, .cards-open #levelCards.focus { grid-template-columns: minmax(0, 1fr); max-width: 520px; margin-inline: auto; } }
 
-.cards-open .lvl { padding: 32px; border-radius: 18px; background: var(--cs-card); border: 1px solid var(--line); gap: 18px; cursor: default; }
-.cards-open .lvl.hl { border: 2px solid var(--teal); padding: 31px; }
+.cards-open .lvl { padding: 28px; border-radius: 18px; background: var(--cs-card); border: 1px solid var(--line); gap: 18px; cursor: default; }
+.cards-open .lvl.hl { border: 2px solid var(--teal); padding: 27px; }
 .cards-open .lvl.sel { border-color: var(--line); box-shadow: 0 0 0 3px color-mix(in srgb, var(--teal) 25%, transparent); }
 .cards-open .lvl.hl.sel { border-color: var(--teal); }
 .cards-open .lvl .ln { font: 700 26px/1.2 var(--font-head); }
@@ -77,7 +79,7 @@
 .cards-open .lvl .trialnote, .cards-open .lvl .trialno, .cards-open .lvl .noact, .cards-open .lvl .until { font-size: 14px; margin-top: 0; }
 
 /* Pill buttons: filled, or outlined beside a highlighted plan. */
-.cards-open .lvl > button:not(.more-t) { min-height: 52px; margin-top: 0; padding: 0 28px; border-radius: 999px; font-size: 17px; width: 100%; }
+.cards-open .lvl > button:not(.more-t):not(.chg) { min-height: 52px; margin-top: 0; padding: 0 16px; border-radius: 999px; font-size: 16px; width: 100%; white-space: nowrap; }
 .cards-open .lvl > button.ghost,
 .cards-open .levels.has-hl .lvl:not(.hl) > button:not(.more-t) { background: transparent; color: var(--text); border: 1px solid var(--teal); }
 .cards-open .lvl > button + button, .cards-open .lvl > .trialhint + button { margin-top: -6px; }

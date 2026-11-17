@@ -85,6 +85,32 @@ const text = (u, h = {}) => new Promise((resolve, reject) => {
       await ctx.close();
     }
   }
+  // A plan chosen by link (?level=, as a partner site's plan button does): that plan alone, outlined,
+  // with sign-in beside it as the one main button; "Change plan" shows the rest.
+  {
+    const ids = await (await fetch(S + '/v1/levels')).json().then((j) => j.levels.map((l) => l.level));
+    const q = await contexts.phone.newPage();
+    const errs = []; q.on('pageerror', (e) => errs.push(e.message));
+    await q.goto(`${S}/demo?level=${ids[1]}&return=https://kaspa.vision/signin`); await q.waitForTimeout(3000);
+    const f = await q.evaluate(() => ({ cards: document.querySelectorAll('#levelCards .lvl').length, tag: !!document.querySelector('#levelCards .lvl .yourtag'), wallet: document.getElementById('wallet').parentElement.id, buttons: [...document.querySelectorAll('#levelCards .lvl > button:not(.chg)')].filter((b) => b.offsetParent).length, step: document.getElementById('walletTitle').textContent }));
+    check('chosen plan: shown alone, labelled, with the sign-in beside it as step 1', f.cards === 1 && f.tag && f.wallet === 'levelCards' && /^1\. Sign in/.test(f.step), f);
+    check('chosen plan: no pay buttons until signed in', f.buttons === 0, f);
+    await q.click('#levelCards .chg'); await q.waitForTimeout(600);
+    check('chosen plan: "Change plan" shows every plan, the pick still labelled', await q.evaluate(() => document.querySelectorAll('#levelCards .lvl').length > 1 && !!document.querySelector('#levelCards .lvl .yourtag')));
+    check('chosen plan: no script errors', errs.length === 0, errs);
+    await q.goto(`${S}/demo?level=nope`); await q.waitForTimeout(2500);
+    check('unknown plan in a link: all plans and a note', await q.evaluate(() => document.querySelectorAll('#levelCards .lvl').length > 1 && /couldn't find that/.test(document.getElementById('levelsLead').textContent)));
+    await q.close();
+  }
+  // Euro visitors: by the language's country, or by a euro time zone with a US-English browser; Bulgaria counts.
+  for (const [locale, timezoneId, want] of [['de-DE', 'America/New_York', 'EUR'], ['en-US', 'Europe/Berlin', 'EUR'], ['bg-BG', 'Europe/Sofia', 'EUR'], ['en-GB', 'Europe/London', 'USD'], ['en-US', 'America/Chicago', 'USD'], ['en-US', 'America/Vancouver', 'CAD']]) {
+    const ctx = await b.newContext({ locale, timezoneId });
+    const q = await ctx.newPage();
+    await q.goto(`${S}/demo`); await q.waitForTimeout(1500);
+    const v = await q.evaluate(() => viewerCurrency());
+    check(`visitor's currency: ${locale} in ${timezoneId} is ${want}`, v === want, v);
+    await ctx.close();
+  }
   await b.close();
   console.log(ok ? 'ALL OK' : 'SOME FAILED');
   process.exit(ok ? 0 : 1);

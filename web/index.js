@@ -276,6 +276,8 @@ function setAddress(a) {
   show("logout", !!session);
   signinLayout();
   $("walletTitle").textContent = session ? "Your wallet" : "Sign in with your wallet";
+  renderWalletSteps($("levelCards").classList.contains("focus"));
+  show("navSignin", !session && !$("levelCards").classList.contains("focus"));
   show("walletHint", !session);
   if (!session) show("yourPlan", false);
   if (a && session) namesOf(a).then((n) => { if (n && address === a) label(n.split(" · ")[0]); });
@@ -292,7 +294,7 @@ function renderWalletLine(passes) {
   const el = $("yourPlan");
   if (!p) {
     const any = (passes || [])[0];
-    el.innerHTML = any ? `Your ${escH(pw())} has ended. <span class="muted">Renew it below to get access back.</span>` : `<span class="muted">No ${escH(lw())} yet: pick one below.</span>`;
+    el.innerHTML = any ? `Your ${escH(pw())} has ended. <span class="muted">Renew it below to get access back.</span>` : (document.documentElement.classList.contains("focus-mode") ? `<span class="muted">${$("levelCards").querySelector(".lvl .trialnote") ? "Now start your free trial or buy, on your" : "Now press Buy on your"} ${escH(lw())}.</span>` : `<span class="muted">No ${escH(lw())} yet: pick one below.</span>`);
   } else {
     const name = (lv(p) && lv(p).name) || (offer && offer.name) || pw({ cap: true });
     el.innerHTML = `Your ${escH(lw())}: ${escH(name)}${p.lifetime ? ", for life" : `, until ${escH(fmtDate(p.expiry_ms))}`}`;
@@ -1430,7 +1432,35 @@ function hideDone() {
   renderDoneBox();
 }
 let FOLDLIST = false;
+// A plan chosen by link (?level=, e.g. a plan button on the creator's site): that plan alone,
+// with the sign-in beside it, until the visitor asks to see the others.
+let FOCUS = false, SHOWALL = false, NOTFOUND = false;
 const renderDoneBox = () => show("doneBox", !$("doneTitle").classList.contains("hidden") || !$("returnDone").classList.contains("hidden") || ($("switchBox").parentElement === $("switchSlot") && !$("switchBox").classList.contains("hidden")));
+
+// Beside a chosen plan, the sign-in reads as step 1, and says what comes next.
+function renderWalletSteps(focus) {
+  if (!session) $("walletTitle").textContent = focus ? "1. Sign in with your wallet" : "Sign in with your wallet";
+  let n = $("walletNext");
+  if (!n) { n = Object.assign(document.createElement("p"), { id: "walletNext", className: "wallet-next" }); $("getWallet").after(n); }
+  const trial = !!$("levelCards").querySelector(".lvl .trialnote");
+  n.textContent = focus && !session ? (trial ? "2. Then choose Start my free trial or Buy on your plan, and approve it in Kaspire." : "2. Then press Buy on your plan and approve the payment in Kaspire.") : "";
+  show("walletNext", focus && !session);
+}
+$("navSignin").onclick = (e) => { e.preventDefault(); $("wallet").scrollIntoView({ behavior: "smooth", block: "start" }); };
+// The creator's details (banner, photo, links, intro) sit in "About" under the plans.
+function renderAbout() {
+  const name = ($("brandName").textContent || "").trim();
+  $("aboutTitle").textContent = name ? `About ${name}` : "About";
+  const any = ["brandBanner", "brandPhoto", "pageBy", "pageTagAbout", "pageMeta", "introBox"].some((id) => $(id) && !$(id).classList.contains("hidden"));
+  show("aboutBox", any);
+}
+// The heading: the creator's tagline if there is one (their name is already in the header), else the name.
+function renderHeading(name) {
+  const tag = page && page.tagline ? page.tagline.trim() : "";
+  const h = $("pageTitle");
+  if (tag) { h.textContent = tag; h.classList.add("taghead"); }
+  else if (name) { h.textContent = name; h.classList.remove("taghead"); }
+}
 
 // First-time visitors: a short how-to-join, until they sign in or hide it.
 const welcomeHidden = () => { try { return localStorage.getItem("kaspass.welcome") === "hidden"; } catch { return false; } };
@@ -1470,11 +1500,12 @@ function renderWelcome() {
   applyLevelWord();
   renderHero();
   namesOf(card.creator_address).then((n) => { n = (offer && offer.creator_name) || (n || "").split(" · ")[0]; if (site.club_name) {
-      $("pageTitle").textContent = site.club_name; document.title = site.club_name;
+      renderHeading(site.club_name); document.title = site.club_name;
       if (n) { $("pageBy").textContent = "by " + n; show("pageBy"); }
-    } else if (n) { $("pageTitle").textContent = n; document.title = `${n} · ${pw({ cap: true })}`; }
+    } else if (n) { renderHeading(n); document.title = `${n} · ${pw({ cap: true })}`; }
     if (n && !$("brandName").textContent) $("brandName").textContent = (site.club_name || n);
     renderTrust();
+    renderAbout();
     if (n) $("wLead").innerHTML = `This is <b>${escH(n)}</b>'s ${escH(pw())}. When you join, it lives in your own Kaspa wallet: nobody can take it away, and there's no card to enter.`; });
   renderHolderRow();
   renderCreatorRow();
@@ -1522,6 +1553,7 @@ function pickReturn(allowed) {
   try { url = new URL(u); } catch { return; }
   if (url.protocol !== "https:" || !allowed.includes(url.origin.toLowerCase())) return;
   RETURN = url.href;
+  document.documentElement.classList.add("from-partner");
   try { sessionStorage.setItem("kaspass.return", RETURN); } catch {}
   document.querySelectorAll(".rh").forEach((e) => (e.textContent = url.host));
   $("returnHost").textContent = url.host;
@@ -1536,7 +1568,7 @@ function renderTrust() {
   let host = "";
   try { host = new URL(RETURN).host; } catch {}
   const name = ($("brandName").textContent || $("pageTitle").textContent || "").trim() || host;
-  $("returnMsg").innerHTML = `Paying for <b>${escH(name)}</b>. This page, <b>${escH(location.host)}</b>, is ${escH(name)}'s own payment site, built on KasPass. Once you've joined, a button takes you back to ${escH(host)}.`;
+  $("returnMsg").innerHTML = `You're paying <b>${escH(name)}</b>. This page, <b>${escH(location.host)}</b>, is ${escH(name)}'s own payment site, built on KasPass. After you pay, a button takes you back to ${escH(host)}.`;
 }
 let returnShown = false;
 function renderReturn(active) {
@@ -1569,7 +1601,7 @@ async function loadLevels() {
   // Prices set in a currency: say once what KAS is, and that nothing is charged by itself.
   const curs = [...new Set(levels.map((l) => l.price && l.price.currency).filter((c) => c && c !== "KAS"))];
   const NAMES = { CAD: "Canadian dollars", USD: "US dollars", EUR: "euros" };
-  $("levelsKas").textContent = (curs.length === 1 ? `KAS is the Kaspa coin. Prices are in ${NAMES[curs[0]] || curs[0]}. You pay the same value in KAS at today's rate. ` : "") + "Nothing is charged automatically unless you choose to prepay future renewals (auto-renew).";
+  $("levelsKas").textContent = (curs.length === 1 ? `Prices are in ${NAMES[curs[0]] || curs[0]}. You pay the same value in KAS, the Kaspa coin, at today's rate. ` : "") + "Nothing renews by itself unless you choose to prepay renewals.";
   show("levelsKas", levels.length > 1);
   levelsTail();
 }
@@ -1581,7 +1613,7 @@ function renderHero() {
     $("heroFrom").textContent = `From ${money(cheapest.price.currency, cheapest.price.amount)} a ${unitOf(cheapest.period_ms)}`;
     $("heroGo").textContent = `See ${w.many} and prices`;
     $("heroGo").onclick = () => $("levelsBox").scrollIntoView({ behavior: "smooth", block: "start" });
-    show("hero", true);
+    show("hero", false);
   }
 }
 function levelsTail() {
@@ -1590,7 +1622,8 @@ function levelsTail() {
     let want = null;
     try { want = new URLSearchParams(location.search).get("level"); } catch {}
     const hit = want && levels.find((l) => l.level === want || l.id === want);
-    if (hit) LEVEL = hit.level;
+    if (hit) { LEVEL = hit.level; PICKED = true; FOCUS = levels.length > 1; }
+    else if (want) NOTFOUND = true;
   }
   if (levels.length > 1 && !LEVEL) LEVEL = levels[0].level;
   show("levelsBox", levels.length > 1);
@@ -1615,7 +1648,11 @@ async function refreshHeld() {
 // on-chain one, each with its % off.
 // ---- v5 prices: plans priced in a currency, paid in KAS at today's rate --------
 let FX = null, PRICE_DISPLAY = "plan";
-const EURO = ["AT", "BE", "CY", "DE", "EE", "ES", "FI", "FR", "GR", "HR", "IE", "IT", "LT", "LU", "LV", "MT", "NL", "PT", "SI", "SK"];
+// Countries that use the euro (Bulgaria since January 1, 2026; Monaco, San Marino, the Vatican,
+// Andorra and Montenegro use it too), and their time zones, so a visitor whose browser is set to
+// another country's language (US English in Berlin, say) still counts.
+const EURO = ["AT", "BE", "BG", "CY", "DE", "EE", "ES", "FI", "FR", "GR", "HR", "IE", "IT", "LT", "LU", "LV", "MT", "NL", "PT", "SI", "SK", "MC", "SM", "VA", "AD", "ME"];
+const EURO_TZ = /^(Europe\/(Vienna|Brussels|Sofia|Nicosia|Famagusta|Berlin|Busingen|Tallinn|Madrid|Helsinki|Paris|Athens|Zagreb|Dublin|Rome|Vilnius|Luxembourg|Riga|Malta|Amsterdam|Lisbon|Ljubljana|Bratislava|Monaco|San_Marino|Vatican|Andorra|Podgorica)|Asia\/(Nicosia|Famagusta)|Atlantic\/(Canary|Madeira|Azores)|Africa\/Ceuta)$/;
 // The visitor's currency, guessed from their browser's language and time zone.
 function viewerCurrency() {
   let region = "";
@@ -1623,7 +1660,7 @@ function viewerCurrency() {
   let tz = "";
   try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch {}
   if (region === "CA" || /^America\/(Toronto|Vancouver|Edmonton|Winnipeg|Halifax|St_Johns|Regina|Montreal|Whitehorse|Yellowknife|Iqaluit|Moncton)/.test(tz)) return "CAD";
-  if (EURO.includes(region)) return "EUR";
+  if (EURO.includes(region) || EURO_TZ.test(tz)) return "EUR";
   return "USD";
 }
 function toCur(amount, from, to) {
@@ -1773,6 +1810,7 @@ function renderLevels() {
   renderTrialBox();
   TRIAL_SHOWN = [];
   if (levels.length < 2) { show("trialAbout", false); return; }
+  const focus = FOCUS && !SHOWALL && !FOLDLIST && levels.some((l) => l.level === LEVEL);
   const anyPerks = levels.some((l) => l.perks && l.perks.length);
   // The visitor's own choice, else the creator's default.
   let stored = null; try { stored = localStorage.getItem("kaspass.view"); } catch {}
@@ -1786,26 +1824,36 @@ function renderLevels() {
   show("levelCompare", compare && !FOLDLIST);
   show("seeOther", FOLDLIST);
   $("seeOther").textContent = `See other ${lw(true)}`;
-  show("levelsLead", !FOLDLIST);
-  show("levelsKas", !FOLDLIST && !!$("levelsKas").textContent);
-  $("levelsTitle").textContent = FOLDLIST ? `Other ${lw(true)}` : `Choose your ${lw()}`;
+  show("levelsLead", !FOLDLIST && !focus);
+  if (NOTFOUND && !FOLDLIST) $("levelsLead").textContent = `We couldn't find that ${lw()}. Pick one below.`;
+  show("levelsKas", !FOLDLIST && !focus && !!$("levelsKas").textContent);
+  $("levelsTitle").textContent = FOLDLIST ? `Other ${lw(true)}` : focus ? `Pay for your ${lw()}` : `Choose your ${lw()}`;
+  if (focus) { show("viewSw", false); show("levelCompare", false); show("levelCards", true); }
+  show("levelsTitle", !focus);
+  renderWalletSteps(focus);
   if (compare) renderCompare();
   renderTierAbout();
   const box = $("levelCards");
   // The pay box may sit between the cards: keep it in the page while they're redrawn.
   if ($("join").parentElement === box) $("levelsBox").after($("join"));
+  if ($("wallet").parentElement === box) $("levelsBox").after($("wallet"));
+  if ($("trialAbout").closest("#levelCards")) box.before($("trialAbout"));
   box.replaceChildren();
+  box.classList.toggle("signedout", !session);
+  box.classList.toggle("focus", focus);
+  document.documentElement.classList.toggle("focus-mode", focus);
+  show("navSignin", !session && !focus);
   // The open card styles show every plan's details, and may highlight one plan.
   const OPEN = document.documentElement.classList.contains("cards-open");
-  const HL = OPEN && page && page.highlight && levels.some((l) => l.level === page.highlight) ? page.highlight : null;
+  const HL = !focus && OPEN && page && page.highlight && levels.some((l) => l.level === page.highlight) ? page.highlight : null;
   box.classList.toggle("has-hl", !!HL);
   const ages = [...new Set(Object.values(TRIALS).filter((t) => t.eligible !== false).map((t) => t.min_age_days || 0))];
   TRIAL_AGE = ages.length === 1 ? ages[0] : null;
-  for (const l of levels) {
+  for (const l of focus ? levels.filter((x) => x.level === LEVEL) : levels) {
     const o = l.offer;
     const d = document.createElement("div");
     const sel = l.level === LEVEL;
-    d.className = "lvl" + (sel && (PICKED || session) ? " sel" : "") + (HL === l.level ? " hl" : "");
+    d.className = "lvl" + (sel && (PICKED || session) ? " sel" : "") + (HL === l.level || (focus && sel) ? " hl" : "");
     const mine = held.find((h) => h.level === l.level && h.active);
     const pr = levelPrice(l);
     const price = !pr ? "Not on sale right now" : l.offer.price ? v5PriceHtml(l.offer, "card") : (pr.reg ? `<div class="was"><s>${kas(pr.reg)}</s><span class="off">${pr.pct}% off</span></div>${kas(pr.final)}` : kas(pr.final)) + `<div class="per">a ${pr.u}</div>`;
@@ -1826,7 +1874,14 @@ function renderLevels() {
       if (hasMore && !OPEN) foldCard(d, l);
       const act = d.querySelector(":scope > .trialnote, :scope > button:not(.more-t), :scope > .noact");
       if (act) act.before(Object.assign(document.createElement("div"), { className: "grow" }));
+      if (FOCUS && sel && !FOLDLIST) d.insertAdjacentHTML("afterbegin", `<p class="yourtag">Your ${escH(lw())}</p>`);
+      if (focus) {
+        const chg = Object.assign(document.createElement("button"), { type: "button", className: "chg", textContent: `Change ${lw()}` });
+        chg.onclick = () => { SHOWALL = true; renderLevels(); $("levelsBox").scrollIntoView({ behavior: "smooth", block: "start" }); };
+        d.append(chg);
+      }
       box.append(d);
+      if (focus) box.append($("wallet"));
       if (PAY === l.level) box.append($("join"));
       continue;
     }
@@ -1840,6 +1895,18 @@ function renderLevels() {
     box.append(d);
   }
   renderTrialAbout(!compare && !FOLDLIST);
+  // Beside a chosen plan, how the free trial works folds under the card's trial line.
+  if (focus && !$("trialAbout").classList.contains("hidden")) {
+    const card = box.querySelector(".lvl");
+    const at = card && card.querySelector(".trialnote");
+    if (at) {
+      const f = Object.assign(document.createElement("details"), { className: "trialfold" });
+      f.innerHTML = "<summary>How the free trial works</summary>";
+      f.append($("trialAbout"));
+      at.after(f);
+    } else show("trialAbout", false);
+  }
+  renderWalletSteps(focus);
 }
 
 // The free trial, explained once above the plans: how it works is the same for every plan, so
@@ -2486,8 +2553,11 @@ async function loadPage() {
   try { const r = await fetch("/v1/page"); page = r.ok ? await r.json() : null; } catch { page = null; }
   applyCardStyle();
   if (!page) return;
-  $("pageTag").textContent = page.tagline || "";
-  show("pageTag", !!page.tagline);
+  // With nothing picked yet, "Plan details" opens on the plan the creator highlights.
+  if (!PICKED && page.highlight && levels.some((l) => l.level === page.highlight)) LEVEL = page.highlight;
+  // The tagline is the page's heading now; "About" keeps the full set of the creator's details.
+  show("pageTag", false);
+  renderHeading(($("brandName").textContent || "").trim());
   const arrow = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3h7v7M13 3L4 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   const links = Object.keys(LINK_NAMES).filter((k) => page.links && /^https?:\/\//i.test(page.links[k] || ""))
     .map((k) => `<a href="${escH(page.links[k])}" target="_blank" rel="noopener noreferrer nofollow">${LINK_NAMES[k]}${arrow}</a>`);
@@ -2498,6 +2568,7 @@ async function loadPage() {
   const intro = richHtml(page.intro_html);
   $("introText").innerHTML = intro;
   show("introBox", !!intro);
+  renderAbout();
   if (intro) {
     // Long intros start folded, with "See more".
     $("introText").classList.add("clamp");
