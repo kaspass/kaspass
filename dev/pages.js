@@ -62,6 +62,29 @@ const text = (u, h = {}) => new Promise((resolve, reject) => {
   check('plan cards: no plan outlined before the visitor picks one', cards.every((c) => !c.sel), cards);
   const about = await p.textContent('#trialAbout').catch(() => '');
   check('plan cards: the free trial explained once, above the plans, and its plan tagged', /free for 7 days/.test(about) && /One free trial per person/.test(about) && cards.some((c) => c.trial), [about, cards]);
+  // Every amount carries its currency: never a bare "$" (en-CA and en-US browsers write CA$ and US$ as "$"),
+  // in every card style, the Compare view and on a phone, and in the dashboard's preview text.
+  const bare = (t) => (t.match(/(^|[^A-Za-z])\$\s?\d[\d,.]*|\d\s?\$(?![A-Za-z0-9{])/g) || []);
+  for (const locale of ['en-CA', 'en-US', 'fr-CA']) {
+    for (const timezoneId of ['America/Vancouver', 'America/New_York']) {
+      const ctx = await b.newContext({ locale, timezoneId, viewport: { width: 390, height: 844 } });
+      for (const st of ['kaspass', 'open', 'kaspa-vision']) {
+        const q = await ctx.newPage();
+        await q.goto(`${S}/demo?style=${st}`); await q.waitForTimeout(2500);
+        let t = await q.evaluate(() => document.body.innerText);
+        if (st === 'kaspass') { await q.click('#vCompare').catch(() => {}); await q.waitForTimeout(500); t += await q.evaluate(() => document.body.innerText); }
+        check(`prices show their currency: ${locale}, ${timezoneId}, ${st}`, !bare(t).length && /CA\$\d/.test(t), bare(t));
+        if (st === 'kaspass') {
+          // A site set to show prices in the visitor's currency: the converted amount gets its own label.
+          const v = await q.evaluate(() => { PRICE_DISPLAY = 'viewer'; FX = FX || { usd_cad: 1.38, eur_usd: 1.08 }; return shown('CAD', 10); });
+          const want = locale === 'en-US' && timezoneId === 'America/New_York' ? /^about US\$7$/ : /^CA\$10$/; // a Canadian language or time zone keeps CA$
+          check(`a converted price says its currency: ${locale}, ${timezoneId}`, want.test(v.main) && !bare(v.main + ' ' + v.plan).length, v);
+        }
+        await q.close();
+      }
+      await ctx.close();
+    }
+  }
   await b.close();
   console.log(ok ? 'ALL OK' : 'SOME FAILED');
   process.exit(ok ? 0 : 1);

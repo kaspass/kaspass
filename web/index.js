@@ -1636,9 +1636,18 @@ function money(cur, amount) {
   // Plans priced in KAS: the exact amount, the way KAS is written everywhere else on the page.
   if (cur === "KAS") return `${Number(amount).toLocaleString(undefined, { maximumFractionDigits: 2 })} KAS`;
   // Whole amounts only (CA$10, CA$101): the exact KAS is on the pay button and in the wallet.
-  const fmt = (loc) => new Intl.NumberFormat(loc, { style: "currency", currency: cur, minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount);
+  return moneyLabel(cur, amount, 0);
+}
+// Every amount carries its own currency's label (CA$10, US$7, €6, or "10 GBP"), never a bare "$".
+// The browser's currency format can't be used for this: set to Canadian English it writes CA$10
+// as "$10", and set to US English it writes US$7 as "$7".
+function moneyLabel(cur, amount, digits) {
+  const opt = { minimumFractionDigits: digits, maximumFractionDigits: digits };
+  let n;
   // Some browsers report a language tag Intl refuses (e.g. "en-US@posix"); fall back to the default.
-  try { return fmt(navigator.language); } catch { try { return fmt(undefined); } catch { return `${amount} ${cur}`; } }
+  try { n = Number(amount).toLocaleString(navigator.language, opt); } catch { try { n = Number(amount).toLocaleString(undefined, opt); } catch { n = String(amount); } }
+  const p = { CAD: "CA$", USD: "US$", EUR: "€" }[cur];
+  return p ? p + n : `${n} ${cur}`;
 }
 // A price as this site shows it: the plan's currency, or about the same in the visitor's.
 function shown(cur, amount) {

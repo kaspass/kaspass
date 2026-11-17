@@ -31,6 +31,13 @@ function busy(id, msg, sub = "Keep this page open until it's done.") {
 }
 const KAS = 100000000;
 const kas = (s) => (Number(s) / KAS).toLocaleString(undefined, { maximumFractionDigits: 2 }) + " KAS";
+// Every amount carries its own currency's label (CA$10, US$7, €6, or "10 GBP"), never a bare "$":
+// the browser's currency format writes CA$10 as "$10" on a Canadian-English computer.
+function moneyLabel(cur, amount, digits) {
+  const n = Number(amount).toLocaleString(undefined, { minimumFractionDigits: digits, maximumFractionDigits: digits });
+  const p = { CAD: "CA$", USD: "US$", EUR: "€" }[cur];
+  return p ? p + n : `${n} ${cur}`;
+}
 // Errors in plain words: no "Failed:" prefix, a capital letter, and technical text behind "Details".
 function plainSay(id, e, fallback = "That didn't work. Nothing was sent. Please try again.") {
   let t = String((e && e.message !== undefined ? e.message : e) || "").replace(/^(Failed|Error|Sign-in failed|Kaspire mobile):\s*/i, "").trim();
@@ -432,7 +439,7 @@ fetch("/v1/levels").then((r) => r.json()).then((j) => {
   const l0 = (j.levels || []).find((l) => l.price);
   if (l0) {
     const c = l0.price.currency, a = l0.price.amount;
-    const money = c === "KAS" ? `${a} KAS` : new Intl.NumberFormat(undefined, { style: "currency", currency: c, maximumFractionDigits: a % 1 ? 2 : 0 }).format(a);
+    const money = c === "KAS" ? `${a} KAS` : moneyLabel(c, a, a % 1 ? 2 : 0);
     const days = Math.round((l0.period_ms || 0) / 86400000);
     PV_PLAN = { name: l0.name || "A plan", money, per: days >= 360 ? "a year" : days >= 28 || !days ? "a month" : `every ${days} days` };
     if (typeof brandPreview === "function" && brand) brandPreview();
@@ -487,7 +494,7 @@ function vpPreview() {
   const a = Number($("vpAmount").value), cur = $("vpCur").value;
   if (!(a > 0)) { $("vpPreview").textContent = ""; return; }
   const per = card ? dur(card.settings.period_ms).replace(/^1 /, "") : "period";
-  const amt = cur === "KAS" ? `${a.toLocaleString()} KAS` : new Intl.NumberFormat(undefined, { style: "currency", currency: cur, maximumFractionDigits: 0 }).format(a);
+  const amt = cur === "KAS" ? `${a.toLocaleString()} KAS` : moneyLabel(cur, a, 0);
   const kasToday = cur !== "KAS" && VP_RATE && VP_RATE.cur === cur ? ` , about ${Math.round(a * VP_RATE.kasPer).toLocaleString()} KAS today` : "";
   const every = card && card.settings.period_ms < 86400000 ? "a month" : /^\d/.test(per) ? "every " + per : "a " + per;
   $("vpPreview").textContent = `Members will see: ${amt} ${every}${kasToday.replace(" ,", ",")}.`;
