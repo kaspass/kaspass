@@ -393,6 +393,9 @@ $("signin").onclick = async () => {
     }
     renderLevels();
     renderAccess();
+    // Pressed a plan's button before signing in: go straight on to paying for it.
+    const want = BUY_AFTER; BUY_AFTER = null;
+    if (want && levelOf(want) && !held.some((h) => h.level === want && h.active)) openPay(want);
   } catch (e) {
     if (e.code === 4001) setError("Cancelled in Kaspire. Press the button to try again.");
     else oops("walletErr", e, "That didn't work. Please try again.");
@@ -1443,7 +1446,7 @@ function renderWalletSteps(focus) {
   let n = $("walletNext");
   if (!n) { n = Object.assign(document.createElement("p"), { id: "walletNext", className: "wallet-next" }); $("getWallet").after(n); }
   const trial = !!$("levelCards").querySelector(".lvl .trialnote");
-  n.textContent = focus && !session ? (trial ? "2. Then choose Start my free trial or Buy on your plan, and approve it in Kaspire." : "2. Then press Buy on your plan and approve the payment in Kaspire.") : "";
+  n.textContent = focus && !session ? (trial ? "2. Then choose Start my free trial or Buy on your plan, and approve it in Kaspire." : "2. Then check the amount and approve the payment in Kaspire.") : "";
   show("walletNext", focus && !session);
 }
 $("navSignin").onclick = (e) => { e.preventDefault(); $("wallet").scrollIntoView({ behavior: "smooth", block: "start" }); };
@@ -1719,6 +1722,13 @@ function v5PriceHtml(o, big) {
     const fp = shown(p.currency, f.amount);
     const until = new Date(f.until_ms - 1).toLocaleDateString(undefined, { dateStyle: "medium" });
     const u = unitOf(o.period_ms);
+    // The open card styles follow kaspa.vision: the early-price badge, the price with the regular
+    // one crossed out after it, today's KAS, then one plain line.
+    if (big === "card" && document.documentElement.classList.contains("cards-open")) {
+      return `<div class="cs-early">Early price until ${escH(until)}</div>${escH(fp.main)} <span class="per">a ${escH(u)}</span> <s class="cs-reg">${escH(reg.main)}</s>${localLine(p.currency, f.amount)}` +
+        (f.kas_today != null ? `<div class="kasline">about ${kasAbout(f.kas_today)} today</div>` : "") +
+        `<div class="kasline fnote">${escH(fp.main)} for your first ${escH(u)} if you join by ${escH(until)}. Then ${escH(reg.main)} a ${escH(u)}.</div>`;
+    }
     return `<div class="was"><s>${escH(reg.main)}</s><span class="off">Founding</span></div>${escH(fp.main)}${big === "card" ? localLine(p.currency, f.amount) : ""}` +
       `<div class="kasline fnote">For your first ${escH(u)}, then ${escH(reg.main)} a ${escH(u)}. Founding price until ${escH(until)}.${f.kas_today != null ? ` About ${kasAbout(f.kas_today)} today.` : ""}</div>`;
   }
@@ -1759,9 +1769,10 @@ function levelPrice(l) {
 }
 
 // Every level below this one, by name: "Core and Plus".
+// "Everything in <the plan one step down>": each plan already includes everything below it.
 function belowNames(l) {
-  const below = levels.slice(0, l.rank).map((x) => escH(x.name));
-  return below.length > 1 ? `${below.slice(0, -1).join(", ")} and ${below[below.length - 1]}` : below[0] || "";
+  const below = levels.slice(0, l.rank);
+  return below.length ? escH(below[below.length - 1].name) : "";
 }
 
 // Cards side by side, or one table comparing what each level includes.
@@ -1841,6 +1852,8 @@ function renderLevels() {
   box.replaceChildren();
   box.classList.toggle("signedout", !session);
   box.classList.toggle("focus", focus);
+  box.classList.toggle("paying", focus && !!PAY && !!session);
+  box.style.setProperty("--cols", String(Math.min(3, Math.max(1, levels.length))));
   document.documentElement.classList.toggle("focus-mode", focus);
   show("navSignin", !session && !focus);
   // The open card styles show every plan's details, and may highlight one plan.
@@ -1881,8 +1894,9 @@ function renderLevels() {
         d.append(chg);
       }
       box.append(d);
-      if (focus) box.append($("wallet"));
-      if (PAY === l.level) box.append($("join"));
+      if (OPEN) { const ab = d.querySelector(".det .about"); if (ab) { ab.classList.add("lsub"); d.querySelector(".ln").after(ab); } }
+      if (focus) box.append(PAY === l.level && session ? $("join") : $("wallet"));
+      else if (PAY === l.level) box.append($("join"));
       continue;
     }
     if (hasMore && !OPEN) foldCard(d, l);
@@ -2059,7 +2073,8 @@ function v5Card(d, l) {
     if (sp) lp.innerHTML = `<div class="was"><s>${escH(money(l.price.currency, l.founding ? l.founding.amount : l.price.amount))}</s><span class="off">${sp}% off</span></div>${escH(money(l.price.currency, amt))} <span class="per">a ${escH(unitOf(l.period_ms))}</span>${localLine(l.price.currency, amt)}${l.price.currency === "KAS" ? "" : `<div class="kasline">about ${kasRound(Math.round(o.monthly_sompi * (100 - sp) / 100))} today</div>`}`;
     // The button says what the wallet actually pays: KAS. The currency price above is for reference.
     const kasNow = l.price.currency === "KAS" ? money("KAS", amt) : `about ${kasRound(Math.round(o.monthly_sompi * amt / Math.max(0.0001, l.price.amount)))}`;
-    const b = btn(`Buy, ${kasNow}`, (promo && promo.claim) || trialOn ? "ghost" : "");
+    // Signed out, the button leads to signing in, so it says so plainly; the KAS is on the card.
+    const b = btn(v5Site() ? `Choose this ${lw()}` : `Buy, ${kasNow}`, (promo && promo.claim) || trialOn ? "ghost" : "");
     b.disabled = !!o.price_unavailable || o.available === false;
     return;
   }
@@ -2210,14 +2225,25 @@ async function chooseKind(id, kind) {
 }
 
 // The pay box, under the card that was pressed: what you get, what you pay now and next year.
-let PAY = null;
+let PAY = null, BUY_AFTER = null;
 async function openPay(id) {
   if (LEVEL !== id) await selectLevel(id, { quiet: true });
-  PAY = id;
+  // Paying keeps the plan in view: that plan alone, with the sign-in (signed out) or the pay box
+  // (signed in) beside it, and the other plans one tap away behind "Change plan".
+  if (levels.length > 1) { FOCUS = true; SHOWALL = false; PICKED = true; }
   hideDone();
+  if (v5Site() && !session) {
+    PAY = null;
+    BUY_AFTER = id;
+    renderLevels();
+    $("levelsBox").scrollIntoView({ behavior: "smooth", block: "start" });
+    setTimeout(() => { try { $("signin").focus({ preventScroll: true }); } catch {} }, 400);
+    return;
+  }
+  PAY = id;
   renderLevels();
   renderPay();
-  $("join").scrollIntoView({ behavior: "smooth", block: "start" });
+  (FOCUS ? $("levelsBox") : $("join")).scrollIntoView({ behavior: "smooth", block: "start" });
 }
 function renderPay() {
   const v5 = v5Site();

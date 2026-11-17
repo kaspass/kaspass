@@ -280,6 +280,8 @@
   .lvl.owned .lp { font-size: 18px; }
   /* The pay box, right under the card that was pressed. */
   #levelCards > #join { grid-column: 1 / -1; margin: 4px 0 6px; border-color: var(--teal-dim); }
+  #levelCards.focus > #join { grid-column: auto; margin: 0; }
+  #levelCards.focus.paying .lvl > button:not(.chg) { display: none; }
   .payinfo { margin: 6px 0 4px; }
   .payinfo dd b { color: var(--text); }
   .payinfo .sub { color: var(--muted); font-size: 13px; }

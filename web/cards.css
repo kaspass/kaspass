@@ -32,21 +32,32 @@
 :root[data-cards="kaspa-vision"] a { color: var(--teal); }
 
 /* The plans get the page's full width (up to about 1200 px), straight on the background. */
-.cards-open .wrap { max-width: 900px; }
+/* kaspa.vision's widths: the header and the plans span about 1150 px; text stays under 760 px,
+   left-aligned with the plans; the boxes under the plans are centred at 760 px. */
+.cards-open .wrap { max-width: 1198px; padding-left: max(24px, env(safe-area-inset-left, 0px)); padding-right: max(24px, env(safe-area-inset-right, 0px)); }
+.cards-open .returnbar, .cards-open .titlerow, .cards-open p.tag, .cards-open #levelsLead, .cards-open #levelsKas, .cards-open #trialAbout { max-width: 760px; }
+.cards-open .kpstrip .in { max-width: 1150px; }
+.cards-open .wrap > section.panel:not(#levelsBox), .cards-open .wrap > footer { max-width: 760px; margin-left: auto; margin-right: auto; box-sizing: border-box; }
 .cards-open #levelsBox { background: transparent; border: 0; padding: 8px 0; }
 .cards-open #levelsBox h2 { font-size: 26px; }
-.cards-open .levels { grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 20px; align-items: stretch; margin-top: 20px; }
-.cards-open #levelCards.focus { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; }
-@media (max-width: 760px) { .cards-open .levels, .cards-open #levelCards.focus { grid-template-columns: minmax(0, 1fr); max-width: 520px; margin-inline: auto; } }
+.cards-open .levels { grid-template-columns: repeat(var(--cols, 3), minmax(0, 1fr)); gap: 24px; align-items: stretch; margin-top: 24px; }
+.cards-open #levelCards.focus { grid-template-columns: minmax(0, 367px) minmax(0, 1fr); align-items: start; }
+.cards-open #levelCards.focus > #wallet, .cards-open #levelCards.focus > #join { max-width: 560px; }
+@media (max-width: 940px) { .cards-open .levels, .cards-open #levelCards.focus { grid-template-columns: minmax(0, 1fr); max-width: 520px; margin-inline: auto; } }
 
-.cards-open .lvl { padding: 28px; border-radius: 18px; background: var(--cs-card); border: 1px solid var(--line); gap: 18px; cursor: default; }
-.cards-open .lvl.hl { border: 2px solid var(--teal); padding: 27px; }
+.cards-open .lvl { padding: 32px; border-radius: 16px; background: var(--cs-card); border: 1px solid var(--line); gap: 18px; cursor: default; }
+.cards-open .lvl.hl { border: 2px solid var(--teal); padding: 31px; }
 .cards-open .lvl.sel { border-color: var(--line); box-shadow: 0 0 0 3px color-mix(in srgb, var(--teal) 25%, transparent); }
 .cards-open .lvl.hl.sel { border-color: var(--teal); }
 .cards-open .lvl .ln { font: 700 26px/1.2 var(--font-head); }
 .cards-open .lvl .lp { font: 700 44px/1.1 var(--font-head); font-variant-numeric: tabular-nums; }
-.cards-open .lvl .lp .per { font: 400 16px/1.4 var(--font-body); color: var(--muted); }
+.cards-open .lvl .lp .cs-reg { white-space: nowrap; }
+.cards-open .lvl .lp .per { font: 400 16px/1.4 var(--font-body); color: var(--muted); margin-left: 2px; white-space: nowrap; }
 .cards-open .lvl .lp s { font: 400 18px var(--font-body); color: var(--muted); }
+.cards-open .lvl .lp s.cs-reg { font-size: 18px; margin-left: 2px; }
+.cards-open .lvl .cs-early { display: flex; width: fit-content; margin-bottom: 6px; padding: 4px 10px; border-radius: 999px; background: var(--cs-warm); color: var(--cs-card); font: 600 12px/1.3 var(--font-body); letter-spacing: .8px; text-transform: uppercase; }
+.cards-open .lvl .lsub { border: 0; padding: 0; margin: -10px 0 0; font-size: 16px; line-height: 1.45; color: var(--muted); }
+.cards-open .lvl .lsub p { margin: 0; }
 .cards-open .lvl .lp .was { margin-bottom: 6px; gap: 8px; }
 .cards-open .lvl .lp .have { font-size: 26px; }
 .cards-open .lvl.owned .lp { font-size: 26px; }
@@ -58,7 +69,7 @@
 .cards-open .lvl .cs-save { display: flex; background: var(--teal); color: var(--accent-ink); margin-bottom: 6px; }
 .cards-open .lvl .cvline { font: 400 14px/1.45 var(--font-body); color: var(--muted); margin-top: 6px; }
 .cards-open .lvl .kasline {
-  display: inline-flex; align-items: center; gap: 8px; width: fit-content; margin-top: 10px; padding: 6px 12px;
+  display: flex; align-items: center; gap: 8px; width: fit-content; margin-top: 10px; padding: 6px 12px;
   border-radius: 999px; background: var(--cs-inset); border: 1px solid var(--line); font: 600 14px/1.3 var(--font-body); color: var(--text);
 }
 .cards-open .lvl .kasline::before {
@@ -72,14 +83,14 @@
 
 /* What each plan includes: always shown, as a plain list. */
 .cards-open .lvl .det { gap: 10px; padding-top: 0; }
-.cards-open .lvl .det .about { font-size: 15px; color: var(--muted); }
-.cards-open .lvl .inc { font-size: 15px; color: var(--cs-ink2); }
-.cards-open .lvl ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; font-size: 15px; color: var(--cs-ink2); flex: none; }
+.cards-open .lvl .det .about { font-size: 16px; color: var(--muted); }
+.cards-open .lvl .inc { font-size: 16px; color: var(--cs-ink2); }
+.cards-open .lvl ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; font-size: 16px; color: var(--cs-ink2); flex: none; }
 .cards-open .lvl ul li { margin: 0; }
 .cards-open .lvl .trialnote, .cards-open .lvl .trialno, .cards-open .lvl .noact, .cards-open .lvl .until { font-size: 14px; margin-top: 0; }
 
 /* Pill buttons: filled, or outlined beside a highlighted plan. */
-.cards-open .lvl > button:not(.more-t):not(.chg) { min-height: 52px; margin-top: 0; padding: 0 16px; border-radius: 999px; font-size: 16px; width: 100%; white-space: nowrap; }
+.cards-open .lvl > button:not(.more-t):not(.chg) { min-height: 52px; margin-top: 0; padding: 0 16px; border-radius: 999px; font-size: 17px; font-weight: 700; width: 100%; white-space: nowrap; }
 .cards-open .lvl > button.ghost,
 .cards-open .levels.has-hl .lvl:not(.hl) > button:not(.more-t) { background: transparent; color: var(--text); border: 1px solid var(--teal); }
 .cards-open .lvl > button + button, .cards-open .lvl > .trialhint + button { margin-top: -6px; }
@@ -99,6 +110,7 @@
 .cards-open .lvl .promo button.claim { min-height: 48px; margin-top: 4px; border-radius: 999px; font-size: 16px; }
 
 @media (max-width: 700px) {
+  .cards-open .wrap { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
   .cards-open .lvl { padding: 24px; }
   .cards-open .lvl.hl { padding: 23px; }
   .cards-open .lvl .lp { font-size: 38px; }
