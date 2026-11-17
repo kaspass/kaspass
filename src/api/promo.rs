@@ -46,6 +46,23 @@ pub struct Promo {
     /// Ended early by the creator.
     #[serde(default)]
     pub ended: bool,
+    /// An emoji shown before the line on the plan's card (empty = the 🎁). A promotion picture
+    /// (brand.rs, "promo") takes its place when there is one.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub emoji: String,
+}
+
+/// A short emoji (or emoji sequence): no letters, digits, spaces or control characters, at most
+/// 8 characters. Anything else is refused.
+fn clean_emoji(e: &str) -> Result<String, String> {
+    let e = e.trim();
+    if e.is_empty() {
+        return Ok(String::new());
+    }
+    if e.chars().count() > 8 || e.chars().any(|c| c.is_ascii() || c.is_control() || c.is_whitespace() || c.is_alphanumeric()) {
+        return Err("the emoji box takes one emoji, for example 🐈 or 🎁".into());
+    }
+    Ok(e.to_string())
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -318,6 +335,9 @@ fn public_view(s: &AppState, p: &Promo, claims: usize, now: i64, paused: bool) -
         "end_ms": p.end_ms,
         "claims_left": (p.max_claims > 0).then(|| p.max_claims.saturating_sub(claims as u64)),
         "once_per_nft": p.needs.list.iter().any(|n| n.kind == "nft"),
+        // The creator's picture for the promotion (for example the token's logo), if they added one.
+        "picture": super::brand::picture_url(&super::brand::load(&s.home), "promo"),
+        "emoji": if p.emoji.is_empty() { "🎁" } else { p.emoji.as_str() },
     })
 }
 
@@ -949,6 +969,8 @@ pub struct PromoRequest {
     /// Start a new campaign (token ids and wallets can claim again) instead of editing this one.
     #[serde(default)]
     new_campaign: bool,
+    #[serde(default)]
+    emoji: String,
 }
 
 /// `POST /v1/creator/promo`: sets the campaign (or edits the running one).
@@ -958,6 +980,7 @@ pub async fn creator_set(State(s): State<AppState>, Json(req): Json<PromoRequest
     if label.is_empty() {
         return Err(bad("write the line the plan's card shows, e.g. \"NACHO holders: your first month is free\""));
     }
+    let emoji = clean_emoji(&req.emoji).map_err(bad)?;
     let lv = s.at(Some(req.level.trim()))?;
     if lv.card.placeholder || !is_v5(&lv.card) {
         return Err(bad("choose one of this site's plans"));
@@ -989,7 +1012,7 @@ pub async fn creator_set(State(s): State<AppState>, Json(req): Json<PromoRequest
         Some(o) if !req.new_campaign && !o.ended => o.id.clone(),
         _ => format!("c{}", &auth::random_token()[..10]),
     };
-    let p = Promo { id, label, level: lv.card.covenant_id.clone(), needs, start_ms: req.start_ms, end_ms: req.end_ms, max_claims: req.max_claims, ended: false };
+    let p = Promo { id, label, level: lv.card.covenant_id.clone(), needs, start_ms: req.start_ms, end_ms: req.end_ms, max_claims: req.max_claims, ended: false, emoji };
     save_promo(&s.home, &p).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     warm_history(&p);
     println!("dashboard: promotion \"{}\" set ({})", p.label, p.needs.describe());
@@ -1009,9 +1032,19 @@ pub async fn creator_end(State(s): State<AppState>, Json(req): Json<SessionBody>
 mod tests {
     use super::*;
 
+    #[test]
+    fn emoji_box_takes_only_emoji() {
+        assert_eq!(clean_emoji(" 🐈 ").unwrap(), "🐈");
+        assert_eq!(clean_emoji("").unwrap(), "");
+        assert_eq!(clean_emoji("🐈\u{200d}⬛").unwrap(), "🐈\u{200d}⬛");
+        assert!(clean_emoji("cat").is_err());
+        assert!(clean_emoji("<b>").is_err());
+        assert!(clean_emoji("🎁🎁🎁🎁🎁🎁🎁🎁🎁").is_err());
+    }
+
     fn promo(mode: &str) -> Promo {
         let needs: Needs = serde_json::from_value(serde_json::json!({"match": mode, "list": [{"kind": "nft", "tick": "NACHO", "min": 2}, {"kind": "token", "tick": "NACHO", "min": 1000}]})).unwrap();
-        Promo { id: "c1".into(), label: "x".into(), level: "l".into(), needs: needs.checked().unwrap(), start_ms: 100, end_ms: 200, max_claims: 2, ended: false }
+        Promo { id: "c1".into(), label: "x".into(), level: "l".into(), needs: needs.checked().unwrap(), start_ms: 100, end_ms: 200, max_claims: 2, ended: false, emoji: String::new() }
     }
 
     fn checked(nft_ok: bool, token_ok: bool) -> crate::holdings::Checked {

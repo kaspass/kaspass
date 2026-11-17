@@ -16,17 +16,21 @@ const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&l
 const T = (id, name, note, l, d) => ({ id, note, theme: { kaspass_theme: 1, name, light: { bg: l[0], text: l[1], accent: l[2], card: l[3] }, dark: { bg: d[0], text: d[1], accent: d[2], card: d[3] }, corners: "round", head_font: "", body_font: "" } });
 const PRESETS = [
   T("kaspass", "KasPass", "The teal it comes with", ["#f2f5f4", "#0f2321", "#0b7a6e", "#ffffff"], ["#0b1615", "#f2f5f4", "#49d9c8", "#12211f"]),
-  T("mono", "Mono", "Black and white, nothing else", ["#e4e4e2", "#141414", "#2a2a2a", "#f4f4f2"], ["#0d0d0d", "#ededeb", "#e8e8e6", "#181818"]),
-  T("gold", "Gold", "Warm gold on deep brown", ["#efe4cb", "#2a1f0c", "#7a5200", "#f9f2e1"], ["#14100a", "#f4ead6", "#f0b93a", "#1f1810"]),
-  T("glacier", "Glacier", "Ice blue on deep navy", ["#dbe6f1", "#0f1c2c", "#1d4f91", "#edf3f9"], ["#0a131f", "#e6eef8", "#7fb8ff", "#121e2e"]),
-  T("ember", "Ember", "Orange on charcoal", ["#faf4ee", "#2a1810", "#b03d0e", "#ffffff"], ["#16100d", "#f4e9e0", "#ff8f52", "#211814"]),
-  T("rose", "Rose", "Soft pink by day, dusk rose at night", ["#fbf3f4", "#2b1820", "#a92657", "#ffffff"], ["#171014", "#f5e8ec", "#ff8fb1", "#22171c"]),
+  // Mono, Gold, Glacier and Violet use Kaspa Vision's exact colours (KasTax reply 52), so the same
+  // name means the same theme in both apps.
+  T("mono", "Mono", "Black and white, nothing else", ["#d9d9d9", "#121212", "#262626", "#e7e7e7"], ["#0b0b0c", "#f2f2f2", "#e6e6e6", "#19191b"]),
+  T("gold", "Gold", "Warm gold on deep brown", ["#e6d9bb", "#1d1607", "#6a4700", "#f0e6cf"], ["#0d0b07", "#f6f0e2", "#f2c14e", "#1b1710"]),
+  T("glacier", "Glacier", "Ice blue on deep navy", ["#cfdcea", "#0c1a29", "#174a87", "#dfe8f2"], ["#0a1118", "#e8f0f8", "#8cc4ff", "#16222f"]),
+  T("violet", "Violet", "Lavender on deep purple", ["#d9d0ee", "#19112e", "#4f2fb0", "#e7e0f6"], ["#0f0b1a", "#efeafc", "#b39cff", "#1c1631"]),
+  // Our own. Their ids differ from Kaspa Vision's "ember" and "rose", which now mean project themes there.
+  T("kp-ember", "Ember", "Orange on charcoal", ["#faf4ee", "#2a1810", "#b03d0e", "#ffffff"], ["#16100d", "#f4e9e0", "#ff8f52", "#211814"]),
+  T("kp-rose", "Rose", "Soft pink by day, dusk rose at night", ["#fbf3f4", "#2b1820", "#a92657", "#ffffff"], ["#171014", "#f5e8ec", "#ff8fb1", "#22171c"]),
 ];
 // "My page's look": a copy of the colours from Your page, Look and brand, added once they're known.
 let PAGE = null;
 const presets = () => (PAGE ? [PRESETS[0], PAGE].concat(PRESETS.slice(1)) : PRESETS);
 // Old ids keep working if a preset is ever renamed.
-const ALIASES = { classic: "kaspass", sakura: "rose" };
+const ALIASES = { classic: "kaspass", sakura: "kp-rose", ember: "kp-ember", rose: "kp-rose" };
 const presetById = (id) => presets().find((p) => p.id === (ALIASES[id] || id));
 const HEX = /^#[0-9a-f]{6}$/i, KEYS = ["bg", "card", "text", "accent"];
 const clone = (o) => JSON.parse(JSON.stringify(o));

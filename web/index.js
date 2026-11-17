@@ -2015,7 +2015,9 @@ function v5Card(d, l) {
 function promoBlock(d, l) {
   const box = document.createElement("div");
   box.className = "promo";
-  box.innerHTML = `<div class="pl"><span aria-hidden="true">🎁</span> ${escH(PROMO.label)}</div><div class="pr">${escH(cap(PROMO.requirement))}. Ends ${escH(fmtDate(PROMO.end_ms))}${PROMO.claims_left != null ? ` · ${PROMO.claims_left} left` : ""}.</div><div id="promoStatus" class="small" role="status"></div><div id="promoErr" class="err small" role="alert"></div>`;
+  // Token names never split across lines ("KCC-" then "20").
+  const nb = (t) => escH(t).replace(/([A-Za-z]{2,})-(\d+)/g, "$1\u2011$2");
+  box.innerHTML = `<div class="pl">${PROMO.picture ? `<img class="ppic" alt="" src="${escH(PROMO.picture)}">` : `<span aria-hidden="true" class="pemoji">${escH(PROMO.emoji || "🎁")}</span>`} <span>${nb(PROMO.label)}</span></div><div class="pr">${nb(cap(PROMO.requirement))}. Ends ${escH(fmtDate(PROMO.end_ms))}${PROMO.claims_left != null ? ` · ${PROMO.claims_left} left` : ""}.</div><div id="promoStatus" class="small" role="status"></div><div id="promoErr" class="err small" role="alert"></div>`;
   (d.querySelector(".also") || d.querySelector(".lp")).after(box);
   const me = PROMO_ME;
   const note = (t) => box.insertAdjacentHTML("beforeend", `<div class="pn">${escH(t)}</div>`);

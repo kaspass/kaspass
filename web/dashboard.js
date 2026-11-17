@@ -424,10 +424,19 @@ function renderSteps3() {
   show("payTitle", true);
   $("launchTitle").textContent = "Step 2. Create your first plan";
 }
-let FX = null, PLAN_CUR = null;
+let FX = null, PLAN_CUR = null, PV_PLAN = null;
 fetch("/v1/levels").then((r) => r.json()).then((j) => {
   FX = j.fx || null;
   PLAN_CUR = ((j.levels || []).map((l) => l.price && l.price.currency).find((c) => c && c !== "KAS")) || null;
+  // Look and brand's preview shows the cheapest real plan instead of a made-up one.
+  const l0 = (j.levels || []).find((l) => l.price);
+  if (l0) {
+    const c = l0.price.currency, a = l0.price.amount;
+    const money = c === "KAS" ? `${a} KAS` : new Intl.NumberFormat(undefined, { style: "currency", currency: c, maximumFractionDigits: a % 1 ? 2 : 0 }).format(a);
+    const days = Math.round((l0.period_ms || 0) / 86400000);
+    PV_PLAN = { name: l0.name || "A plan", money, per: days >= 360 ? "a year" : days >= 28 || !days ? "a month" : `every ${days} days` };
+    if (typeof brandPreview === "function" && brand) brandPreview();
+  }
   if (VAULT != null) drawVault();
   applyV5(!!j.v5);
   if (j.launch_no_fee) { $("lFeeNote").textContent = "No KasPass fee: every payment goes to you in full."; $("ovFee").textContent = $("payFee").textContent = "None"; }
@@ -1830,6 +1839,12 @@ function brandPreview() {
   $("bPvBack").textContent = host ? "← Back to " + host : "";
   const name = (data && data.creator_name) || (data && data.name) || "Your page";
   $("bPvName").textContent = name; $("bPvTitle").textContent = name;
+  if (PV_PLAN) {
+    const cardEl = $("bPv").querySelector(".bpv-card");
+    cardEl.querySelector(".bpv-cn").textContent = PV_PLAN.name;
+    const pr = cardEl.querySelector(".bpv-price"); pr.firstChild.textContent = PV_PLAN.money + " "; pr.querySelector("span").textContent = PV_PLAN.per;
+    cardEl.querySelector(".bpv-btn").textContent = "Buy for " + PV_PLAN.money;
+  }
   const notes = [];
   if (f.light) notes.push(contrastNote(f.light, "Light"));
   if (f.dark) notes.push(contrastNote(f.dark, "Dark"));
@@ -1873,6 +1888,7 @@ async function loadBrand() {
   fillPictures();
   brandPreview();
 }
+window.brandSayFn = (m, e) => brandSay(m, e);
 function brandSay(msg, err) {
   $("bStatus").textContent = err ? "" : msg; show("bStatus", !err && !!msg);
   $("bErr").textContent = err ? msg : ""; show("bErr", !!err && !!msg);
@@ -1906,6 +1922,8 @@ $("bReset").onclick = async () => {
 };
 document.querySelectorAll(".bpic").forEach((box) => {
   const kind = box.dataset.kind;
+  // The promotion's picture reports in the Promotions tab, not in Look and brand.
+  const brandSay = kind === "promo" ? (m, bad) => { say("prErr", bad ? m : ""); say("prStatus", bad ? "" : m === "Uploaded. It's on your page now." ? "Uploaded. It's on the plan's card now." : m); } : window.brandSayFn;
   box.querySelector("input[type=file]").addEventListener("change", async (ev) => {
     let file = ev.target.files && ev.target.files[0];
     ev.target.value = "";
@@ -1926,7 +1944,7 @@ document.querySelectorAll(".bpic").forEach((box) => {
 });
 // Big photos are shrunk in the browser before upload (nothing leaves your computer until then):
 // at most 512 px for a logo or photo and 1600 px wide for a banner, as WebP.
-const PIC = { logo: { px: 512, max: 300000 }, photo: { px: 512, max: 400000 }, banner: { px: 1600, max: 1500000 } };
+const PIC = { logo: { px: 512, max: 300000 }, photo: { px: 512, max: 400000 }, banner: { px: 1600, max: 1500000 }, promo: { px: 256, max: 300000 } };
 async function shrinkPicture(file, kind) {
   const lim = PIC[kind];
   if (!/^image\/(png|jpeg|webp)$/.test(file.type)) return file; // SVG and others go as they are
@@ -2117,6 +2135,7 @@ function renderPromo() {
   if (p && !$("prNeeds").children.length) {
     sel.value = p.level;
     $("prLabel").value = p.label;
+    $("prEmoji").value = p.emoji || "";
     $("prMatch").value = p.needs.match;
     p.needs.list.forEach(needRow);
     $("prStart").value = toLocalInput(p.start_ms);
@@ -2174,7 +2193,7 @@ $("prGo").onclick = async () => {
   const start_ms = new Date($("prStart").value).getTime(), end_ms = new Date($("prEnd").value).getTime();
   if (!(start_ms > 0 && end_ms > 0)) { say("prErr", "Pick a start and an end."); return; }
   try {
-    const r = await fetch("/v1/creator/promo", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ session, label: $("prLabel").value, level: $("prLevel").value, needs: { match: $("prMatch").value, list }, start_ms, end_ms, max_claims: Number($("prMax").value) || 0, new_campaign: $("prNew").checked }) });
+    const r = await fetch("/v1/creator/promo", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ session, label: $("prLabel").value, level: $("prLevel").value, needs: { match: $("prMatch").value, list }, start_ms, end_ms, max_claims: Number($("prMax").value) || 0, new_campaign: $("prNew").checked, emoji: $("prEmoji").value.trim() }) });
     if (!r.ok) throw new Error(await r.text());
     $("prNew").checked = false;
     say("prStatus", "Saved. Your page shows it now.");

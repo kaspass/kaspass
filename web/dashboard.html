@@ -646,6 +646,13 @@ body:has(#creatorArea.hidden) .main { padding-bottom: 64px; }
 }
 #recStatus:not(:empty), #recErr:not(.hidden) { margin-top: var(--s3); }
 
+.prlook { display: grid; grid-template-columns: minmax(0, 220px) minmax(0, 440px); gap: var(--s4); margin-top: var(--s3); align-items: start; }
+.premoji input { font-size: 22px; max-width: 110px; display: block; }
+.premoji .hint { display: block; margin-top: 6px; }
+@media (max-width: 860px) { .prlook { grid-template-columns: 1fr; } }
+.prpic { max-width: 440px; }
+.prpic .bprev { height: 72px; width: 72px; border-radius: 50%; }
+.prpic .bprev img { width: 100%; height: 100%; object-fit: cover; }
 </style>
 </head>
 <body>
@@ -1087,6 +1094,8 @@ body:has(#creatorArea.hidden) .main { padding-bottom: 64px; }
           <label>Plan<select id="prLevel"></select></label>
           <label class="wide">Line on the plan's card<input id="prLabel" maxlength="80" placeholder="NACHO holders: your first month is free"></label>
         </div>
+        <div class="prlook"><label class="premoji">Emoji before the line<input id="prEmoji" maxlength="8" placeholder="🎁" autocomplete="off" aria-describedby="prEmojiHint"><span class="hint" id="prEmojiHint">One emoji, for example 🐈. Saved with the promotion.</span></label>
+        <div class="bpic prpic" data-kind="promo"><div class="small">Or a picture, shown instead of the emoji: for example the token's logo</div><div class="bprev"><img alt="" class="hidden"><span class="small">None</span></div><div class="row"><label class="ghostbtn">Upload<input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" hidden></label><button class="ghost sm brm hidden">Remove</button></div><div class="small muted">Square works best, up to 300 KB. It stays until you remove it, so change it when you start a different promotion. Uploading saves it straight away.</div></div></div>
         <div class="small" style="margin:14px 0 6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span><b>Who qualifies:</b> holders of</span> <select id="prMatch" style="width:auto"><option value="all">all of these</option><option value="any">any one of these</option></select></div>
         <div id="prNeeds"></div>
         <button class="ghost sm" id="prAddNeed" style="margin-top:6px">Add something to hold</button>

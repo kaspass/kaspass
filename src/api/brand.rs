@@ -43,6 +43,9 @@ pub(crate) struct Brand {
     pub photo: Option<String>,
     #[serde(default)]
     pub banner: Option<String>,
+    /// The holder promotion's picture (see KINDS).
+    #[serde(default)]
+    pub promo: Option<String>,
     /// With both palettes, which one a first-time visitor sees: "light" (the default, like most
     /// sites), "dark", or "device" (their device's setting). Visitors can switch with the
     /// sun/moon button either way, and a partner site can pass `?theme=light|dark`.
@@ -303,7 +306,9 @@ fn fonts_css_path(home: &std::path::Path) -> std::path::PathBuf {
 // ---------------------------------------------------------------------------
 // Pictures
 
-pub(crate) const KINDS: [(&str, usize); 3] = [("logo", 300_000), ("photo", 400_000), ("banner", 1_500_000)];
+/// "promo": the running holder promotion's picture (for example the token's logo), shown on its
+/// plan's card instead of the gift and in `/v1/promo` for partner sites.
+pub(crate) const KINDS: [(&str, usize); 4] = [("logo", 300_000), ("photo", 400_000), ("banner", 1_500_000), ("promo", 300_000)];
 
 /// The picture's type from its first bytes, or why it's refused.
 pub(crate) fn sniff(bytes: &[u8]) -> Result<&'static str, String> {
@@ -381,7 +386,7 @@ fn content_type(ext: &str) -> &'static str {
 }
 
 fn store_picture(home: &std::path::Path, kind: &str, bytes: &[u8]) -> Result<Brand, ApiError> {
-    let (_, max) = KINDS.iter().find(|(k, _)| *k == kind).ok_or_else(|| bad("the picture must be a logo, photo or banner"))?;
+    let (_, max) = KINDS.iter().find(|(k, _)| *k == kind).ok_or_else(|| bad("the picture must be a logo, photo, banner or promotion picture"))?;
     if bytes.len() > *max {
         return Err(bad(format!("that picture is too large (the {kind} can be up to {} KB)", max / 1000)));
     }
@@ -402,6 +407,7 @@ fn store_picture(home: &std::path::Path, kind: &str, bytes: &[u8]) -> Result<Bra
     match kind {
         "logo" => b.logo = name,
         "photo" => b.photo = name,
+        "promo" => b.promo = name,
         _ => b.banner = name,
     }
     b.version = now();
@@ -414,6 +420,7 @@ pub(crate) fn picture_url(b: &Brand, kind: &str) -> Option<String> {
     let f = match kind {
         "logo" => &b.logo,
         "photo" => &b.photo,
+        "promo" => &b.promo,
         _ => &b.banner,
     };
     let ex = super::examples::current().map(|e| format!("&ex={}", e.id)).unwrap_or_default();
@@ -442,6 +449,7 @@ pub(crate) fn public_json(b: &Brand) -> serde_json::Value {
         "corners": b.corners, "back_url": b.back_url, "back_host": back_host(&b.back_url),
         "start": if b.start.is_empty() { "light" } else { b.start.as_str() },
         "logo": picture_url(b, "logo"), "photo": picture_url(b, "photo"), "banner": picture_url(b, "banner"),
+        "promo": picture_url(b, "promo"),
         "version": b.version,
     })
 }
@@ -482,6 +490,7 @@ async fn picture(State(s): State<AppState>, axum::extract::Path(kind): axum::ext
         "logo" => b.logo,
         "photo" => b.photo,
         "banner" => b.banner,
+        "promo" => b.promo,
         _ => None,
     };
     let Some(f) = f else { return (StatusCode::NOT_FOUND, "not found").into_response() };
@@ -617,7 +626,8 @@ async fn remove_picture(State(s): State<AppState>, Json(req): Json<RemoveRequest
         "logo" => &mut b.logo,
         "photo" => &mut b.photo,
         "banner" => &mut b.banner,
-        _ => return Err(bad("the picture must be a logo, photo or banner")),
+        "promo" => &mut b.promo,
+        _ => return Err(bad("the picture must be a logo, photo, banner or promotion picture")),
     };
     if let Some(f) = slot.take() {
         let _ = std::fs::remove_file(s.home.join(BRAND_DIR).join(f));

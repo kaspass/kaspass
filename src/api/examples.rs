@@ -173,6 +173,7 @@ pub fn build(s: &AppState, id: &str) -> Option<Example> {
         logo: Some("logo.svg".into()),
         photo: Some("photo.svg".into()),
         banner: Some("banner.svg".into()),
+        promo: None,
         start: sp.start.into(),
         version: 1,
     };
