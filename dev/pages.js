@@ -76,9 +76,9 @@ const text = (u, h = {}) => new Promise((resolve, reject) => {
         check(`prices show their currency: ${locale}, ${timezoneId}, ${st}`, !bare(t).length && /CA\$\d/.test(t), bare(t));
         if (st === 'kaspass') {
           // A site set to show prices in the visitor's currency: the converted amount gets its own label.
-          const v = await q.evaluate(() => { PRICE_DISPLAY = 'viewer'; FX = FX || { usd_cad: 1.38, eur_usd: 1.08 }; return shown('CAD', 10); });
-          const want = locale === 'en-US' && timezoneId === 'America/New_York' ? /^about US\$7$/ : /^CA\$10$/; // a Canadian language or time zone keeps CA$
-          check(`a converted price says its currency: ${locale}, ${timezoneId}`, want.test(v.main) && !bare(v.main + ' ' + v.plan).length, v);
+          const v = await q.evaluate(() => { PRICE_DISPLAY = 'viewer'; FX = FX || { usd_cad: 1.38, eur_usd: 1.08 }; const r = { main: shown('CAD', 10).main, line: localLine('CAD', 10).replace(/<[^>]+>/g, '') }; PRICE_DISPLAY = 'plan'; return r; });
+          const want = locale === 'en-US' && timezoneId === 'America/New_York' ? /^about US\$7 in your currency$/ : /^$/; // a Canadian language or time zone keeps CA$
+          check(`CA$ first, plus about the visitor's own: ${locale}, ${timezoneId}`, v.main === 'CA$10' && want.test(v.line) && !bare(v.main + ' ' + v.line).length, v);
         }
         await q.close();
       }
