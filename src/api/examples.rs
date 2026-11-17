@@ -162,7 +162,7 @@ pub fn build(s: &AppState, id: &str) -> Option<Example> {
         about.insert(l.card.covenant_id.clone(), a.to_string());
         perks.insert(l.card.covenant_id.clone(), p.iter().map(|x| x.to_string()).collect());
     }
-    let page = PageProfile { tagline: sp.tagline.into(), intro_html: sp.intro.into(), links: Default::default(), view: "cards".into(), show_count: false, price_display: String::new(), hide_club: true };
+    let page = PageProfile { tagline: sp.tagline.into(), intro_html: sp.intro.into(), links: Default::default(), view: "cards".into(), show_count: false, price_display: String::new(), hide_club: true, card_style: String::new(), highlight: String::new() };
     let brand = brand::Brand {
         light: Some(palette(sp.light)),
         dark: Some(palette(sp.dark)),

@@ -1474,6 +1474,7 @@ function renderWelcome() {
       if (n) { $("pageBy").textContent = "by " + n; show("pageBy"); }
     } else if (n) { $("pageTitle").textContent = n; document.title = `${n} · ${pw({ cap: true })}`; }
     if (n && !$("brandName").textContent) $("brandName").textContent = (site.club_name || n);
+    renderTrust();
     if (n) $("wLead").innerHTML = `This is <b>${escH(n)}</b>'s ${escH(pw())}. When you join, it lives in your own Kaspa wallet: nobody can take it away, and there's no card to enter.`; });
   renderHolderRow();
   renderCreatorRow();
@@ -1527,6 +1528,15 @@ function pickReturn(allowed) {
   $("returnLink").href = RETURN;
   $("returnGo").href = RETURN;
   show("returnBar");
+  renderTrust();
+}
+// Coming from the creator's own site: say plainly whose payment page this is, and its address.
+function renderTrust() {
+  if (!RETURN || $("result").classList.contains("returning")) return;
+  let host = "";
+  try { host = new URL(RETURN).host; } catch {}
+  const name = ($("brandName").textContent || $("pageTitle").textContent || "").trim() || host;
+  $("returnMsg").innerHTML = `Paying for <b>${escH(name)}</b>. This page, <b>${escH(location.host)}</b>, is ${escH(name)}'s own payment site, built on KasPass. Once you've joined, a button takes you back to ${escH(host)}.`;
 }
 let returnShown = false;
 function renderReturn(active) {
@@ -1654,7 +1664,7 @@ function v5PriceHtml(o, big) {
     const until = new Date(f.until_ms - 1).toLocaleDateString(undefined, { dateStyle: "medium" });
     const u = unitOf(o.period_ms);
     return `<div class="was"><s>${escH(reg.main)}</s><span class="off">Founding</span></div>${escH(fp.main)}` +
-      `<div class="kasline">For your first ${escH(u)}, then ${escH(reg.main)} a ${escH(u)}. Founding price until ${escH(until)}.${f.kas_today != null ? ` About ${kasAbout(f.kas_today)} today.` : ""}</div>`;
+      `<div class="kasline fnote">For your first ${escH(u)}, then ${escH(reg.main)} a ${escH(u)}. Founding price until ${escH(until)}.${f.kas_today != null ? ` About ${kasAbout(f.kas_today)} today.` : ""}</div>`;
   }
   return `${escH(reg.main)}${per}${kasLine}`;
 }
@@ -1766,13 +1776,17 @@ function renderLevels() {
   // The pay box may sit between the cards: keep it in the page while they're redrawn.
   if ($("join").parentElement === box) $("levelsBox").after($("join"));
   box.replaceChildren();
+  // The open card styles show every plan's details, and may highlight one plan.
+  const OPEN = document.documentElement.classList.contains("cards-open");
+  const HL = OPEN && page && page.highlight && levels.some((l) => l.level === page.highlight) ? page.highlight : null;
+  box.classList.toggle("has-hl", !!HL);
   const ages = [...new Set(Object.values(TRIALS).filter((t) => t.eligible !== false).map((t) => t.min_age_days || 0))];
   TRIAL_AGE = ages.length === 1 ? ages[0] : null;
   for (const l of levels) {
     const o = l.offer;
     const d = document.createElement("div");
     const sel = l.level === LEVEL;
-    d.className = "lvl" + (sel && (PICKED || session) ? " sel" : "");
+    d.className = "lvl" + (sel && (PICKED || session) ? " sel" : "") + (HL === l.level ? " hl" : "");
     const mine = held.find((h) => h.level === l.level && h.active);
     const pr = levelPrice(l);
     const price = !pr ? "Not on sale right now" : l.offer.price ? (l.offer.founding ? v5PriceHtml(l.offer) : v5PriceHtml(l.offer, "card")) : (pr.reg ? `<div class="was"><s>${kas(pr.reg)}</s><span class="off">${pr.pct}% off</span></div>${kas(pr.final)}` : kas(pr.final)) + `<div class="per">a ${pr.u}</div>`;
@@ -1781,21 +1795,23 @@ function renderLevels() {
     const hasMore = !!(about || lower || (l.perks && l.perks.length));
     d.innerHTML = `<div class="ln">${escH(l.name)}${mine ? `<span class="yours">Your ${escH(lw())}</span>` : ""}</div>` +
       `<div class="lp">${price}</div>` +
-      `<div class="det"${CLOSED.has(l.level) || !hasMore ? " hidden" : ""}>` +
+      `<div class="det"${(CLOSED.has(l.level) && !OPEN) || !hasMore ? " hidden" : ""}>` +
       (about ? `<div class="rich about">${about}</div>` : "") +
       (lower ? `<div class="inc">Everything in ${lower}${l.perks && l.perks.length ? ", plus:" : ""}</div>` : "") +
       (l.perks && l.perks.length ? `<ul>${l.perks.map((x) => `<li>${escH(x)}</li>`).join("")}</ul>` : `<ul></ul>`) +
       `</div>`;
     if (v5Site()) {
       v5Card(d, l);
-      if (hasMore) foldCard(d, l);
+      const save = OPEN && !d.classList.contains("owned") ? saveWords(l) : "";
+      if (save) d.querySelector(".lp").insertAdjacentHTML("afterbegin", `<div class="cs-save">${escH(save)}</div>`);
+      if (hasMore && !OPEN) foldCard(d, l);
       const act = d.querySelector(":scope > .trialnote, :scope > button:not(.more-t), :scope > .noact");
       if (act) act.before(Object.assign(document.createElement("div"), { className: "grow" }));
       box.append(d);
       if (PAY === l.level) box.append($("join"));
       continue;
     }
-    if (hasMore) foldCard(d, l);
+    if (hasMore && !OPEN) foldCard(d, l);
     const b = document.createElement("button");
     b.textContent = sel ? `Viewing ${l.name}` : `Choose ${l.name}`;
     b.className = sel ? "ghost" : "";
@@ -2017,13 +2033,13 @@ function promoBlock(d, l) {
   box.className = "promo";
   // Token names never split across lines ("KCC-" then "20").
   const nb = (t) => escH(t).replace(/([A-Za-z]{2,})-(\d+)/g, "$1\u2011$2");
-  box.innerHTML = `<div class="pl">${PROMO.picture ? `<img class="ppic" alt="" src="${escH(PROMO.picture)}">` : `<span aria-hidden="true" class="pemoji">${escH(PROMO.emoji || "🎁")}</span>`} <span>${nb(PROMO.label)}</span></div><div class="pr">${nb(cap(PROMO.requirement))}. Ends ${escH(fmtDate(PROMO.end_ms))}${PROMO.claims_left != null ? ` · ${PROMO.claims_left} left` : ""}.</div><div id="promoStatus" class="small" role="status"></div><div id="promoErr" class="err small" role="alert"></div>`;
+  box.innerHTML = `<div class="pl">${PROMO.picture ? `<img class="ppic" alt="" src="${escH(PROMO.picture)}">` : `<span aria-hidden="true" class="pemoji">${escH(PROMO.emoji || "🎁")}</span>`} <span class="ptx"><span class="ptag">Running now</span><span class="plab">${nb(PROMO.label)}</span></span></div><div class="pr">${nb(cap(PROMO.requirement))}. <span class="pe">Ends ${escH(fmtDate(PROMO.end_ms))}${PROMO.claims_left != null ? ` · ${PROMO.claims_left} left` : ""}.</span></div><div id="promoStatus" class="small" role="status"></div><div id="promoErr" class="err small" role="alert"></div>`;
   (d.querySelector(".also") || d.querySelector(".lp")).after(box);
   const me = PROMO_ME;
   const note = (t) => box.insertAdjacentHTML("beforeend", `<div class="pn">${escH(t)}</div>`);
   if (!session) { note("Sign in to check whether your wallet qualifies."); return { claim: false }; }
   if (!me) { note("Checking your wallet…"); return { claim: false }; }
-  if (me.error) { note(me.error); return { claim: false }; }
+  if (me.error) { note(cap(me.error)); return { claim: false }; }
   if (me.eligible) {
     const did = (me.rows || []).filter((r) => r.ok && (r.kind === "migrated" || r.kind === "burned")).map((r) => `${r.kind} ${fmtNum(r.have)} ${r.tick}`);
     if (did.length) note(`You ${did.join(" and ")}: your free ${unitOf(l.period_ms)} is ready.`);
@@ -2418,9 +2434,38 @@ function richHtml(html) {
 }
 
 let page = null;
+// The plan cards' style: a link's ?style= (a built-in style, remembered for this tab by
+// theme-boot.js), else the creator's choice. Kaspa Vision's colours need day or night to be
+// decided, so the page's own starting look is made explicit.
+const CARD_STYLES = ["kaspass", "open", "kaspa-vision"];
+function applyCardStyle() {
+  const r = document.documentElement;
+  let st = null;
+  try { st = sessionStorage.getItem("kaspass.style"); } catch {}
+  if (!CARD_STYLES.includes(st)) st = page && CARD_STYLES.includes(page.card_style) ? page.card_style : "kaspass";
+  r.dataset.cards = st;
+  r.classList.toggle("cards-open", st !== "kaspass");
+  if (st === "kaspa-vision" && !r.dataset.theme) {
+    const b = $("themeToggle");
+    const start = b && !b.classList.contains("hidden") ? b.dataset.start : "dark";
+    r.dataset.theme = start === "device" ? (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light") : start === "light" ? "light" : "dark";
+  }
+}
+// "Save 17% vs monthly": a longer plan against the shortest one, at regular prices.
+function saveWords(l) {
+  if (!l.price || !l.period_ms) return "";
+  const base = levels.filter((x) => x.price && x.price.currency === l.price.currency && x.period_ms).sort((a, b) => a.period_ms - b.period_ms)[0];
+  if (!base || base.period_ms >= l.period_ms || !base.price.amount) return "";
+  const n = Math.round(l.period_ms / base.period_ms);
+  if (n < 2) return "";
+  const pct = Math.round((1 - l.price.amount / (n * base.price.amount)) * 100);
+  const unit = { day: "daily", week: "weekly", month: "monthly", year: "yearly" }[unitOf(base.period_ms)];
+  return pct >= 5 && unit ? `Save ${pct}% vs ${unit}` : "";
+}
 const LINK_NAMES = { website: "Website", x: "X", tiktok: "TikTok", youtube: "YouTube", instagram: "Instagram", telegram: "Telegram", discord: "Discord" };
 async function loadPage() {
   try { const r = await fetch("/v1/page"); page = r.ok ? await r.json() : null; } catch { page = null; }
+  applyCardStyle();
   if (!page) return;
   $("pageTag").textContent = page.tagline || "";
   show("pageTag", !!page.tagline);

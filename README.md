@@ -109,7 +109,7 @@ So an indexer can't invent or alter a pass, and anyone can run their own from th
 | `GET /v1/passes` | Every live, verified pass |
 | `GET /v1/check?address=...` | `{ address, active, passes, levels }`: active on any level (each pass says its level) |
 | `GET /v1/member?address=...` | Everything in `/v1/check`, plus per pass `renew_opens_ms`, `renews_from_ms`, `renewal` (`currency`, `amount`, `kas_today`) and `periods_prepaid`, and the wallet's `payments` (`time_ms`, `kind`, `kas`, `txid`, `level`) and `payin_orders` (`level`, `status`, `txid` and `refunds`; an open order's pay-in address `pay_to` and `created_ms` only when signed in as that wallet): for a partner's "Membership" page. Public, like `/v1/check`; no currency amounts for past payments |
-| `GET /v1/page` | The page's tagline, intro, links, default view, member count (if shown) and each level's description |
+| `GET /v1/page` | The page's tagline, intro, links, default view, card style (`card_style`, one of `card_styles`) and highlighted plan (`highlight`, a level id or empty), member count (if shown) and each level's description |
 | `GET /v1/levels` | Every level on sale, lowest first, with its name, perks, offer, `rank`, `access_rank` payout `vault` and `keeper`, plus the club name and the word for levels |
 | `GET /v1/promo` | The running holder promotion, if any: `active`, `label`, `level`, `requirement` (in words), `needs`, `start_ms`, `end_ms`, `claims_left`, `picture` (a path, or null) |
 | `POST /v1/promo/check` | `{ session }` → does the signed-in member qualify (`eligible`, `reason`, and what each requirement found) |
@@ -261,6 +261,15 @@ It's on for test networks only. On mainnet it stays off, with no switch, until a
 
 **Coming from a partner site:** `serve --allow-return https://example.com` (https only, repeatable) lets other sites link to the membership page with `?return=https://example.com/some/page`. The page then says where the visitor came from, and once their access is active it shows "Back to example.com" to that exact page. Any other return address is ignored, and the choice is remembered for the tab, so it survives signing in. After a payment (or a promotion claim) on the page, the way back adds `paid=1` to that address, so the partner site can say "confirming your payment" instead of "welcome back". It's only a hint: the partner should still check the pass itself.
 
+**Card styles:** in the dashboard (Your page › Plans on your page › Card style) the creator picks how the plan cards look:
+- **KasPass** (the default): compact cards whose details fold away.
+- **Open:** every plan's details shown, bigger prices, pill buttons, and the promotion as a boxed offer ("Running now", picture, line, who qualifies, end date), in the creator's own colours and fonts.
+- **Kaspa Vision:** Open, in Kaspa Vision's exact colours, fonts and sizes (day and night, following `?theme=`). It uses Space Grotesk, bundled with the program.
+
+The Open styles can also **highlight a plan** (a thicker outline, and the other plans' buttons become outlined), and show "Save N% vs monthly" on a longer plan that costs less than the shortest one at regular prices. Saved in `page.json` (`card_style`, `highlight`). A link may pick a style with `?style=kaspass`, `?style=open` or `?style=kaspa-vision`; anything else is ignored, and the choice is remembered for the tab. A style only changes how the cards look, never where buttons go.
+
+**Saying whose payment page it is:** when a visitor arrives with an allowed `?return=`, the top of the page says "Paying for <name>. This page, <its address>, is <name>'s own payment site, built on KasPass", with the way back. The pages send `frame-ancestors 'none'`, so no other site can show them inside a frame.
+
 **Opening one step from a partner site:** add `?level=<id>&do=manage`, `do=renew` or `do=topup`. After the member signs in, the page opens that plan's Manage menu, its renewal payment (when renewals are open; otherwise the menu, which says when they open) or its top-up box. The link never pays or ends anything by itself: the member still presses the button and approves in their wallet, and cancelling or closing still takes two clicks. If the wallet doesn't hold that plan, the page just shows the plan's card with its Buy or Upgrade button. A plan you hold also has a "Manage your membership" button on its card.
 
 **Transactions in progress** show an animated hourglass with "Keep this page open until it's done", and the browser asks before leaving while one is being sent.
@@ -273,7 +282,7 @@ Only the creator's wallet can sign these actions: the contracts check the creato
 
 ## KasPass's own website
 
-On KasPass's own host names (`kaspass.app` and `www.kaspass.app`, or the comma-separated list in `KASPASS_HOME_HOSTS`), the server shows KasPass's home page at `/`: what KasPass is, where the money goes, what it costs, a live example and the example creators. The membership page moves to `/demo` (older links with `?level=`, `?return=`, `?invite=`, `?do=`, `?theme=` or `?k=` are sent there; other queries, such as `?utm_source=`, just show the home page). Every other site is unchanged.
+On KasPass's own host names (`kaspass.app` and `www.kaspass.app`, or the comma-separated list in `KASPASS_HOME_HOSTS`), the server shows KasPass's home page at `/`: what KasPass is, where the money goes, what it costs, a live example and the example creators. The membership page moves to `/demo` (older links with `?level=`, `?return=`, `?invite=`, `?do=`, `?theme=`, `?style=` or `?k=` are sent there; other queries, such as `?utm_source=`, just show the home page). Every other site is unchanged.
 
 - **"Get your own page"** (`/creators`) has a short contact form. Notes are kept in `contact-requests.json` (plain text, up to 1,000; when it's full, new notes are refused and never pushed out) and shown in the dashboard's Overview, where the owner can delete them. The owner gets one Telegram or Discord message per 10 minutes when notes arrive. Limits: 3 notes a day per visitor, a small allowance for notes that look like junk, a hidden box for bots, and a signed time stamp in the page (a note sent less than 4 seconds after the page loaded is refused).
 - **Contact details** come from `contact.json` next to the data, so nothing personal sits in the code: `{"telegram": "handle", "email": "hello@example.com"}` (either or both). The home page, `/creators`, `/privacy`, `/terms` and `/help` show them; without the file they point to the form.

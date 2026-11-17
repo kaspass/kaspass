@@ -168,7 +168,7 @@ pub async fn root(State(s): State<AppState>, headers: HeaderMap, uri: axum::http
     if is_home(&headers) {
         // Older links to the membership page (`/?level=...`, `?return=...`) keep working; other
         // queries (`?utm_source=`, `?fbclid=`) just show the home page.
-        const PAGE_KEYS: [&str; 6] = ["level=", "return=", "invite=", "do=", "theme=", "k="];
+        const PAGE_KEYS: [&str; 7] = ["level=", "return=", "invite=", "do=", "theme=", "style=", "k="];
         if let Some(q) = uri.query().filter(|q| q.split('&').any(|kv| PAGE_KEYS.iter().any(|k| kv.starts_with(k)))) {
             return axum::response::Redirect::to(&format!("/demo?{q}")).into_response();
         }

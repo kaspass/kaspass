@@ -160,6 +160,8 @@
   .lvl .promo .pl { font-weight: 600; }
   .lvl .promo .pl .ppic { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; float: left; margin: 2px 10px 4px 0; }
   .lvl .promo .pr { clear: both; }
+  .lvl .promo .ptag { display: none; }
+  .lvl .promo .ptx { display: inline; }
   .lvl .promo .pr, .lvl .promo .pn { font-size: 13px; color: var(--muted); margin-top: 4px; }
   .lvl .promo button.claim { width: 100%; margin-top: 10px; }
   .lvl .lp s { color: var(--muted); font-weight: 400; font-size: 14px; margin-right: 6px; }
@@ -367,6 +369,7 @@
 </style>
 <link rel="stylesheet" href="/brand/fonts.css?v=0">
 <link rel="stylesheet" href="/brand/theme.css?v=0">
+<link rel="stylesheet" href="/assets/cards.css">
 </head>
 <body>
 <div class="kpstrip"><div class="in"><a class="kpmark" href="https://kaspass.app/" target="_blank" rel="noopener"><svg viewBox="19.6 14 64.7 72" aria-hidden="true"><path fill="currentColor" d="M28 61.61 28 86 42 86 42 73.36ZM28 38.39 42 26.64 42 14 28 14ZM41.39 50 84.28 14 62.51 14 19.61 50 62.51 86 84.28 86Z"/></svg><span>Memberships by <b>KasPass</b></span></a><span class="net" id="net">Testnet-10</span></div></div>
@@ -389,7 +392,7 @@
     </nav>
   </header>
   <div class="brandbanner hidden" id="brandBanner"><img id="brandBannerImg" alt=""></div>
-  <div class="returnbar hidden" id="returnBar"><span>You came from <b id="returnHost"></b>. Once you've joined, a button takes you back.</span><a id="returnLink" href="#">Back to <span class="rh"></span></a></div>
+  <div class="returnbar hidden" id="returnBar"><span id="returnMsg">You came from <b id="returnHost"></b>. Once you've joined, a button takes you back.</span><a id="returnLink" href="#">Back to <span class="rh"></span></a></div>
   <div class="titlerow"><img id="brandPhoto" class="avatar hidden" alt=""><div>
   <p class="kind">Membership page</p>
   <h1 class="page" id="pageTitle">Membership</h1>

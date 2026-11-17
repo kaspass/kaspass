@@ -1173,6 +1173,8 @@ const ASSETS: &[(&str, &str, &[u8])] = &[
     ("club.js", "text/javascript; charset=utf-8", include_bytes!("../web/club.js")),
     ("help.js", "text/javascript; charset=utf-8", include_bytes!("../web/help.js")),
     ("fonts.css", "text/css; charset=utf-8", include_bytes!("../web/fonts.css")),
+    // The plan card styles ("open" and "kaspa-vision").
+    ("cards.css", "text/css; charset=utf-8", include_bytes!("../web/cards.css")),
     // KasPass's own website (kaspass.app).
     // Kaspire mobile (WalletConnect) for the creator dashboard.
     ("kaspire-mobile.js", "text/javascript; charset=utf-8", include_bytes!("../web/kaspire-mobile.js")),
@@ -1185,6 +1187,9 @@ const ASSETS: &[(&str, &str, &[u8])] = &[
     ("fonts/inter-latin-700-normal.woff2", "font/woff2", include_bytes!("../web/fonts/inter-latin-700-normal.woff2")),
     ("fonts/montserrat-latin-600-normal.woff2", "font/woff2", include_bytes!("../web/fonts/montserrat-latin-600-normal.woff2")),
     ("fonts/montserrat-latin-800-normal.woff2", "font/woff2", include_bytes!("../web/fonts/montserrat-latin-800-normal.woff2")),
+    // The "Kaspa Vision" card style's headings and prices: Space Grotesk (SIL Open Font License).
+    ("fonts/space-grotesk-latin-500-normal.woff2", "font/woff2", include_bytes!("../web/fonts/space-grotesk-latin-500-normal.woff2")),
+    ("fonts/space-grotesk-latin-700-normal.woff2", "font/woff2", include_bytes!("../web/fonts/space-grotesk-latin-700-normal.woff2")),
     // kaspass.app's own typefaces (SIL Open Font License): Bricolage Grotesque and Instrument Sans.
     ("fonts/bricolage-grotesque-latin-600-normal.woff2", "font/woff2", include_bytes!("../web/fonts/bricolage-grotesque-latin-600-normal.woff2")),
     ("fonts/bricolage-grotesque-latin-800-normal.woff2", "font/woff2", include_bytes!("../web/fonts/bricolage-grotesque-latin-800-normal.woff2")),
@@ -2008,6 +2013,21 @@ struct PageProfile {
     /// Leave the holder club (its link, section and sign-up) off the membership page.
     #[serde(default)]
     hide_club: bool,
+    /// How the plan cards look: one of `CARD_STYLES` (empty means "kaspass").
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    card_style: String,
+    /// A plan to draw attention to (its id), in the card styles that do that. Empty for none.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    highlight: String,
+}
+
+/// The card styles a creator (or a link's `?style=`) may pick. Built in, so a link can't bring
+/// its own: "kaspass" (folded details), "open" (every plan's details shown, in the creator's
+/// own look) and "kaspa-vision" (open, in Kaspa Vision's exact colours and fonts).
+pub(crate) const CARD_STYLES: [&str; 3] = ["kaspass", "open", "kaspa-vision"];
+
+fn card_style_of(v: &str) -> &'static str {
+    CARD_STYLES.iter().copied().find(|c| *c == v).unwrap_or("kaspass")
 }
 
 fn page_profile(home: &std::path::Path) -> PageProfile {
@@ -2044,6 +2064,8 @@ async fn page_info(State(s): State<AppState>) -> Json<serde_json::Value> {
         "tagline": p.tagline, "intro_html": p.intro_html, "links": p.links,
         "view": if p.view == "compare" { "compare" } else { "cards" },
         "show_count": p.show_count, "price_display": if p.price_display == "viewer" { "viewer" } else { "plan" }, "hide_club": p.hide_club, "members": members, "about": levels, "about_raw": raw,
+        "card_style": card_style_of(&p.card_style), "card_styles": CARD_STYLES,
+        "highlight": if s.levels.iter().any(|l| l.card.covenant_id == p.highlight) { p.highlight.as_str() } else { "" },
     }))
 }
 
@@ -2064,6 +2086,10 @@ struct PageRequest {
     price_display: String,
     #[serde(default)]
     hide_club: bool,
+    #[serde(default)]
+    card_style: String,
+    #[serde(default)]
+    highlight: String,
 }
 
 async fn creator_page(State(s): State<AppState>, Json(req): Json<PageRequest>) -> Result<Json<serde_json::Value>, ApiError> {
@@ -2085,9 +2111,15 @@ async fn creator_page(State(s): State<AppState>, Json(req): Json<PageRequest>) -
             links.insert(k.clone(), u);
         }
     }
-    let p = PageProfile { tagline: clean_text(&req.tagline, 140), intro_html: intro, links, view: if req.view == "compare" { "compare".into() } else { "cards".into() }, show_count: req.show_count, price_display: if req.price_display == "viewer" { "viewer".into() } else { "plan".into() }, hide_club: req.hide_club };
+    if !req.card_style.is_empty() && !CARD_STYLES.contains(&req.card_style.as_str()) {
+        return Err(bad("unknown card style"));
+    }
+    if !req.highlight.is_empty() && !s.levels.iter().any(|l| l.card.covenant_id == req.highlight) {
+        return Err(bad("that plan isn't on this site"));
+    }
+    let p = PageProfile { tagline: clean_text(&req.tagline, 140), intro_html: intro, links, view: if req.view == "compare" { "compare".into() } else { "cards".into() }, show_count: req.show_count, price_display: if req.price_display == "viewer" { "viewer".into() } else { "plan".into() }, hide_club: req.hide_club, card_style: card_style_of(&req.card_style).into(), highlight: req.highlight.clone() };
     std::fs::write(s.home.join(PAGE_FILE), serde_json::to_string_pretty(&p).unwrap_or_default()).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    Ok(Json(serde_json::json!({ "tagline": p.tagline, "intro_html": p.intro_html, "links": p.links, "view": p.view, "show_count": p.show_count, "price_display": p.price_display, "hide_club": p.hide_club })))
+    Ok(Json(serde_json::json!({ "tagline": p.tagline, "intro_html": p.intro_html, "links": p.links, "view": p.view, "show_count": p.show_count, "price_display": p.price_display, "hide_club": p.hide_club, "card_style": p.card_style, "highlight": p.highlight })))
 }
 
 #[derive(Deserialize)]

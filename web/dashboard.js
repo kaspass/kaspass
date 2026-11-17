@@ -1641,16 +1641,30 @@ async function loadPageCfg() {
     $("pgCount").checked = !!pageCfg.show_count;
     $("pgClub").checked = !pageCfg.hide_club;
     $("pgPriceDisplay").value = pageCfg.price_display === "viewer" ? "viewer" : "plan";
+    $("pgCardStyle").value = ["open", "kaspa-vision"].includes(pageCfg.card_style) ? pageCfg.card_style : "kaspass";
+    fillHighlight(pageCfg.highlight || "");
   }
   if (!lvAbout.focused()) lvAbout.set((pageCfg.about_raw || pageCfg.about || {})[card.covenant_id] || "");
 }
+// "Highlight a plan": every plan on the site, by name.
+async function fillHighlight(want) {
+  const sel = $("pgHighlight");
+  try {
+    const lv = (await (await fetch("/v1/levels", { cache: "no-store" })).json()).levels || [];
+    sel.replaceChildren(new Option("None", ""), ...lv.map((l) => new Option(l.name, l.level)));
+  } catch {}
+  sel.value = [...sel.options].some((o) => o.value === want) ? want : "";
+  showHighlight();
+}
+function showHighlight() { show("pgHighlightL", $("pgCardStyle").value !== "kaspass"); }
+$("pgCardStyle").onchange = showHighlight;
 async function savePage() {
   say("pgMsg", ""); say("pgErr", "");
   $("pgGo").disabled = true;
   try {
     const links = Object.fromEntries(LINK_KINDS.map((k) => [k, $("pgL_" + k).value.trim()]));
     const r = await fetch("/v1/creator/page", { method: "POST", headers: { "content-type": "application/json" },
-      body: JSON.stringify({ session, tagline: $("pgTagline").value, intro_html: pgIntro.get(), links, view: $("pgView").value, show_count: $("pgCount").checked, price_display: $("pgPriceDisplay").value, hide_club: !$("pgClub").checked }) });
+      body: JSON.stringify({ session, tagline: $("pgTagline").value, intro_html: pgIntro.get(), links, view: $("pgView").value, show_count: $("pgCount").checked, price_display: $("pgPriceDisplay").value, hide_club: !$("pgClub").checked, card_style: $("pgCardStyle").value, highlight: $("pgCardStyle").value === "kaspass" ? "" : $("pgHighlight").value }) });
     if (!r.ok) throw new Error(await r.text());
     const j = await r.json();
     await saveNames("tNameMsg");
