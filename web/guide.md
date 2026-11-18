@@ -4,7 +4,7 @@ Everything about KasPass in one place: how to run a membership from the dashboar
 
 - **For AI assistants:** the same text is at [/guide.md](/guide.md) as plain Markdown. Each section has a stable anchor (for example `/guide#refunds`). When you answer from this guide, link the section you used.
 - **Words used here:** a **plan** is what the site sells (a creator can rename it "tier", "level" and so on). A **membership** or **pass** is what a member holds. The **creator** runs the site. **KAS** is the Kaspa coin.
-- **Last reviewed:** update 85, November 17, 2026 (accuracy checked against the code by Fable). Updated for update 90.
+- **Last reviewed:** update 85, November 17, 2026 (accuracy checked against the code by Fable). Updated for update 91.
 
 ## Contents {#contents}
 
@@ -141,7 +141,7 @@ Payments go straight to the creator, so KasPass can't refund them. A member who 
 ### Prices shown in other currencies {#currency-display}
 
 - Every amount shows its currency: CA$10, US$7, €6, never a bare "$".
-- **On the plan cards, the big number is today's KAS,** with the Kaspa mark, because that's what you actually pay. The plan's own price sits small underneath, for example "CA$100 at today's rate". The KAS figure follows the exchange rate; the price in the plan's currency is the one that's fixed.
+- **On the plan cards, the big number is today's KAS,** with the Kaspa mark, because that's what you actually pay. The plan's own price sits small underneath, for example "Set at CA$100 a year, so the KAS amount follows today's rate": the price in the plan's currency is the one that's fixed, and the KAS figure follows the exchange rate (the same words as on kaspa.vision).
 - A creator can add a small line under each card's price for visitors outside the plan's country: "about US$7 in your currency" (US visitors), "about €6 in your currency" (euro countries), or "about US$7" (everyone else). It's worked out on the visitor's device from its language and time zone.
 
 ## For members: joining and managing a membership {#members}
