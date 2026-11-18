@@ -773,6 +773,14 @@ async function refresh() {
 
 // ---- Overview across every plan --------------------------------------------
 let ALL = null;
+// A plan name as members see it: {tax_year} becomes the tax year on sale now (it moves on every
+// November 1, Pacific time) and {next_tax_year} the one after, as the membership page shows it.
+// The edit boxes keep the text as written.
+function taxFill(name) {
+  const d = new Date(Date.now() - 7 * 3600000);
+  const ty = d.getUTCMonth() >= 10 ? d.getUTCFullYear() : d.getUTCFullYear() - 1;
+  return String(name || "").replaceAll("{tax_year}", String(ty)).replaceAll("{next_tax_year}", String(ty + 1));
+}
 async function loadAllTotals() {
   const lv = (data && data.levels) || [];
   if (lv.length < 2) { ALL = null; render(); return; }
@@ -782,12 +790,12 @@ async function loadAllTotals() {
     const per = [];
     for (const d of each) {
       if (!d) continue;
-      per.push({ name: d.name || "", active: Number(d.totals.active || 0) });
+      per.push({ name: taxFill(d.name), active: Number(d.totals.active || 0) });
       for (const k of ["earned_sompi", "active", "renewals", "upgrades", "autorenewals", "sales", "trials"]) t[k] += Number(d.totals[k] || 0);
       t.auto_renewing += d.v4 ? Number(d.v4.auto_renewing || 0) : 0;
-      for (const e of d.events || []) ev.push({ ...e, plan: d.name || "" });
+      for (const e of d.events || []) ev.push({ ...e, plan: taxFill(d.name) });
     }
-    ALL = { totals: t, per, events: ev.sort((a, b) => (a.at_ms || 0) - (b.at_ms || 0)) };
+    ALL = { totals: t, per, events: ev.sort((a, b) => (a.time_ms || a.at_ms || 0) - (b.time_ms || b.at_ms || 0)) };
   } catch { ALL = null; }
   render();
 }
@@ -1233,14 +1241,15 @@ function render() {
     inp.addEventListener("keydown", (e) => { if (e.key === "Enter") inp.blur(); });
   });
 
-  const label = { monthly: "Monthly sale", lifetime: "Lifetime sale", term: "Commitment sale", trial: "Free trial", self_trial: "Free trial", renew: "Renewal", autorenew: "Auto-renewal", upgrade: "Upgrade to lifetime", transfer: "Resale royalty" };
-  const row = (e, plan) => `<tr><td>${label[e.kind] || escHtml(e.kind)}${plan ? ` <span class="muted small">${escHtml(plan)}</span>` : ""}</td><td data-l="Paid">${kas(e.amount_sompi)}</td><td data-l="To you">${kas(e.creator_sompi)}</td><td data-l="KasPass fee">${e.fee_sompi ? kas(e.fee_sompi) : "none"}</td></tr>`;
-  const head = "<tr><th>What</th><th>Paid</th><th>To you</th><th>KasPass fee</th></tr>";
-  const ev = [...data.events].reverse().slice(0, 50);
-  $("activity").innerHTML = head + (ev.length ? ev.map((e) => row(e)).join("") : `<tr><td colspan="4" class="muted">No payments yet.</td></tr>`);
+  const label = { monthly: "Sale", lifetime: "Lifetime sale", term: "Commitment sale", trial: "Free trial", self_trial: "Free trial", renew: "Renewal", autorenew: "Auto-renewal", upgrade: "Upgrade to lifetime", transfer: "Resale royalty" };
+  const when = (e) => (e.time_ms ? new Date(e.time_ms).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "");
+  const row = (e, plan) => `<tr><td data-l="Date" class="nowrap">${escHtml(when(e))}</td><td>${label[e.kind] || escHtml(e.kind)}${plan ? ` <span class="muted small">${escHtml(plan)}</span>` : ""}</td><td data-l="Paid">${kas(e.amount_sompi)}</td><td data-l="To you">${kas(e.creator_sompi)}</td><td data-l="KasPass fee">${e.fee_sompi ? kas(e.fee_sompi) : "none"}</td></tr>`;
+  const head = "<tr><th>Date</th><th>What</th><th>Paid</th><th>To you</th><th>KasPass fee</th></tr>";
+  const ev = [...data.events].sort((a, b) => (a.time_ms || 0) - (b.time_ms || 0)).reverse().slice(0, 50);
+  $("activity").innerHTML = head + (ev.length ? ev.map((e) => row(e)).join("") : `<tr><td colspan="5" class="muted">No payments yet.</td></tr>`);
   // The overview shows the latest few, from every plan.
   const evAll = ALL ? [...ALL.events].reverse().slice(0, 5) : ev.slice(0, 5);
-  $("recent").innerHTML = head + (evAll.length ? evAll.map((e) => row(e, ALL ? e.plan : "")).join("") : `<tr><td colspan="4" class="muted">No payments yet.</td></tr>`);
+  $("recent").innerHTML = head + (evAll.length ? evAll.map((e) => row(e, ALL ? e.plan : "")).join("") : `<tr><td colspan="5" class="muted">No payments yet.</td></tr>`);
   $("recent").classList.add("stack");
 
   renderFixed(lane);
@@ -2092,7 +2101,16 @@ async function loadInvites() {
   box.innerHTML = "";
   if (!list.length) { box.innerHTML = '<p class="muted small">No invite links yet.</p>'; return; }
   const when = (ms) => new Date(ms).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
-  for (const i of list) {
+  // Cancelled and expired links fold away in a closed bar under the others, so the links still
+  // in play are what the creator sees first.
+  const gone = list.filter((i) => i.state !== "open" && i.state !== "used");
+  let goneBox = null;
+  if (gone.length) {
+    goneBox = document.createElement("details");
+    goneBox.className = "invgone";
+    goneBox.innerHTML = `<summary>Cancelled or expired links (${gone.length})</summary>`;
+  }
+  for (const i of [...list.filter((x) => !gone.includes(x)), ...gone]) {
     const link = `${location.origin}/?invite=${encodeURIComponent(i.code)}`;
     const row = document.createElement("div");
     row.className = "invrow";
@@ -2115,8 +2133,9 @@ async function loadInvites() {
       r.append(inp, cp, x);
       row.append(r);
     }
-    box.append(row);
+    (goneBox && gone.includes(i) ? goneBox : box).append(row);
   }
+  if (goneBox) box.append(goneBox);
 }
 $("ivBackSave").onclick = async () => {
   show("ivBackErr", false);

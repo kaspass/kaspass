@@ -318,10 +318,11 @@ details.adv > div { padding-top: var(--s3); }
 .pcard .pa { display: flex; gap: 6px; align-items: center; padding: 12px 14px; flex-wrap: wrap; justify-content: flex-end; }
 .pcard .pa button.ic { width: 34px; padding: 0; }
 .sw { display: inline-flex; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 600; cursor: pointer; margin-right: 6px; }
-.sw input { appearance: none; width: 34px; height: 20px; border-radius: 999px; background: var(--line); position: relative; margin: 0; cursor: pointer; transition: background .15s; }
-.sw input::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--card); transition: left .15s; }
+.sw input { appearance: none; -webkit-appearance: none; box-sizing: border-box; flex: none; width: 34px; height: 20px; min-height: 0; padding: 0; border: 0; border-radius: 999px; background: var(--line); position: relative; margin: 0; cursor: pointer; transition: background .15s; }
+/* The knob sits in the middle of its track, 2px from each end, whatever the theme does to inputs. */
+.sw input::after { content: ""; position: absolute; top: 50%; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--card); transform: translateY(-50%); transition: left .15s; }
 .sw input:checked { background: var(--accent); box-shadow: 0 0 0 3px var(--glow); }
-.sw input:checked::after { left: 16px; background: var(--on-accent); }
+.sw input:checked::after { left: calc(100% - 18px); background: var(--on-accent); }
 
 /* What members will see: a small pass. */
 .peek { flex: 0 1 270px; align-self: flex-start; border: 1px solid var(--line); border-radius: var(--r-field); background: var(--field); overflow: hidden; }
@@ -377,7 +378,7 @@ details.adv > div { padding-top: var(--s3); }
 .fx .sw { grid-column: 2; grid-row: 1 / 3; margin: 0; }
 .fx .sw input { width: 46px; height: 26px; }
 .fx .sw input::after { width: 22px; height: 22px; }
-.fx .sw input:checked::after { left: 22px; }
+.fx .sw input:checked::after { left: calc(100% - 24px); }
 /* Folded sections: Make your own, Colours from a picture, Theme file. */
 details.fold { padding: 0; }
 details.fold > summary { list-style: none; cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 18px var(--s5); border-radius: var(--r-card); }
@@ -653,6 +654,16 @@ body:has(#creatorArea.hidden) .main { padding-bottom: 64px; }
 .prpic { max-width: 440px; }
 .prpic .bprev { height: 72px; width: 72px; border-radius: 50%; }
 .prpic .bprev img { width: 100%; height: 100%; object-fit: cover; }
+  /* "Plans on your page": two settings per row, each label, box and help line lined up at the top. */
+  .setgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+  .setgrid > label:not(.check) { display: flex; flex-direction: column; gap: 6px; align-self: start; }
+  .setgrid > label:not(.check) select { width: 100%; }
+  .setgrid > label.check { grid-column: 1 / -1; }
+  @media (max-width: 640px) { .setgrid { grid-template-columns: minmax(0, 1fr); } }
+  .nowrap { white-space: nowrap; }
+  .invgone { margin-top: 10px; border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; }
+  .invgone summary { cursor: pointer; font-size: 13.5px; font-weight: 600; color: var(--muted); }
+  .invgone[open] summary { margin-bottom: 8px; }
 </style>
 </head>
 <body>
@@ -858,11 +869,11 @@ body:has(#creatorArea.hidden) .main { padding-bottom: 64px; }
             <label>Discord<input id="pgL_discord" maxlength="200" placeholder="https://discord.gg/invite" autocomplete="off" inputmode="url"></label>
           </div>
           <div class="h3">Plans on your page</div>
-          <div class="grid">
-            <label>Show them as<select id="pgView"><option value="cards">Cards, side by side</option><option value="compare">A comparison table</option></select></label>
-            <label>Card style<select id="pgCardStyle"><option value="kaspass">KasPass: details fold away</option><option value="open">Open: every plan's details shown, in your look</option><option value="kaspa-vision">Kaspa Vision: open, in Kaspa Vision's colours and fonts</option></select><span class="hint">How each plan's card looks. Your look's colours and fonts still apply, except with Kaspa Vision.</span></label>
+          <div class="grid setgrid">
+            <label>Show them as<select id="pgView"><option value="cards">Cards, side by side</option><option value="compare">A comparison table</option></select><span class="hint">Visitors can switch between the two.</span></label>
+            <label>Card style<select id="pgCardStyle"><option value="kaspass">KasPass</option><option value="open">Open</option><option value="kaspa-vision">Kaspa Vision</option></select><span class="hint">KasPass: compact cards whose details fold away. Open: every plan's details shown, in your colours and fonts. Kaspa Vision: Open, in Kaspa Vision's own colours and fonts.</span></label>
             <label id="pgHighlightL">Highlight a plan<select id="pgHighlight"><option value="">None</option></select><span class="hint">A thicker outline and the main button, like "best value". Open and Kaspa Vision styles only.</span></label>
-            <label>How visitors see prices<select id="pgPriceDisplay"><option value="plan">In my currency</option><option value="viewer">In my currency, plus about how much in the visitor's</option></select><span class="hint">Visitors outside your country also see, for example, "about US$7 in your currency" under each price.</span></label>
+            <label>How visitors see prices<select id="pgPriceDisplay"><option value="plan">My currency only</option><option value="viewer">Mine, plus the visitor's</option></select><span class="hint">With "Mine, plus the visitor's", visitors outside your country also see, for example, "about US$7 in your currency" under each price.</span></label>
             <label class="check wide"><input type="checkbox" id="pgCount"> Show how many members have joined</label>
             <label class="check wide"><input type="checkbox" id="pgClub"> Show the NFT holder club on this page</label>
           </div>

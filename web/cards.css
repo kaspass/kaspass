@@ -67,6 +67,10 @@
 }
 .cards-open .lvl .lp .was .off { background: var(--cs-warm); color: var(--cs-card); }
 .cards-open .lvl .cs-save { display: flex; background: var(--teal); color: var(--accent-ink); margin-bottom: 6px; }
+.cards-open .lvl .kasmark { background: var(--cs-kas); }
+.cards-open .lvl .lp > .kaslead { font-size: inherit; }
+.cards-open .lvl .fiatline { font-size: 15px; margin-top: 6px; }
+.cards-open .lvl .fiatline s.cs-reg { font-size: inherit; margin: 0 3px; }
 .cards-open .lvl .cvline { font: 400 14px/1.45 var(--font-body); color: var(--muted); margin-top: 6px; }
 .cards-open .lvl .kasline {
   display: flex; align-items: center; gap: 8px; width: fit-content; margin-top: 10px; padding: 6px 12px;

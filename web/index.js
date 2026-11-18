@@ -1604,7 +1604,7 @@ async function loadLevels() {
   // Prices set in a currency: say once what KAS is, and that nothing is charged by itself.
   const curs = [...new Set(levels.map((l) => l.price && l.price.currency).filter((c) => c && c !== "KAS"))];
   const NAMES = { CAD: "Canadian dollars", USD: "US dollars", EUR: "euros" };
-  $("levelsKas").textContent = (curs.length === 1 ? `Prices are in ${NAMES[curs[0]] || curs[0]}. You pay the same value in KAS, the Kaspa coin, at today's rate. ` : "") + "Nothing renews by itself unless you choose to prepay renewals.";
+  $("levelsKas").textContent = (curs.length === 1 ? `You pay in KAS, the Kaspa coin. Prices are set in ${NAMES[curs[0]] || curs[0]}, so the KAS amount follows today's rate. ` : "") + "Nothing renews by itself unless you choose to prepay renewals.";
   show("levelsKas", levels.length > 1);
   levelsTail();
 }
@@ -1725,14 +1725,25 @@ function v5PriceHtml(o, big) {
     // The open card styles follow kaspa.vision: the early-price badge, the price with the regular
     // one crossed out after it, today's KAS, then one plain line.
     if (big === "card" && document.documentElement.classList.contains("cards-open")) {
+      if (f.kas_today != null) return `<div class="cs-early">Early price until ${escH(until)}</div>` + kasLead(kasAbout(f.kas_today), `${escH(fp.main)} <s class="cs-reg">${escH(reg.main)}</s> at today's rate`, ` <span class="per">a ${escH(u)}</span>`) + localLine(p.currency, f.amount) +
+        `<div class="kasline fnote">${escH(fp.main)} for your first ${escH(u)} if you join by ${escH(until)}. Then ${escH(reg.main)} a ${escH(u)}.</div>`;
       return `<div class="cs-early">Early price until ${escH(until)}</div>${escH(fp.main)} <span class="per">a ${escH(u)}</span> <s class="cs-reg">${escH(reg.main)}</s>${localLine(p.currency, f.amount)}` +
-        (f.kas_today != null ? `<div class="kasline">about ${kasAbout(f.kas_today)} today</div>` : "") +
         `<div class="kasline fnote">${escH(fp.main)} for your first ${escH(u)} if you join by ${escH(until)}. Then ${escH(reg.main)} a ${escH(u)}.</div>`;
     }
+    if (big === "card" && f.kas_today != null) return `<div class="was"><s>${escH(reg.main)}</s><span class="off">Founding</span></div>` + kasLead(kasAbout(f.kas_today), `${escH(fp.main)} at today's rate`, ` <span class="per">a ${escH(u)}</span>`) + localLine(p.currency, f.amount) +
+      `<div class="kasline fnote">For your first ${escH(u)}, then ${escH(reg.main)} a ${escH(u)}. Founding price until ${escH(until)}.</div>`;
     return `<div class="was"><s>${escH(reg.main)}</s><span class="off">Founding</span></div>${escH(fp.main)}${big === "card" ? localLine(p.currency, f.amount) : ""}` +
       `<div class="kasline fnote">For your first ${escH(u)}, then ${escH(reg.main)} a ${escH(u)}. Founding price until ${escH(until)}.${f.kas_today != null ? ` About ${kasAbout(f.kas_today)} today.` : ""}</div>`;
   }
+  if (big === "card" && p.currency !== "KAS" && !o.price_unavailable && p.kas_today != null) return kasLead(kasRound(o.monthly_sompi), `${escH(reg.main)} at today's rate`, per) + localLine(p.currency, p.amount);
   return `${escH(reg.main)}${per}${big === "card" ? localLine(p.currency, p.amount) : ""}${kasLine}`;
+}
+
+// On a card, a plan priced in a currency leads with what's actually paid: today's KAS, with the
+// Kaspa mark, then the plan's own price small underneath ("CA$100 at today's rate").
+function kasLead(kas, fiat, per) {
+  const n = String(kas).replace(/ KAS$/, "");
+  return `<span class="kaslead"><i class="kasmark" aria-hidden="true"></i><span class="kasn">${escH(n)}</span><span class="kasu">KAS</span></span>${per || ""}<div class="fiatline">${fiat}</div>`;
 }
 
 // A v5 lifetime or commitment price: the amount in the plan's currency, then today's KAS.
@@ -2070,7 +2081,8 @@ function v5Card(d, l) {
     // Signed out (or no quote yet): founding or regular price, "Buy for ...".
     const sp = o.sale && o.sale.pct ? o.sale.pct : 0;
     const amt = (l.founding ? l.founding.amount : l.price.amount) * (100 - sp) / 100;
-    if (sp) lp.innerHTML = `<div class="was"><s>${escH(money(l.price.currency, l.founding ? l.founding.amount : l.price.amount))}</s><span class="off">${sp}% off</span></div>${escH(money(l.price.currency, amt))} <span class="per">a ${escH(unitOf(l.period_ms))}</span>${localLine(l.price.currency, amt)}${l.price.currency === "KAS" ? "" : `<div class="kasline">about ${kasRound(Math.round(o.monthly_sompi * (100 - sp) / 100))} today</div>`}`;
+    if (sp && l.price.currency !== "KAS") lp.innerHTML = `<div class="was"><s>${escH(money(l.price.currency, l.founding ? l.founding.amount : l.price.amount))}</s><span class="off">${sp}% off</span></div>` + kasLead(kasRound(Math.round(o.monthly_sompi * (100 - sp) / 100)), `${escH(money(l.price.currency, amt))} at today's rate`, ` <span class="per">a ${escH(unitOf(l.period_ms))}</span>`) + localLine(l.price.currency, amt);
+    else if (sp) lp.innerHTML = `<div class="was"><s>${escH(money(l.price.currency, l.founding ? l.founding.amount : l.price.amount))}</s><span class="off">${sp}% off</span></div>${escH(money(l.price.currency, amt))} <span class="per">a ${escH(unitOf(l.period_ms))}</span>${localLine(l.price.currency, amt)}${l.price.currency === "KAS" ? "" : `<div class="kasline">about ${kasRound(Math.round(o.monthly_sompi * (100 - sp) / 100))} today</div>`}`;
     // The button says what the wallet actually pays: KAS. The currency price above is for reference.
     const kasNow = l.price.currency === "KAS" ? money("KAS", amt) : `about ${kasRound(Math.round(o.monthly_sompi * amt / Math.max(0.0001, l.price.amount)))}`;
     // Signed out, the button leads to signing in, so it says so plainly; the KAS is on the card.
@@ -2120,8 +2132,9 @@ function v5Card(d, l) {
   const was = base - q.amount > 0.004 || q.founding ? `<div class="was">${base - q.amount > 0.004 ? `<s>${escH(money(cur, base))}</s>` : ""}${q.founding ? '<span class="off">Founding</span>' : ""}</div>` : "";
   const plain = !(q.credit > 0) && !q.founding && q.action !== "renew";
   lp.innerHTML = plain
-    ? `${was}${escH(money(cur, q.amount))} <span class="per">a ${escH(unitOf(l.period_ms))}</span>${localLine(cur, q.amount)}${cur === "KAS" ? "" : `<div class="kasline">about ${kasAbout(q.kas_today)} today</div>`}`
-    : `${was}${escH(money(cur, q.amount))}${localLine(cur, q.amount)}${cur === "KAS" ? "" : `<div class="kasline">about ${kasAbout(q.kas_today)} today</div>`}<div class="per">${q.action === "renew" ? "for the next " + escH(unitOf(l.period_ms)) : q.credit > 0 ? "now, then " + escH(money(cur, q.regular)) + " a " + escH(unitOf(l.period_ms)) : "your first " + escH(unitOf(l.period_ms))}</div>`;
+    ? (cur !== "KAS" && q.kas_today != null ? `${was}` + kasLead(kasAbout(q.kas_today), `${escH(money(cur, q.amount))} at today's rate`, ` <span class="per">a ${escH(unitOf(l.period_ms))}</span>`) + localLine(cur, q.amount)
+      : `${was}${escH(money(cur, q.amount))} <span class="per">a ${escH(unitOf(l.period_ms))}</span>${localLine(cur, q.amount)}${cur === "KAS" ? "" : `<div class="kasline">about ${kasAbout(q.kas_today)} today</div>`}`)
+    : `${was}${cur !== "KAS" && q.kas_today != null ? kasLead(kasAbout(q.kas_today), `${escH(money(cur, q.amount))} at today's rate`, "") : escH(money(cur, q.amount)) + (cur === "KAS" ? "" : `<div class="kasline">about ${kasAbout(q.kas_today)} today</div>`)}${localLine(cur, q.amount)}<div class="per">${q.action === "renew" ? "for the next " + escH(unitOf(l.period_ms)) : q.credit > 0 ? "now, then " + escH(money(cur, q.regular)) + " a " + escH(unitOf(l.period_ms)) : "your first " + escH(unitOf(l.period_ms))}</div>`;
   if (q.credit > 0) lp.insertAdjacentHTML("afterend", `<div class="credit">${escH(money(cur, q.amount))} today because your unused ${escH(levelName(q.from_level))} time counts toward it (${escH(money(cur, q.credit))}).</div>`);
   if (q.action === "renew") d.querySelector(".ln").insertAdjacentHTML("beforeend", `<span class="yours">Your ${escH(lw())}</span>`);
   const verb = q.action === "upgrade" ? "Upgrade" : q.action === "renew" ? "Renew" : "Buy";

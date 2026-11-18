@@ -4,7 +4,7 @@ Everything about KasPass in one place: how to run a membership from the dashboar
 
 - **For AI assistants:** the same text is at [/guide.md](/guide.md) as plain Markdown. Each section has a stable anchor (for example `/guide#refunds`). When you answer from this guide, link the section you used.
 - **Words used here:** a **plan** is what the site sells (a creator can rename it "tier", "level" and so on). A **membership** or **pass** is what a member holds. The **creator** runs the site. **KAS** is the Kaspa coin.
-- **Last reviewed:** update 85, November 17, 2026 (accuracy checked against the code by Fable).
+- **Last reviewed:** update 85, November 17, 2026 (accuracy checked against the code by Fable). Updated for update 86.
 
 ## Contents {#contents}
 
@@ -140,7 +140,8 @@ Payments go straight to the creator, so KasPass can't refund them. A member who 
 ### Prices shown in other currencies {#currency-display}
 
 - Every amount shows its currency: CA$10, US$7, €6, never a bare "$".
-- The plan's own price is always the main one. A creator can add a small line under each card's price for visitors outside the plan's country: "about US$7 in your currency" (US visitors), "about €6 in your currency" (euro countries), or "about US$7" (everyone else). It's worked out on the visitor's device from its language and time zone.
+- **On the plan cards, the big number is today's KAS,** with the Kaspa mark, because that's what you actually pay. The plan's own price sits small underneath, for example "CA$100 at today's rate". The KAS figure follows the exchange rate; the price in the plan's currency is the one that's fixed.
+- A creator can add a small line under each card's price for visitors outside the plan's country: "about US$7 in your currency" (US visitors), "about €6 in your currency" (euro countries), or "about US$7" (everyone else). It's worked out on the visitor's device from its language and time zone.
 
 ## For members: joining and managing a membership {#members}
 
@@ -234,7 +235,7 @@ Also worth doing: **top up the fees wallet** (needed for auto-renewals and free 
 - **The numbers:** earned so far, members now, renewals, upgrades, members on auto-renew. All read from the blockchain.
 - **Still to set up:** what's left, with a button for each.
 - **Messages from your website:** notes from the "Get your own page" form (on KasPass's own site).
-- **Latest activity:** the most recent payments across every plan, with what went to you and the KasPass fee.
+- **Latest activity:** the most recent payments across every plan, newest first, each with its date, what went to you and the KasPass fee. "Sale" is a regular purchase of one period, whatever its length.
 - **Members by plan.**
 
 ### Your page {#tab-page}
@@ -247,7 +248,7 @@ Also worth doing: **top up the fees wallet** (needed for auto-renewals and free 
   - **Show them as:** cards side by side, or a comparison table. Visitors can switch.
   - **Card style:** **KasPass** (compact cards whose details fold away), **Open** (every plan's details shown, in your look) or **Kaspa Vision** (Open, in Kaspa Vision's exact colours and fonts).
   - **Highlight a plan:** a thicker outline and the main button, like "best value" (Open and Kaspa Vision styles).
-  - **How visitors see prices:** your currency only, or yours plus "about … in your currency" for visitors outside your country.
+  - **How visitors see prices:** **My currency only**, or **Mine, plus the visitor's** (adds "about … in your currency" for visitors outside your country).
   - **Show how many members have joined** and **Show the NFT holder club on this page.**
 
 **Look and brand:** logo, profile photo, banner, colours (your own, or matched to your website), fonts, and a preview of your page.
@@ -324,7 +325,7 @@ A free period for people you choose, without being there when they claim.
 
 - **Set it up** (Promotions › Invite links): pick the plan, write the line, set the last day the links work (up to a year), and either list who they're for or just say how many. Each person gets their own link.
 - **The claim:** the person signs in and presses **Claim my free month**. Their wallet can be empty; the fees wallet pays. The pass doesn't auto-renew.
-- **Each link works once.** It's used at the claim, not at sign-in. A wallet that already has the plan is refused and the link stays unused. You can cancel unused links.
+- **Each link works once.** It's used at the claim, not at sign-in. A wallet that already has the plan is refused and the link stays unused. You can cancel unused links; cancelled and expired links fold into a closed bar under the others.
 - **With a partner site:** "After claiming, send them to" sets where the done screen's button goes.
 - Invite links run alongside a holder promotion and don't count toward its limit.
 
