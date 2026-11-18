@@ -1112,16 +1112,20 @@ async function loadOffer() {
       : `NFT holders pay ${v4.holder_bps / 100}% less<div class="sub">${session ? "This wallet doesn't qualify yet. If your NFTs are in another wallet, link it in the holder club section below." : "Sign in to see your price."}</div>`;
   }
   show("holderBanner", !!(v4 && v4.discounts && v4.holder_bps > 0));
-  // Auto-renew toggle.
-  show("autoBox", !!(v4 && v4.auto_renew));
+  // Auto-renew toggle. While a plan's pay box is open it owns these controls (its own totals,
+  // the cushion and the Pay button), so a background refresh mustn't take them back.
   $("autoOnText").textContent = `${prepayName().replace(")", ", optional)")}`;
-  const autoAmt = () => {
-    const n = Number($("autoN").value);
-    $("autoAmt").textContent = `= ${kas(n * offer.monthly_sompi)} more, held in your ${pw()}. It's still yours: whatever isn't used comes back if you cancel.`;
-  };
-  $("autoOn").onchange = () => {};
-  $("autoN").onchange = () => { $("autoOn").checked = true; autoAmt(); };
-  autoAmt();
+  if (PAY && repaintPay) repaintPay();
+  else {
+    show("autoBox", !!(v4 && v4.auto_renew));
+    const autoAmt = () => {
+      const n = Number($("autoN").value);
+      $("autoAmt").textContent = `= ${kas(n * offer.monthly_sompi)} more, held in your ${pw()}. It's still yours: whatever isn't used comes back if you cancel.`;
+    };
+    $("autoOn").onchange = () => {};
+    $("autoN").onchange = () => { $("autoOn").checked = true; autoAmt(); };
+    autoAmt();
+  }
   const left = offer.remaining >= 0 ? (offer.remaining === 0 ? " Sold out." : ` ${offer.remaining} left.`) : "";
   $("buyNote").textContent = `Every ${pw()} holds a ${kas(offer.bond_sompi)} deposit that you get back when you end it, and each payment has a tiny network fee. Kaspire shows every amount before you approve.` + left;
   // Prices at the top of the membership box, following the holder price after sign-in.
@@ -2162,6 +2166,7 @@ function promoBlock(d, l) {
     b.textContent = `Claim my free ${unitOf(l.period_ms)}`;
     b.onclick = () => claimPromo(l, b);
     box.append(b);
+    box.classList.add("ready");
     return { claim: true };
   }
   if (me.reason === "already_claimed") note("You've claimed this one. Enjoy!");
@@ -2239,6 +2244,8 @@ async function chooseKind(id, kind) {
 
 // The pay box, under the card that was pressed: what you get, what you pay now and next year.
 let PAY = null, BUY_AFTER = null;
+// The open pay box redraws its rows and Pay button with this (set by openPay, cleared when it closes).
+let repaintPay = null;
 async function openPay(id) {
   if (LEVEL !== id) await selectLevel(id, { quiet: true });
   // Paying keeps the plan in view: that plan alone, with the sign-in (signed out) or the pay box
@@ -2259,6 +2266,7 @@ async function openPay(id) {
   (FOCUS ? $("levelsBox") : $("join")).scrollIntoView({ behavior: "smooth", block: "start" });
 }
 function renderPay() {
+  repaintPay = null;
   const v5 = v5Site();
   for (const id of ["payInfo", "payGoBox"]) show(id, v5 && !!PAY);
   if (!v5) return;
@@ -2347,8 +2355,15 @@ function renderPay() {
     $("payInfo").innerHTML = rows.map(([k, v]) => `<dt>${escH(k)}</dt><dd>${v}</dd>`).join("");
     if (autoOk) $("autoAmt").textContent = `= about ${kasAbout(Number($("autoN").value) * Number(q.kas_next || 0) * (1 + cush()))} more (today's price${cush() > 0 ? ` plus a ${Math.round(cush() * 100)}% cushion` : ""}), set aside in your ${pw()}'s contract. Whatever isn't used comes back if you cancel.`;
     $("payGo").textContent = `Pay ${kasOf(total())} in Kaspire`;
+    // A free period is waiting for this wallet on this plan: point at the claim first, so nobody
+    // pays for what they could have had free.
+    const free = !!(PROMO && PROMO.level === l.level && PROMO_ME && PROMO_ME.eligible && q.action !== "renew");
+    $("payGo").classList.toggle("ghost", free);
+    $("freeFirst").textContent = free ? `A free ${u} is waiting for you: press "Claim my free ${u}" first. This button pays for the ${u} with your own KAS instead.` : "";
+    show("freeFirst", free);
   };
   show("payInfo", true);
+  repaintPay = paint;
   $("autoOn").onchange = paint;
   // Choosing how many renewals to pay ahead turns auto-renew on.
   $("autoN").onchange = () => { $("autoOn").checked = true; paint(); };

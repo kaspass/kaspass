@@ -72,6 +72,25 @@ mod tests {
         assert!(!html.contains("<!--GUIDE-->") && !html.contains("{#"));
     }
 
+    /// The rules-file section's example is a real, working rules file (the same as the one in
+    /// `examples/`), and it names every rule the server accepts.
+    #[test]
+    fn guide_holder_club_example_is_valid() {
+        let sec = GUIDE_MD.split("{#holder-club-rules}").nth(1).expect("the holder club rules section");
+        let json = sec.split("```json").nth(1).and_then(|x| x.split("```").next()).expect("an example");
+        let rules: crate::clubs::Rules = serde_json::from_str(json).expect("the guide's example parses");
+        crate::clubs::Club::from_rules(rules.clone(), Some([("1".to_string(), 3u64), ("2".to_string(), 900)].into_iter().collect()), std::path::Path::new(".")).expect("the guide's example is accepted");
+        let file: serde_json::Value = serde_json::from_str(include_str!("../../examples/club-rules-example.json")).unwrap();
+        assert_eq!(serde_json::from_str::<serde_json::Value>(json).unwrap(), file, "the guide's example and examples/club-rules-example.json differ");
+        for r in ["min_tokens", "min_credits", "owns_band", "owns_token", "has_pass", "holds_nft", "holds_token", "holds_kcc20", "any_of", "all_of"] {
+            assert!(sec.contains(&format!("`{r}`")), "the guide doesn't explain the {r} rule");
+        }
+        // The dashboard's "Download an example" file is the same club.
+        let dash = include_str!("../../web/dashboard.js");
+        assert!(dash.contains(r#"club: "Bitcoin the Turtle""#));
+        assert!(include_str!("../../web/dashboard.html").contains(r#"href="/guide#holder-club-rules""#));
+    }
+
     /// Every panel in the dashboard is explained in the guide, so a new panel can't ship
     /// without its help. (Fable reviews the guide's accuracy now and then; this only checks
     /// that nothing is missing.)

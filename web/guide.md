@@ -4,7 +4,7 @@ Everything about KasPass in one place: how to run a membership from the dashboar
 
 - **For AI assistants:** the same text is at [/guide.md](/guide.md) as plain Markdown. Each section has a stable anchor (for example `/guide#refunds`). When you answer from this guide, link the section you used.
 - **Words used here:** a **plan** is what the site sells (a creator can rename it "tier", "level" and so on). A **membership** or **pass** is what a member holds. The **creator** runs the site. **KAS** is the Kaspa coin.
-- **Last reviewed:** update 85, November 17, 2026 (accuracy checked against the code by Fable). Updated for update 86.
+- **Last reviewed:** update 85, November 17, 2026 (accuracy checked against the code by Fable). Updated for update 87.
 
 ## Contents {#contents}
 
@@ -351,6 +351,69 @@ A free period for people you choose, without being there when they claim.
 - **Linked wallets** add up across a member's wallets. NFTs listed for sale don't count unless the rules say so.
 - **Holder discount:** members who qualify can pay less for paid plans (Promotions tab).
 - Holdings are re-checked every minute; anyone who stops qualifying loses that group or role.
+
+### Writing a holder club rules file {#holder-club-rules}
+
+The rules file is a small JSON text file. Upload it under **Groups › Holder club › Advanced: upload holder club rules**, then press **Check and apply**. If anything is wrong, nothing changes and the message says what to fix. **Download an example** in that panel gives you a working file to start from.
+
+**Ask an AI to write it.** Give any AI assistant this page's plain-text version, `https://<your site>/guide.md`, and describe your club in your own words: the collection, who should get in, and any levels. For example: "Write a KasPass holder club rules file for my BITCOIN NFT collection on mainnet. Anyone with 1 NFT is a Turtle Holder. Anyone who owns a rank 1 to 4 NFT, or has 200 credits, is a Whale." Then upload the file and use **Check a wallet** on a few wallets you know before relying on it.
+
+**The fields:**
+
+| Field | Needed | What it is |
+|---|---|---|
+| `club` | yes | The club's name, shown to members. |
+| `collection` | yes | Your NFT collection: `{"network": "mainnet", "tick": "BITCOIN"}`. Use `"testnet-10"` while testing. |
+| `tiers` | yes | The levels, at least one. Each is `{"name": "Whale", "rule": {...}}`, with an optional `"discord_role"` if the Discord role should have another name. Each level becomes a Discord role and can have its own Telegram group. Names must be different, and `pass` is taken. |
+| `bands` | no | Rank ranges that give credits: `{"name": "Gold", "ranks": [5, 21], "credits": 25}`. Ranges can't overlap, and need the ranks list. |
+| `count_listed` | no | `true` to count NFTs listed for sale. Default `false`: a listed NFT doesn't count. |
+
+**Rules.** Each `rule` has exactly one of these. To combine several, put them in `any_of` (any one is enough) or `all_of` (all are needed).
+
+| Rule | Example | Means |
+|---|---|---|
+| `min_tokens` | `{"min_tokens": 3}` | Holds at least 3 NFTs of your collection. |
+| `min_credits` | `{"min_credits": 200}` | Has at least 200 credits from the bands. |
+| `owns_band` | `{"owns_band": "Gold"}` | Owns at least one NFT in that band. |
+| `owns_token` | `{"owns_token": [7, 42]}` | Owns one of these specific NFTs (token ids). |
+| `has_pass` | `{"has_pass": true}` | Has an active paid membership on this site. |
+| `holds_nft` | `{"holds_nft": {"tick": "NACHO", "min": 1}}` | Holds NFTs of another KRC-721 collection (whole number, 1 to 1000). |
+| `holds_token` | `{"holds_token": {"tick": "NACHO", "min": 100000}}` | Holds a KRC-20 token amount. |
+| `holds_kcc20` | `{"holds_kcc20": {"id": "<64-character covenant id>", "tick": "NACHO", "min": 1000}}` | Holds a KCC-20 token amount. The id comes from the token's official page. |
+| `any_of` / `all_of` | `{"any_of": [{"owns_band": "Legacy"}, {"min_credits": 200}]}` | Combines rules. |
+
+Holdings add up across all the wallets a member has linked.
+
+**The ranks list** (optional second file, only if you use bands): each NFT's rank, either `{"1": 950, "2": 14}` (token id, then rank) or a list of rows like `[{"id": 1, "rank": 950}]`, which is what a spreadsheet export usually gives. The ranks come from your collection's own rarity list.
+
+**A full example:**
+
+```json
+{
+  "club": "Bitcoin the Turtle",
+  "collection": { "network": "mainnet", "tick": "BITCOIN" },
+  "count_listed": false,
+  "bands": [
+    { "name": "Legacy", "ranks": [1, 4], "credits": 0 },
+    { "name": "Gold", "ranks": [5, 21], "credits": 25 },
+    { "name": "Silver", "ranks": [22, 210], "credits": 10 },
+    { "name": "Bronze", "ranks": [211, 630], "credits": 5 },
+    { "name": "Normal", "ranks": [631, 2100], "credits": 2 }
+  ],
+  "tiers": [
+    { "name": "Turtle Holder", "rule": { "min_tokens": 1 } },
+    { "name": "Whale", "rule": { "any_of": [ { "owns_band": "Legacy" }, { "min_credits": 200 } ] } }
+  ]
+}
+```
+
+**Common messages:**
+- "isn't valid JSON": a missing comma, quote or bracket. Paste the file into an AI or a JSON checker to find it.
+- "each rule needs exactly one key": a rule has two things in it; wrap them in `any_of` or `all_of`.
+- "owns_band "Gold" isn't one of the bands": the band name doesn't match one in `bands` exactly (capitals count).
+- "bands "Gold" and "Silver" overlap": two rank ranges share a number.
+- "the bands use ranks, so the club needs a ranks list": choose your ranks file next to the rules file (the example uses bands, so it needs one too), or remove `bands` and any `owns_band` or `min_credits` rules.
+- "unknown rule": a spelling mistake in the rule name; the message lists the right names.
 
 ## Linking from another website {#partner-sites}
 

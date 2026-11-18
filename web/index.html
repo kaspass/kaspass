@@ -172,6 +172,17 @@
   .lvl .promo .ptx { display: inline; }
   .lvl .promo .pr, .lvl .promo .pn { font-size: 13px; color: var(--muted); margin-top: 4px; }
   .lvl .promo button.claim { width: 100%; margin-top: 10px; }
+  /* A free period this wallet can claim: a soft glow and a light that runs around the border, so the
+     claim is what people see first (and don't pay by mistake). Still, with reduced motion. */
+  @property --promo-a { syntax: "<angle>"; initial-value: 0deg; inherits: false; }
+  .lvl .promo.ready { --promo-glow: var(--cs-warm, var(--teal, #49d9c8)); position: relative; border-style: solid; border-color: var(--promo-glow); box-shadow: 0 0 22px -6px var(--promo-glow), inset 0 0 14px -10px var(--promo-glow); }
+  .lvl .promo.ready::before { content: ""; position: absolute; inset: -1px; border-radius: inherit; padding: 2px; pointer-events: none;
+    background: conic-gradient(from var(--promo-a), transparent 0deg 250deg, var(--promo-glow) 300deg, #fff3d6 330deg, var(--promo-glow) 345deg, transparent 360deg);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); mask-composite: exclude;
+    animation: promo-run 3.2s linear infinite; }
+  @keyframes promo-run { to { --promo-a: 360deg; } }
+  @media (prefers-reduced-motion: reduce) { .lvl .promo.ready::before { animation: none; background: none; } }
+  .freefirst { margin: 0 0 10px; padding: 10px 12px; border-radius: 10px; font-size: 14px; line-height: 1.45; color: var(--text); border: 1px solid var(--cs-warm, var(--teal, #49d9c8)); background: color-mix(in srgb, var(--cs-warm, var(--teal, #49d9c8)) 10%, transparent); }
   .lvl .lp s { color: var(--muted); font-weight: 400; font-size: 14px; margin-right: 6px; }
   .lvl .inc { color: var(--muted); font-size: 13px; }
   .lvl ul { margin: 2px 0 0; padding-left: 18px; font-size: 14px; flex: 1; }
@@ -608,7 +619,7 @@
       </div>
       <p class="muted small" id="buyNote" style="margin-bottom:0"></p>
     </div>
-    <div class="paygo hidden" id="payGoBox"><button id="payGo"></button><div class="muted small" id="payGoNote">Kaspire shows every amount before you approve. Payments go straight to the creator and can't be refunded by KasPass.</div><button class="ghost qrgo hidden" id="qrGo">Pay from another wallet (QR code)</button></div>
+    <div class="paygo hidden" id="payGoBox"><p class="freefirst hidden" id="freeFirst" role="note"></p><button id="payGo"></button><div class="muted small" id="payGoNote">Kaspire shows every amount before you approve. Payments go straight to the creator and can't be refunded by KasPass.</div><button class="ghost qrgo hidden" id="qrGo">Pay from another wallet (QR code)</button></div>
     <div class="qrbox hidden" id="qrBox">
       <div class="qrtitle">Scan with your phone wallet</div>
       <div class="qrwho" id="qrWho"></div>

@@ -989,7 +989,7 @@ async function renderClub() {
   try {
     const c = await (await fetch("/v1/creator/club?session=" + encodeURIComponent(session))).json();
     if (!c.enabled) {
-      el.textContent = "No holder club yet. A holder club gives free access to people who own your NFTs. Message KasPass to set one up.";
+      el.textContent = "No holder club yet. A holder club gives free access to people who own your NFTs. Upload its rules under Advanced below, or message KasPass and we'll help you set one up.";
       $("clubBands").innerHTML = ""; $("clubTiersT").innerHTML = "";
       return;
     }
@@ -1007,6 +1007,31 @@ const readJson = (input) => new Promise((resolve, reject) => {
   r.onerror = () => reject(new Error("couldn't read " + f.name));
   r.readAsText(f);
 });
+
+// A working rules file to start from (the same as examples/club-rules-example.json in the code).
+const CLUB_EXAMPLE = {
+  club: "Bitcoin the Turtle",
+  collection: { network: "mainnet", tick: "BITCOIN" },
+  count_listed: false,
+  bands: [
+    { name: "Legacy", ranks: [1, 4], credits: 0 },
+    { name: "Gold", ranks: [5, 21], credits: 25 },
+    { name: "Silver", ranks: [22, 210], credits: 10 },
+    { name: "Bronze", ranks: [211, 630], credits: 5 },
+    { name: "Normal", ranks: [631, 2100], credits: 2 },
+  ],
+  tiers: [
+    { name: "Turtle Holder", rule: { min_tokens: 1 } },
+    { name: "Whale", rule: { any_of: [{ owns_band: "Legacy" }, { min_credits: 200 }] } },
+  ],
+};
+$("clubExample").onclick = () => {
+  const url = URL.createObjectURL(new Blob([JSON.stringify(CLUB_EXAMPLE, null, 2) + "\n"], { type: "application/json" }));
+  const a = document.createElement("a");
+  a.href = url; a.download = "club-rules-example.json";
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+};
 
 $("clubUpload").onclick = async () => {
   const msg = $("clubUploadMsg");

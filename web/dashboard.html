@@ -1168,6 +1168,8 @@ body:has(#creatorArea.hidden) .main { padding-bottom: 64px; }
         <details class="adv" id="clubAdv"><summary><svg class="i"><use href="#i-chev"/></svg>Advanced: upload holder club rules</summary>
         <div>
         <div class="small"><b>Upload rules</b>: the rules file (JSON), and the ranks list if the rules use ranks (JSON: <span class="mono">{"tokenId": rank}</span>, or a list of <span class="mono">{"id", "rank"}</span> rows).</div>
+        <div class="small" style="margin-top:6px"><a href="/guide#holder-club-rules" target="_blank" rel="noopener">How to write a rules file</a>: every field and rule, an example, and how to have an AI write it for you.</div>
+        <div style="margin-top:8px"><button class="ghost sm" id="clubExample" type="button">Download an example</button></div>
         <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:8px">
           <label class="small">Rules <input type="file" id="clubRules" accept=".json,application/json"></label>
           <label class="small">Ranks (optional) <input type="file" id="clubRanks" accept=".json,application/json"></label>
