@@ -415,8 +415,10 @@ pub async fn serve(setups: Vec<LevelSetup>, chain: Chain, port: u16, members_htm
         loop {
             for ((ix, cache, snap), cursor) in scanners.iter_mut().zip(cursors.iter_mut()) {
                 let res: Result<()> = async {
-                    // One page at a time, so purchases never wait behind a long catch-up.
-                    loop {
+                    // One page at a time, so purchases never wait behind a long catch-up, and at most
+                    // MAX_PAGES a round: the passes, lanes and saved progress are refreshed after each
+                    // round even while a long catch-up is still going.
+                    for _ in 0..MAX_PAGES {
                         let done = pages.step(ix, &chain, cursor).await?;
                         progress_now();
                         if done {
@@ -625,6 +627,13 @@ pub async fn serve(setups: Vec<LevelSetup>, chain: Chain, port: u16, members_htm
 }
 
 /// Pages of blocks read from the node in this pass, shared by every level's indexer.
+/// Pages the chain reader reads per round before refreshing what the site shows.
+const MAX_PAGES: usize = 50;
+
+/// How long one page from the node may take before it's given up and tried again (so a node that
+/// stops answering can't hold the chain connection, and every page that needs it, forever).
+const PAGE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60);
+
 #[derive(Default)]
 struct PageCache {
     pages: HashMap<Option<kaspa_consensus_core::Hash>, Arc<(Vec<(kaspa_consensus_core::tx::Transaction, i64)>, Option<kaspa_consensus_core::Hash>, bool)>>,
@@ -636,7 +645,10 @@ impl PageCache {
         let page = match self.pages.get(cursor) {
             Some(p) => p.clone(),
             None => {
-                let p = Arc::new(chain.lock().await.blocks_page(*cursor).await?);
+                let c = chain.lock().await;
+                let read = tokio::time::timeout(PAGE_TIMEOUT, c.blocks_page(*cursor)).await;
+                drop(c);
+                let p = Arc::new(read.map_err(|_| anyhow::anyhow!("the node took over {} s to answer; trying again", PAGE_TIMEOUT.as_secs()))??);
                 // Only the last few pages are kept: enough for levels that are in step.
                 if self.pages.len() >= 64 {
                     self.pages.clear();

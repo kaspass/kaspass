@@ -94,7 +94,8 @@
 .cards-open .lvl .trialnote, .cards-open .lvl .trialno, .cards-open .lvl .noact, .cards-open .lvl .until { font-size: 14px; margin-top: 0; }
 
 /* Pill buttons: filled, or outlined beside a highlighted plan. */
-.cards-open .lvl > button:not(.more-t):not(.chg) { min-height: 52px; margin-top: 0; padding: 0 16px; border-radius: 999px; font-size: 17px; font-weight: 700; width: 100%; white-space: nowrap; }
+/* Long plan names wrap inside the button instead of spilling past it on a phone. */
+.cards-open .lvl > button:not(.more-t):not(.chg) { min-height: 52px; margin-top: 0; padding: 10px 20px; border-radius: 999px; font-size: 17px; font-weight: 700; line-height: 1.25; width: 100%; white-space: normal; overflow-wrap: anywhere; text-wrap: balance; }
 .cards-open .lvl > button.ghost,
 .cards-open .levels.has-hl .lvl:not(.hl) > button:not(.more-t) { background: transparent; color: var(--text); border: 1px solid var(--teal); }
 .cards-open .lvl > button + button, .cards-open .lvl > .trialhint + button { margin-top: -6px; }

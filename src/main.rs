@@ -644,6 +644,50 @@ enum Chain {
     Sim(Sim),
 }
 
+/// From one answer of the node (the confirmed chain blocks after `low`, what each accepted, and the
+/// transaction bodies in hand), the transactions to read now in the order they took effect, the
+/// new cursor, and whether that's everything the node listed (caught up for this round).
+///
+/// A chain block is read only if every transaction it accepted is in hand; the cursor stops before
+/// the first one that isn't. Only the first chain block may come from its own merge set (the caller
+/// fetched it); later ones need their block in the bulk read, and none at all after an off-chain
+/// cursor.
+fn pick_accepted(
+    low: Hash,
+    added: &[Hash],
+    accepted: &[(Hash, Vec<TransactionId>)],
+    off_chain: bool,
+    in_bulk: &std::collections::HashSet<Hash>,
+    bodies: &HashMap<TransactionId, Vec<(Transaction, i64)>>,
+) -> Result<(Vec<(Transaction, i64)>, Hash, bool)> {
+    if accepted.is_empty() {
+        // Every chain block accepts at least its parent's coinbase, so new chain blocks with no
+        // accepted list is a node answering wrongly: skipping them could skip a purchase for good,
+        // so nothing is read and the next round asks again.
+        bail!("the node listed {} new chain block(s) without their accepted transactions", added.len());
+    }
+    let mut txs = Vec::new();
+    let mut last = low;
+    for (n, (hash, ids)) in accepted.iter().enumerate() {
+        if n > 0 && (off_chain || !in_bulk.contains(hash)) {
+            break; // the blocks it merged aren't all in hand: it's read with a later page
+        }
+        let Some(batch) = ids.iter().map(|id| bodies.get(id).cloned()).collect::<Option<Vec<_>>>() else {
+            if n == 0 {
+                bail!("the node accepted a transaction it can't show (chain block {hash})");
+            }
+            break; // its bodies come with a later page: the cursor stays on the block before it
+        };
+        txs.extend(batch.into_iter().flatten().filter(|(tx, _)| !tx.is_coinbase()));
+        last = *hash;
+    }
+    // Caught up when every confirmed chain block the node listed was read. New blocks arrive ten a
+    // second, so "the next call finds nothing new" may never happen: waiting for that kept the
+    // reader in a tight loop in update 89 as first released, and the site stopped answering.
+    let caught_up = added.last() == Some(&last);
+    Ok((txs, last, caught_up))
+}
+
 /// Confirmations a chain block needs before the block reader counts what it accepted (about three
 /// seconds at ten blocks a second).
 const CHAIN_CONFIRMATIONS: u64 = 30;
@@ -874,38 +918,18 @@ impl Chain {
                 // leaves out the cursor's own past, and only the first chain block is read this round,
                 // from its merge set.
                 let off_chain = !vc.removed_chain_block_hashes.is_empty();
-                let mut txs = Vec::new();
-                let mut last = low;
-                for (n, acc) in vc.accepted_transaction_ids.iter().enumerate() {
-                    if n > 0 && (off_chain || !in_bulk.contains(&acc.accepting_block_hash)) {
-                        // The blocks it merged aren't all in hand: it's read with a later page.
-                        break;
-                    }
-                    if n == 0 && (off_chain || acc.accepted_transaction_ids.iter().any(|id| !bodies.contains_key(id))) {
-                        let cb = c.get_block(acc.accepting_block_hash, false).await?;
+                if let Some(first) = vc.accepted_transaction_ids.first() {
+                    if off_chain || first.accepted_transaction_ids.iter().any(|id| !bodies.contains_key(id)) {
+                        let cb = c.get_block(first.accepting_block_hash, false).await?;
                         let vd = cb.verbose_data.ok_or_else(|| anyhow!("the node gave no merge set for a chain block"))?;
                         for h in vd.merge_set_blues_hashes.iter().chain(vd.merge_set_reds_hashes.iter()) {
                             add(&mut bodies, c.get_block(*h, true).await?);
                         }
                     }
-                    let Some(batch) = acc.accepted_transaction_ids.iter().map(|id| bodies.get(id).cloned()).collect::<Option<Vec<_>>>() else {
-                        if n == 0 {
-                            bail!("the node accepted a transaction it can't show (chain block {})", acc.accepting_block_hash);
-                        }
-                        // Its bodies come with a later page: the cursor stays on the block before it.
-                        break;
-                    };
-                    txs.extend(batch.into_iter().flatten().filter(|(tx, _)| !tx.is_coinbase()));
-                    last = acc.accepting_block_hash;
                 }
-                // The cursor only moves past chain blocks whose accepted transactions were read. Every
-                // chain block accepts at least its parent's coinbase, so new chain blocks with no
-                // accepted list at all is a node answering wrongly: skipping them could skip a
-                // purchase for good, so nothing is read and the next round asks again.
-                if vc.accepted_transaction_ids.is_empty() {
-                    bail!("the node listed {} new chain block(s) without their accepted transactions", vc.added_chain_block_hashes.len());
-                }
-                Ok((txs, Some(last), false))
+                let accepted: Vec<(Hash, Vec<TransactionId>)> = vc.accepted_transaction_ids.iter().map(|a| (a.accepting_block_hash, a.accepted_transaction_ids.clone())).collect();
+                let (txs, last, caught_up) = pick_accepted(low, &vc.added_chain_block_hashes, &accepted, off_chain, &in_bulk, &bodies)?;
+                Ok((txs, Some(last), caught_up))
             }
             Chain::Sim(s) => {
                 let from = cursor.map(sim_index).unwrap_or(0).min(s.blocks.len());

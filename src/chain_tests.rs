@@ -199,3 +199,75 @@ async fn lost_lane_is_found_again_at_its_address() -> Result<()> {
     assert_eq!(again.verified_lanes(&chain).await?.len(), 1, "kept after a restart");
     Ok(())
 }
+
+// ---- The live block reader's choice of what to read, against node answers it may give ----
+
+fn tx_paying(v: u64, coinbase: bool) -> Transaction {
+    let mut t = Transaction::new_non_finalized(
+        TX_VERSION,
+        vec![],
+        vec![TransactionOutput { value: v, script_public_key: ScriptPublicKey::from_vec(0, vec![0x51]), covenant: None }],
+        0,
+        if coinbase { kaspa_consensus_core::subnets::SUBNETWORK_ID_COINBASE } else { Default::default() },
+        0,
+        vec![],
+    );
+    t.finalize();
+    t
+}
+
+fn chain_hash(n: u8) -> Hash {
+    Hash::from_bytes([n; 32])
+}
+
+/// Two confirmed chain blocks, everything in hand: both are read, coinbases are left out, and the
+/// reader reports it's caught up (so the server's round ends even while new blocks keep coming).
+#[test]
+fn reader_reports_caught_up_once_everything_listed_is_read() {
+    let (a, b) = (chain_hash(1), chain_hash(2));
+    let (t1, t2, cb) = (tx_paying(1, false), tx_paying(2, false), tx_paying(3, true));
+    let bodies: HashMap<TransactionId, Vec<(Transaction, i64)>> = [(t1.id(), vec![(t1.clone(), 10)]), (t2.id(), vec![(t2.clone(), 20)]), (cb.id(), vec![(cb.clone(), 20)])].into_iter().collect();
+    let accepted = vec![(a, vec![cb.id(), t1.id()]), (b, vec![t2.id()])];
+    let in_bulk = [a, b].into_iter().collect();
+    let (txs, last, caught_up) = pick_accepted(chain_hash(0), &[a, b], &accepted, false, &in_bulk, &bodies).unwrap();
+    assert_eq!(txs.iter().map(|(t, _)| t.id()).collect::<Vec<_>>(), vec![t1.id(), t2.id()]);
+    assert_eq!(last, b);
+    assert!(caught_up);
+}
+
+/// The node lists more chain blocks than the bulk read holds, or pages its accepted list shorter
+/// than its chain list: the reader stops at the last complete block and says there's more.
+#[test]
+fn reader_stops_at_the_last_complete_block_and_says_more_is_coming() {
+    let (a, b, c) = (chain_hash(1), chain_hash(2), chain_hash(3));
+    let (t1, t2) = (tx_paying(1, false), tx_paying(2, false));
+    let bodies: HashMap<TransactionId, Vec<(Transaction, i64)>> = [(t1.id(), vec![(t1.clone(), 10)])].into_iter().collect();
+    // b's block isn't in the bulk read.
+    let in_bulk = [a].into_iter().collect();
+    let (txs, last, caught_up) = pick_accepted(chain_hash(0), &[a, b], &[(a, vec![t1.id()]), (b, vec![t2.id()])], false, &in_bulk, &bodies).unwrap();
+    assert_eq!((txs.len(), last, caught_up), (1, a, false));
+    // The accepted list covers fewer chain blocks than the chain list.
+    let in_bulk = [a, b, c].into_iter().collect();
+    let (_, last, caught_up) = pick_accepted(chain_hash(0), &[a, b, c], &[(a, vec![t1.id()])], false, &in_bulk, &bodies).unwrap();
+    assert_eq!((last, caught_up), (a, false));
+    // A body missing for the second block: stop before it.
+    let (_, last, caught_up) = pick_accepted(chain_hash(0), &[a, b], &[(a, vec![t1.id()]), (b, vec![t2.id()])], false, &[a, b].into_iter().collect(), &bodies).unwrap();
+    assert_eq!((last, caught_up), (a, false));
+}
+
+/// After the cursor fell off the chain only the first new chain block is read (its merge set was
+/// fetched on its own); a node that lists chain blocks without accepted lists is an error, not a skip.
+#[test]
+fn reader_handles_an_off_chain_cursor_and_a_wrong_answer() {
+    let (a, b) = (chain_hash(1), chain_hash(2));
+    let (t1, t2) = (tx_paying(1, false), tx_paying(2, false));
+    let bodies: HashMap<TransactionId, Vec<(Transaction, i64)>> = [(t1.id(), vec![(t1.clone(), 10)]), (t2.id(), vec![(t2.clone(), 20)])].into_iter().collect();
+    let in_bulk = [a, b].into_iter().collect();
+    let (txs, last, caught_up) = pick_accepted(chain_hash(0), &[a, b], &[(a, vec![t1.id()]), (b, vec![t2.id()])], true, &in_bulk, &bodies).unwrap();
+    assert_eq!((txs.len(), last, caught_up), (1, a, false));
+    assert!(pick_accepted(chain_hash(0), &[a, b], &[], false, &in_bulk, &bodies).is_err());
+    // The first block's transaction isn't in hand even after its merge set was read: an error, so
+    // the cursor doesn't move past a purchase it couldn't read.
+    let t3 = tx_paying(3, false);
+    assert!(pick_accepted(chain_hash(0), &[a], &[(a, vec![t3.id()])], false, &in_bulk, &bodies).is_err());
+}
