@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="The complete KasPass guide: running a membership from the dashboard, joining and managing one, how the contracts work and what they can and can't do.">
+<link rel="alternate" type="text/markdown" href="/guide.md" title="The KasPass guide as Markdown">
+<title>Guide · KasPass</title>
+<script src="/assets/theme-boot.js"></script>
+<link rel="stylesheet" href="/assets/fonts.css">
+<style>
+  :root {
+    --bg: #050808;
+    --panel: #0d1414;
+    --line: #1c2a29;
+    --text: #e8f1f0;
+    --muted: #8aa09d;
+    --teal: #49d9c8;
+    --teal-dim: #1f5f58;
+    --font-head: Montserrat, sans-serif;
+    --font-body: Inter, system-ui, sans-serif;
+    --accent-ink: #031312;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.6 var(--font-body); }
+  .wrap { max-width: 780px; margin: 0 auto; padding: 32px 16px 64px; }
+  header { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
+  header svg { width: 23.4px; height: 26px; flex: none; color: var(--teal); }
+  header a.back + a.back { margin-left: 14px; }
+  .word { font: 800 21px/1 var(--font-head); letter-spacing: -0.02em; }
+  header a.back { margin-left: auto; font-size: 14px; white-space: nowrap; }
+  h1 { font: 800 clamp(28px, 6vw, 38px)/1.15 var(--font-head); letter-spacing: -0.6px; margin: 0 0 10px; }
+  .lead { color: var(--muted); font-size: 17px; margin: 0 0 22px; }
+  nav.toc { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 26px; }
+  [hidden] { display: none !important; }
+  nav.toc a { font-size: 14px; padding: 10px 14px; border-radius: 999px; background: color-mix(in srgb, var(--teal) 8%, transparent); text-decoration: none; }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 20px 22px; margin-bottom: 14px; scroll-margin-top: 16px; }
+  h2 { font: 600 19px/1.3 var(--font-head); margin: 0 0 10px; }
+  h3 { font: 600 16px/1.3 var(--font-head); margin: 16px 0 6px; }
+  p { margin: 0 0 10px; }
+  p:last-child, ol:last-child, ul:last-child { margin-bottom: 0; }
+  ol, ul { margin: 0 0 10px; padding-left: 22px; }
+  li { margin-bottom: 6px; }
+  a { color: var(--teal); }
+  b { font-weight: 600; }
+  .muted { color: var(--muted); }
+  /* Amounts and names inside grey explanations stand out. */
+  .muted b, .muted strong { color: var(--text); }
+  .note { border-left: 3px solid var(--teal-dim); padding: 2px 0 2px 12px; color: var(--muted); font-size: 15px; }
+  .ui { font-weight: 600; color: var(--teal); white-space: normal; }
+  footer { margin-top: 28px; color: var(--muted); font-size: 13px; text-align: center; }
+  /* The guide: one long page of plain headings, lists and tables, readable without scripts. */
+  main h1 { margin-bottom: 14px; }
+  main h2 { font: 700 23px/1.25 var(--font-head); margin: 40px 0 12px; padding-top: 22px; border-top: 1px solid var(--line); scroll-margin-top: 16px; }
+  main h3 { font: 600 17px/1.3 var(--font-head); margin: 24px 0 8px; scroll-margin-top: 16px; }
+  main h2 a.self, main h3 a.self { color: inherit; text-decoration: none; }
+  main ul, main ol { margin: 0 0 14px; }
+  main p { margin: 0 0 12px; }
+  main code { font: 14px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; background: color-mix(in srgb, var(--teal) 10%, transparent); padding: 1px 5px; border-radius: 5px; overflow-wrap: anywhere; }
+  .tablewrap { overflow-x: auto; margin: 0 0 16px; }
+  main table { border-collapse: collapse; width: 100%; font-size: 15px; }
+  main th, main td { text-align: left; vertical-align: top; padding: 9px 10px; border-bottom: 1px solid var(--line); }
+  main th { font-weight: 600; color: var(--muted); }
+  main strong { font-weight: 600; }
+</style>
+<link rel="stylesheet" href="/brand/fonts.css">
+<link rel="stylesheet" href="/brand/theme.css">
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <svg viewBox="19.6 14 64.7 72" aria-hidden="true"><path fill="currentColor" d="M28 61.61 28 86 42 86 42 73.36ZM28 38.39 42 26.64 42 14 28 14ZM41.39 50 84.28 14 62.51 14 19.61 50 62.51 86 84.28 86Z"/></svg>
+    <div class="word">KasPass</div>
+    <a class="back" href="/help">Quick help</a><a class="back" href="/">Membership page</a>
+  </header>
+  <main id="main">
+<!--GUIDE-->
+  </main>
+  <footer>Powered by <a href="https://kaspass.app/" target="_blank" rel="noopener">KasPass</a> · <a href="/guide.md">This guide as plain text</a> · <a href="https://github.com/kaspass/kaspass" target="_blank" rel="noopener">source code</a></footer>
+</div>
+</body>
+</html>

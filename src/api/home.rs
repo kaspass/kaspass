@@ -269,7 +269,7 @@ pub async fn sitemap(headers: HeaderMap) -> axum::response::Response {
     if !is_home(&headers) {
         return (StatusCode::NOT_FOUND, "Not found").into_response();
     }
-    let urls = ["", "creators", "help", "privacy", "terms"].iter().map(|p| format!("  <url><loc>https://kaspass.app/{p}</loc></url>\n")).collect::<String>();
+    let urls = ["", "creators", "help", "guide", "privacy", "terms"].iter().map(|p| format!("  <url><loc>https://kaspass.app/{p}</loc></url>\n")).collect::<String>();
     let x = format!("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n{urls}</urlset>\n");
     ([(header::CONTENT_TYPE, "application/xml; charset=utf-8"), (header::CACHE_CONTROL, "public, max-age=3600")], x).into_response()
 }

@@ -22,6 +22,7 @@ mod trial;
 mod members;
 mod alerts;
 mod examples;
+mod guide;
 
 use anyhow::Result;
 use std::sync::Mutex;
@@ -507,6 +508,9 @@ pub async fn serve(setups: Vec<LevelSetup>, chain: Chain, port: u16, members_htm
         .route("/dashboard", get(dashboard))
         .route("/club", get(club_page))
         .route("/help", get(help_page))
+        .route("/guide", get(guide::guide_page))
+        .route("/guide.md", get(guide::guide_markdown))
+        .route("/llms.txt", get(guide::llms_txt))
         .route("/v1/creator", get(creator_overview))
         .route("/v1/creator/prepare", post(creator_prepare))
         .route("/v1/launch/prepare", post(launch_prepare))
