@@ -69,6 +69,12 @@
   .outs .n { color: var(--muted); font-size: 12px; grid-row: span 2; align-self: center; }
   .outs .what { font-weight: 600; }
   .outs .what.fee { color: var(--teal); }
+  .outs li.change { opacity: .6; }
+  .approving { font-weight: 700; font-size: 16px; margin-bottom: 4px; }
+  .outsfold { margin-top: 8px; }
+  .outsfold > summary { cursor: pointer; min-height: 32px; display: flex; align-items: center; }
+  /* Prepay details only once someone ticks it. */
+  .autobox:not(.on) #autoMore, .autobox:not(.on) .contractLine { display: none; }
   .outs .addr { color: var(--muted); font: 12px ui-monospace, monospace; word-break: break-all; }
   .salebanner { border: 1px solid rgba(242,200,107,.45); background: rgba(242,200,107,.09); color: #f2c86b; border-radius: 12px; padding: 10px 14px; margin-bottom: 14px; font-weight: 600; }
   .salebanner .sub { color: var(--muted); font-weight: 400; font-size: 13px; }
@@ -332,7 +338,8 @@
   button.linkish { background: none; border: none; color: var(--muted); text-decoration: underline; padding: 0; margin-top: 10px; font-size: 13px; cursor: pointer; }
   details.passdetails { margin-top: 12px; }
   details.passdetails summary { cursor: pointer; color: var(--text); font-size: 15px; font-weight: 600; padding: 6px 0; }
-  .members a.btn { display: inline-block; background: var(--teal); color: var(--accent-ink); text-decoration: none; font-weight: 700; font-size: 16px; padding: 12px 22px; border-radius: var(--r-btn); }
+  .donesite { margin: 4px 0 10px; }
+  #doneSite a.btn, #members a.btn { display: inline-block; background: var(--teal); color: var(--accent-ink); text-decoration: none; font-weight: 700; font-size: 16px; padding: 12px 22px; border-radius: var(--r-btn); }
   /* Sent here from a partner site: a way back. */
   /* The trust line when a visitor arrives from the creator's own site: plain text, not a box. */
   .returnbar { display: block; margin: -8px 0 20px; font-size: 13px; line-height: 1.5; color: var(--muted); }
@@ -484,6 +491,7 @@
   <section class="panel done hidden" id="doneBox" aria-live="polite">
     <h2 class="donetitle hidden" id="doneTitle" tabindex="-1"></h2>
     <div class="returndone hidden" id="returnDone"><div><b>You're all set.</b> Your access is active, so you can go back now.</div><a class="btn" id="returnGo" href="#">Back to <span class="rh"></span></a></div>
+    <div class="donesite hidden" id="doneSite"></div>
     <div id="doneNext"></div>
     <p class="small hidden" id="doneLine"></p>
     <div id="switchSlot"></div>
@@ -640,6 +648,7 @@
       <button class="linkish" id="qrCancel">Cancel and go back</button>
     </div>
     <p class="muted small hidden" id="noShop">This website isn't selling <span data-pw="s">memberships</span> right now.</p>
+    <span id="buyStatusHome" hidden></span>
     <div id="buyStatus" class="small hidden" style="margin-top:12px"></div>
     <div class="err hidden" id="buyErr"></div>
   </section>

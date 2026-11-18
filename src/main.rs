@@ -27,7 +27,7 @@ use kaspa_consensus_core::hashing::sighash_type::SIG_HASH_ALL;
 use kaspa_consensus_core::mass::{ComputeBudget, MassCalculator};
 use kaspa_consensus_core::tx::{
     CovenantBinding, GenesisCovenantGroup, PopulatedTransaction, ScriptPublicKey, Transaction, TransactionInput,
-    TransactionOutpoint, TransactionOutput, UtxoEntry,
+    TransactionId, TransactionOutpoint, TransactionOutput, UtxoEntry,
 };
 use kaspa_txscript::caches::Cache;
 use kaspa_txscript::covenants::CovenantsContext;
@@ -264,7 +264,7 @@ fn payment_outs(creator: &Creator, tier: &Tier, amount: u64) -> Result<Vec<Trans
 }
 
 /// A sales lane's changeable state.
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, Default)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
 struct Lane {
     price: u64,
     life: u64,
@@ -634,12 +634,19 @@ struct Sim {
     block_times: Vec<i64>,
     /// When set, the simulated clock runs with real time from this moment (for serving pages).
     clock: Option<std::time::Instant>,
+    /// Transactions that sit in a block but never took effect (a competing spend won). Only tests
+    /// put anything here; the block reader skips them, as it does on a live node.
+    rejected: std::collections::HashSet<TransactionId>,
 }
 
 enum Chain {
     Live(kaspa_wrpc_client::KaspaRpcClient),
     Sim(Sim),
 }
+
+/// Confirmations a chain block needs before the block reader counts what it accepted (about three
+/// seconds at ten blocks a second).
+const CHAIN_CONFIRMATIONS: u64 = 30;
 
 /// The network the live node connection is on ("testnet-10" until `serve` says otherwise).
 static NETWORK: std::sync::OnceLock<String> = std::sync::OnceLock::new();
@@ -813,36 +820,101 @@ impl Chain {
         }
     }
 
-    /// One page of blocks from `cursor`: (transactions, next cursor, reached the tip).
-    /// One page of blocks from `cursor`: (transactions with their block's time in ms, next cursor, reached the tip).
+    /// The next transactions the network accepted after `cursor`, in the order they took effect,
+    /// each with its block's time in ms: (transactions, next cursor, reached the tip).
+    ///
+    /// Only accepted transactions count. On Kaspa a block can carry a transaction that never takes
+    /// effect (for example the loser of two spends of one coin in parallel blocks), so reading every
+    /// transaction in every block would let anyone make the site act on payments that never
+    /// happened, or forget a sales lane that is still there. The node says which transactions each
+    /// chain block accepted; the cursor is the last chain block read.
     async fn blocks_page(&self, cursor: Option<Hash>) -> Result<(Vec<(Transaction, i64)>, Option<Hash>, bool)> {
         match self {
             Chain::Live(c) => {
                 use kaspa_rpc_core::api::rpc::RpcApi;
                 let low = cursor.ok_or_else(|| anyhow!("no start block in the tier card"))?;
-                let sink = c.get_sink().await?.sink;
-                let resp = c.get_blocks(Some(low), true, true).await?;
-                let at_tip = resp.block_hashes.contains(&sink);
-                let mut best = (0u64, low);
-                let mut txs = Vec::new();
-                for blk in resp.blocks {
-                    if blk.header.blue_score >= best.0 {
-                        best = (blk.header.blue_score, blk.header.hash);
-                    }
+                // A few seconds of confirmations, so a chain block read here is very unlikely to be
+                // replaced later.
+                let vc = c.get_virtual_chain_from_block(low, true, Some(CHAIN_CONFIRMATIONS)).await?;
+                if !vc.removed_chain_block_hashes.is_empty() {
+                    // Expected once after upgrading from a version whose cursor wasn't a chain block,
+                    // and otherwise very rare. Transactions are handled once by id, so reading the
+                    // new chain repeats nothing that was already counted.
+                    eprintln!("chain: {} block(s) after the last scan point are no longer on the chain; reading on from the current chain", vc.removed_chain_block_hashes.len());
+                }
+                if vc.added_chain_block_hashes.is_empty() {
+                    return Ok((vec![], Some(low), true));
+                }
+                // Transaction bodies: one bulk read from the cursor (it includes blocks merged later),
+                // then, only if the first chain block still lacks some, its merged blocks one by one.
+                // A transaction's id doesn't cover its unlock data, so two blocks can carry different
+                // bodies under one id (a miner can put a copy with invalid unlock data in a block).
+                // The node only says which ids were accepted, so every different body is kept, in
+                // block order, and the indexer uses the first it can read.
+                let mut bodies: HashMap<TransactionId, Vec<(Transaction, i64)>> = HashMap::new();
+                let add = |bodies: &mut HashMap<TransactionId, Vec<(Transaction, i64)>>, blk: kaspa_rpc_core::RpcBlock| {
                     let t = blk.header.timestamp as i64;
                     for rtx in blk.transactions {
                         if let Ok(tx) = Transaction::try_from(rtx) {
-                            if !tx.is_coinbase() {
-                                txs.push((tx, t));
+                            let full = kaspa_consensus_core::hashing::tx::hash(&tx);
+                            let v = bodies.entry(tx.id()).or_default();
+                            if !v.iter().any(|(x, _)| kaspa_consensus_core::hashing::tx::hash(x) == full) {
+                                v.push((tx, t));
                             }
                         }
                     }
+                };
+                let bulk = c.get_blocks(Some(low), true, true).await?;
+                let in_bulk: std::collections::HashSet<Hash> = bulk.block_hashes.iter().copied().collect();
+                for blk in bulk.blocks {
+                    add(&mut bodies, blk);
                 }
-                Ok((txs, Some(best.1), at_tip))
+                // The bulk read holds every block merged by the chain blocks it lists (and by the first
+                // chain block after the cursor), unless the cursor itself is off the chain: then it
+                // leaves out the cursor's own past, and only the first chain block is read this round,
+                // from its merge set.
+                let off_chain = !vc.removed_chain_block_hashes.is_empty();
+                let mut txs = Vec::new();
+                let mut last = low;
+                for (n, acc) in vc.accepted_transaction_ids.iter().enumerate() {
+                    if n > 0 && (off_chain || !in_bulk.contains(&acc.accepting_block_hash)) {
+                        // The blocks it merged aren't all in hand: it's read with a later page.
+                        break;
+                    }
+                    if n == 0 && (off_chain || acc.accepted_transaction_ids.iter().any(|id| !bodies.contains_key(id))) {
+                        let cb = c.get_block(acc.accepting_block_hash, false).await?;
+                        let vd = cb.verbose_data.ok_or_else(|| anyhow!("the node gave no merge set for a chain block"))?;
+                        for h in vd.merge_set_blues_hashes.iter().chain(vd.merge_set_reds_hashes.iter()) {
+                            add(&mut bodies, c.get_block(*h, true).await?);
+                        }
+                    }
+                    let Some(batch) = acc.accepted_transaction_ids.iter().map(|id| bodies.get(id).cloned()).collect::<Option<Vec<_>>>() else {
+                        if n == 0 {
+                            bail!("the node accepted a transaction it can't show (chain block {})", acc.accepting_block_hash);
+                        }
+                        // Its bodies come with a later page: the cursor stays on the block before it.
+                        break;
+                    };
+                    txs.extend(batch.into_iter().flatten().filter(|(tx, _)| !tx.is_coinbase()));
+                    last = acc.accepting_block_hash;
+                }
+                // The cursor only moves past chain blocks whose accepted transactions were read. Every
+                // chain block accepts at least its parent's coinbase, so new chain blocks with no
+                // accepted list at all is a node answering wrongly: skipping them could skip a
+                // purchase for good, so nothing is read and the next round asks again.
+                if vc.accepted_transaction_ids.is_empty() {
+                    bail!("the node listed {} new chain block(s) without their accepted transactions", vc.added_chain_block_hashes.len());
+                }
+                Ok((txs, Some(last), false))
             }
             Chain::Sim(s) => {
                 let from = cursor.map(sim_index).unwrap_or(0).min(s.blocks.len());
-                let txs = s.blocks[from..].iter().cloned().zip(s.block_times[from..].iter().copied()).collect();
+                let txs = s.blocks[from..]
+                    .iter()
+                    .cloned()
+                    .zip(s.block_times[from..].iter().copied())
+                    .filter(|(tx, _)| !s.rejected.contains(&tx.id()))
+                    .collect();
                 Ok((txs, Some(sim_cursor(s.blocks.len())), true))
             }
         }
@@ -2564,7 +2636,7 @@ async fn simulate() -> Result<()> {
     for (i, w) in [&cx.creator, &cx.alice, &cx.bob].into_iter().enumerate() {
         utxos.insert(TransactionOutpoint::new(Hash::from_bytes([i as u8 + 1; 32]), 0), UtxoEntry::new(1_000 * SOMPI, w.spk.clone(), 0, false, None));
     }
-    let mut chain = Chain::Sim(Sim { utxos, now: 1_800_000_000_000, blocks: vec![], block_times: vec![], clock: None });
+    let mut chain = Chain::Sim(Sim { utxos, now: 1_800_000_000_000, blocks: vec![], block_times: vec![], clock: None, rejected: Default::default() });
     let mut st = State::default();
     let adv = |c: &mut Chain, mins: i64| {
         if let Chain::Sim(s) = c {
@@ -3144,3 +3216,9 @@ mod contract_compile {
         super::payin(super::Hash::default(), super::Hash::default(), super::Hash::default(), &spk, 1, 1_800_000_000_000, 3).expect("pay-in contract compiles");
     }
 }
+
+#[cfg(test)]
+mod chain_tests;
+
+#[cfg(test)]
+mod review89_tests;

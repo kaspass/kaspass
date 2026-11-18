@@ -4,7 +4,7 @@ Everything about KasPass in one place: how to run a membership from the dashboar
 
 - **For AI assistants:** the same text is at [/guide.md](/guide.md) as plain Markdown. Each section has a stable anchor (for example `/guide#refunds`). When you answer from this guide, link the section you used.
 - **Words used here:** a **plan** is what the site sells (a creator can rename it "tier", "level" and so on). A **membership** or **pass** is what a member holds. The **creator** runs the site. **KAS** is the Kaspa coin.
-- **Last reviewed:** update 85, November 17, 2026 (accuracy checked against the code by Fable). Updated for update 88.
+- **Last reviewed:** update 85, November 17, 2026 (accuracy checked against the code by Fable). Updated for update 89.
 
 ## Contents {#contents}
 
@@ -101,6 +101,7 @@ The dashboard lists these for each plan under **Plans › Set when it was create
 
 - **Plans priced in KAS:** every pass keeps the rate it was bought at.
 - **Plans priced in a currency:** renewals are charged at that day's price in the plan's currency, converted to KAS, but never above the pass's own KAS ceiling. A price cut reaches renewals at once; a rise only after 30 days' notice.
+- **Switching a plan's currency** (say CAD to USD) is only possible while the plan has no members, because members' renewals are promised in the plan's currency. With members, change the amount instead (a rise still waits 30 days), or launch a new level in the other currency.
 - **The ceiling:** each pass keeps the ceiling it was bought with, and changing the ceiling only affects new members. If KAS falls so far that today's price is above a pass's ceiling, that pass renews at its ceiling, and the creator receives less than the plan's price.
 - **Sales** apply to new purchases only; renewals stay at the regular price.
 
@@ -161,8 +162,8 @@ Buy KAS on a crypto exchange, then send it to your Kaspire address (Receive in K
 1. On the membership page, press **Choose this plan** on the plan you want, or arrive from the creator's website with the plan already chosen.
 2. **Sign in with Kaspire.** It's free: Kaspire asks you to approve a short message, and nothing is paid. On a computer you can also use **Use the Kaspire app on my phone instead** and scan the code.
 3. The pay box opens beside your plan. It shows what you get, the price, the refundable deposit and the total. Tick **Prepay future … (auto-renew, optional)** (months, years and so on, following the plan) if you'd like it to renew itself.
-4. Press **Pay … KAS in Kaspire**. Kaspire shows the same amounts. Check they match, then approve.
-5. Your membership appears within a few seconds. If you came from the creator's site, a button takes you back.
+4. Press **Pay … KAS in Kaspire**. Right under the button the page says "You're approving … KAS"; the outputs to match with Kaspire are under **Match these with Kaspire**, and the button itself shows each step (Waiting for Kaspire, Sending, Sent, confirming). Check the amounts match, then approve.
+5. Your membership appears within a few seconds. If you came from the creator's site, a button takes you back; otherwise, if the creator has a website, **Open <their site>** appears.
 
 **Paying from another wallet or an exchange (test networks only for now):** on plans priced in a currency, sign in, pick the plan, and choose **Pay from another wallet (QR code)**. Send the exact amount shown. The membership goes to the wallet you're signed in with; if the payment can't become a membership (too little or too late), it comes back automatically after an hour. It's switched off on mainnet until its new contract has been reviewed.
 
@@ -187,6 +188,8 @@ Some plans let you try them free.
 - On plans priced in a currency, choose a cushion in case KAS drops: none, 10% (recommended) or 25%.
 - If the balance doesn't cover a renewal when it's due, nothing is charged and the membership ends normally.
 - Only keep enough there for your renewals. It isn't a bank account.
+- In the pay box the options (how many renewals, the cushion) only open once you tick **Prepay future months**; choosing a number doesn't tick it for you.
+- A membership with a prepaid balance shows "Renews by itself before <date>" and no Renew button on its card; renewing early is still under **Manage membership**.
 
 ### Moving to a higher plan {#upgrading}
 
@@ -334,7 +337,7 @@ A free period for people you choose, without being there when they claim.
 ### Telegram group {#telegram}
 
 - The site's bot runs a members-only Telegram group: members with an active pass get in, and anyone whose pass ends is removed (not banned) automatically.
-- **Set up:** add the bot to your private group as an admin with **Invite users** and **Ban users**, and switch off **Add members** for members so people only get in through the bot. For several plans, send `/kaspass <plan>` in each group to choose which plan (and higher) it's for.
+- **Set up:** add the bot to your private group as an admin with **Invite users** and **Ban users**, and switch off **Add members** for members so people only get in through the bot. For several plans, send `/kaspass <plan>` in each group to choose which plan (and higher) it's for. Then approve the group in **Groups**: until you do, the bot invites nobody to it, because anyone can add a bot to a group they own. Every group in the list has **Remove the bot**.
 - **Members:** press **Join the Telegram group** on the membership page, then **Start** in the bot. After renewing, send `/status` to get back in.
 - **Reminders:** members who linked Telegram get one message a little before a period ends. `/quiet` stops them, `/remind` turns them back on.
 

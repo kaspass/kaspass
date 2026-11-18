@@ -49,8 +49,14 @@ pub struct Link {
 pub struct Group {
     pub chat_id: i64,
     pub title: String,
-    /// "pass", "level:<id>", "tier:<name>", or None until an admin picks one.
+    /// "pass", "level:<id>", "tier:<name>", or None until the site's owner approves one. Only a
+    /// group with a key is offered to members.
     pub key: Option<String>,
+    /// Who a group admin asked for it to be for, waiting for the site's owner to approve it in the
+    /// dashboard. (Anyone can add a public bot to a group they own, so a group admin's word alone
+    /// never makes it a members' group.)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pending: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Default, Debug)]
@@ -71,6 +77,9 @@ pub struct BotState {
     pub offset: i64,
 }
 
+/// What the bot says until the site's owner has approved a group.
+const APPROVAL: &str = "The site's owner approves it in the KasPass dashboard (Groups) before any members are invited.";
+
 pub struct Bot {
     token: String,
     api: String,
@@ -83,7 +92,14 @@ pub struct Bot {
     /// What groups can be for besides "pass", as (key, name): paid levels ("level:<id>", "Gold")
     /// then club tiers ("tier:Whale", "Whale"). Kept up to date by the server.
     choices: Mutex<Vec<(String, String)>>,
+    /// (user, group) -> when a sweep first found them in a group they no longer qualify for. They're
+    /// removed only if a later sweep, at least MISS_CONFIRM later, still says so: one bad reading
+    /// (a node a moment behind, a renewal mid-way) mustn't send "your membership has ended".
+    misses: Mutex<HashMap<(i64, i64), Instant>>,
 }
+
+/// How long a "no longer qualifies" must hold before the member is removed.
+const MISS_CONFIRM: Duration = Duration::from_secs(120);
 
 /// "Which access keys does this wallet have right now?" ("pass", "tier:Whale", ...).
 /// None means the server can't tell yet (still syncing, or the NFT indexer is down), so nothing changes.
@@ -134,13 +150,13 @@ impl Bot {
         if let Some(id) = state.chat_id.take() {
             let title = state.chat_title.take().unwrap_or_else(|| "your group".into());
             if !state.groups.iter().any(|g| g.chat_id == id) {
-                state.groups.push(Group { chat_id: id, title, key: Some("pass".into()) });
+                state.groups.push(Group { chat_id: id, title, key: Some("pass".into()), pending: None });
             }
             for l in state.links.iter_mut().filter(|l| l.in_group) {
                 l.in_groups = vec![id];
             }
         }
-        let mut bot = Bot { token, api, http, username: String::new(), path, state: Mutex::new(state), codes: Mutex::new(HashMap::new()), choices: Mutex::new(Vec::new()) };
+        let mut bot = Bot { token, api, http, username: String::new(), path, state: Mutex::new(state), codes: Mutex::new(HashMap::new()), choices: Mutex::new(Vec::new()), misses: Mutex::new(HashMap::new()) };
         let me = bot.call("getMe", json!({})).await.map_err(|e| anyhow!("Telegram didn't accept the bot token ({e})"))?;
         bot.username = me["username"].as_str().unwrap_or_default().to_string();
         bot.save();
@@ -201,6 +217,29 @@ impl Bot {
     /// Groups the bot is in without admin rights.
     pub fn unmanaged(&self) -> Vec<Group> {
         self.state.lock().unwrap_or_else(|e| e.into_inner()).unmanaged.clone()
+    }
+
+    /// The site's owner approves who a group is for (what its admin asked). Returns the group's title
+    /// and who it's for now.
+    pub async fn approve(&self, chat: i64, shown: Option<&str>) -> Result<(String, String)> {
+        let (title, key) = {
+            let mut s = self.state.lock().unwrap_or_else(|e| e.into_inner());
+            let g = s.groups.iter_mut().find(|g| g.chat_id == chat).ok_or_else(|| anyhow!("the bot doesn't manage that group"))?;
+            // The owner approves what the dashboard showed: if a group admin changed the request in
+            // the meantime, nothing is approved and the dashboard shows the new request.
+            if let (Some(shown), Some(p)) = (shown, g.pending.as_deref()) {
+                if key_label(p) != shown {
+                    return Err(anyhow!("the group's admin changed who it's for since this page loaded; check it again"));
+                }
+            }
+            let key = g.pending.take().ok_or_else(|| anyhow!("nobody in that group has chosen who it's for yet: an admin of the group sends /kaspass there first"))?;
+            g.key = Some(key.clone());
+            (g.title.clone(), key)
+        };
+        self.save();
+        println!("telegram: the owner approved group \"{}\" ({chat}) for {}", crate::log_safe(&title), key_label(&key));
+        self.say(chat, &format!("Approved: this group is now for {}. Members who qualify can join from the membership website, and I'll remove anyone who stops qualifying.", key_label(&key))).await;
+        Ok((title, key_label(&key)))
     }
 
     /// The bot leaves a group it knows about (managed or not).
@@ -332,14 +371,16 @@ impl Bot {
                     }
                     None => {
                         let first = s.groups.is_empty();
-                        let key = (first && no_tiers).then(|| "pass".to_string());
-                        let ready = key.is_some();
-                        s.groups.push(Group { chat_id: chat, title: title.clone(), key });
-                        println!("telegram: connected to group \"{}\" ({chat})", crate::log_safe(&title));
+                        // On a site with one plan the only choice is "every paid member"; it still
+                        // waits for the owner's approval.
+                        let pending = (first && no_tiers).then(|| "pass".to_string());
+                        let ready = pending.is_some();
+                        s.groups.push(Group { chat_id: chat, title: title.clone(), key: None, pending });
+                        println!("telegram: added to group \"{}\" ({chat}); waiting for the owner's approval", crate::log_safe(&title));
                         Some(if ready {
-                            "KasPass is connected. Members can join from the membership website, and I'll remove anyone whose access ends.".to_string()
+                            format!("KasPass is connected. {APPROVAL}")
                         } else {
-                            format!("KasPass is connected. {}", self.assign_help())
+                            format!("KasPass is connected. {} {APPROVAL}", self.assign_help())
                         })
                     }
                 },
@@ -355,7 +396,7 @@ impl Bot {
                 // with the bot in it); greet once.
                 "member" if known.is_none() && s.unmanaged.iter().any(|g| g.chat_id == chat) => None,
                 "member" if known.is_none() => {
-                    s.unmanaged.push(Group { chat_id: chat, title: title.clone(), key: None });
+                    s.unmanaged.push(Group { chat_id: chat, title: title.clone(), key: None, pending: None });
                     Some("Thanks for adding me. Make me an admin (with \"Invite users\" and \"Ban users\") and I'll start managing this group for KasPass.".to_string())
                 }
                 _ => None,
@@ -402,14 +443,27 @@ impl Bot {
             self.say(chat, &format!("\"{rest}\" isn't one of this site's levels. {}", self.assign_help())).await;
             return;
         };
-        {
+        let already = {
             let mut s = self.state.lock().unwrap_or_else(|e| e.into_inner());
-            if let Some(g) = s.groups.iter_mut().find(|g| g.chat_id == chat) {
-                g.key = Some(key.clone());
+            match s.groups.iter_mut().find(|g| g.chat_id == chat) {
+                Some(g) if g.key.as_deref() == Some(key.as_str()) => {
+                    g.pending = None;
+                    true
+                }
+                Some(g) => {
+                    g.pending = Some(key.clone());
+                    false
+                }
+                None => return,
             }
+        };
+        if already {
+            self.save();
+            self.say(chat, &format!("This group is already for {}.", key_label(&key))).await;
+            return;
         }
         self.save();
-        self.say(chat, &format!("Done: this group is now for {}. Members who qualify can join from the membership website, and I'll remove anyone who stops qualifying.", key_label(&key))).await;
+        self.say(chat, &format!("Got it: this group will be for {}. {APPROVAL}", key_label(&key))).await;
     }
 
     fn set_title(&self, chat: i64, title: &str) {
@@ -641,7 +695,18 @@ impl Bot {
                     Err(_) => continue,
                 };
                 let inside = matches!(status.as_str(), "member" | "restricted");
-                if inside && !keys.iter().any(|k| k == key) {
+                let gone = inside && !keys.iter().any(|k| k == key);
+                {
+                    let mut m = self.misses.lock().unwrap_or_else(|e| e.into_inner());
+                    if !gone {
+                        m.remove(&(l.user_id, g.chat_id));
+                    } else if m.entry((l.user_id, g.chat_id)).or_insert_with(Instant::now).elapsed() < MISS_CONFIRM {
+                        continue; // seen once: check again on a later sweep before removing
+                    } else {
+                        m.remove(&(l.user_id, g.chat_id));
+                    }
+                }
+                if gone {
                     // Ban then unban: removes them without blocking a later return.
                     if self.call("banChatMember", json!({ "chat_id": g.chat_id, "user_id": l.user_id })).await.is_ok() {
                         let _ = self.call("unbanChatMember", json!({ "chat_id": g.chat_id, "user_id": l.user_id, "only_if_banned": true })).await;
@@ -683,3 +748,7 @@ pub fn short(a: &str) -> String {
 fn now_ms() -> i64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as i64).unwrap_or(0)
 }
+
+#[cfg(test)]
+#[path = "telegram_tests.rs"]
+mod tests;

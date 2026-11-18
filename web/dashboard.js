@@ -258,7 +258,8 @@ async function renderSetup() {
   if (!(data.level && data.level.perks && data.level.perks.length)) items.push([`Say what ${data.level && data.level.name ? data.level.name : "your plan"} includes`, "levels"]);
   try {
     const t = await (await fetch("/v1/creator/telegram?session=" + encodeURIComponent(session))).json();
-    if (t.enabled && !(t.groups || []).some((g) => g.assigned)) items.push(["Connect your Telegram group", "groups"]);
+    if (t.enabled && (t.groups || []).some((g) => g.pending)) items.push(["A Telegram group is waiting for approval: check it's yours", "groups"]);
+    else if (t.enabled && !(t.groups || []).some((g) => g.assigned)) items.push(["Connect your Telegram group", "groups"]);
   } catch {}
   if (pageCfg && !pageCfg.intro_html) items.push(["Write an intro for your page", "page"]);
   if (data.v4 && data.v4.keeper && data.v4.keeper.balance_sompi < KAS) items.push([`Turn on auto-renew: send 2 ${card && card.network === "mainnet" ? "KAS" : "test KAS"} to your fees wallet. It pays the tiny network fee each time a member's plan renews itself (2 KAS covers about 60 renewals).`, "promos"]);
@@ -1101,21 +1102,33 @@ async function renderTelegram() {
     }
     const on = t.groups.filter((g) => g.assigned);
     pill("tgPill", on.length > 0, on.length ? `Connected: ${on.map((g) => g.title).join(", ")}` : "Not connected");
-    const groups = t.groups.map((g) => `<b>${escHtml(g.title)}</b> → ${g.assigned ? escHtml(g.for) : "<i>not linked to a plan yet: send /kaspass in the group</i>"}`).join("<br>");
-    el.innerHTML = `<ol class="small"><li>Open your private group in Telegram and add <b>@${escHtml(t.bot)}</b> as a member.</li><li>Make it an admin, with "Invite users" and "Ban users" switched on.</li><li>In the group, send <b>/kaspass</b>. The bot lists your ${escHtml(levelWord().many)}. Send the one this group is for.</li></ol>` +
-      (t.groups.length ? `<div style="margin-top:8px">Your groups:<br>${groups}</div>` : "") +
+    const sbtn = `class="ghost" style="padding:4px 10px;font-size:13px;margin-left:6px"`;
+    const groups = t.groups.map((g) => {
+      const now = g.assigned ? `→ ${escHtml(g.for)}` : `→ <i>${g.pending ? "waiting for you" : "not linked to a plan yet: an admin sends /kaspass in the group"}</i>`;
+      const ask = g.pending ? `<br><span class="small">An admin of this group asked for it to be for <b>${escHtml(g.pending)}</b>. Approve it only if it's your own group.</span> <button ${sbtn} data-approve="${g.chat_id}" data-for="${escHtml(g.pending)}">Approve</button>` : "";
+      return `<div style="margin-top:6px"><b>${escHtml(g.title)}</b> ${now} <button ${sbtn} data-leave="${g.chat_id}">Remove the bot</button>${ask}</div>`;
+    }).join("");
+    el.innerHTML = `<ol class="small"><li>Open your private group in Telegram and add <b>@${escHtml(t.bot)}</b> as a member.</li><li>Make it an admin, with "Invite users" and "Ban users" switched on.</li><li>In the group, send <b>/kaspass</b>. The bot lists your ${escHtml(levelWord().many)}. Send the one this group is for.</li><li>Approve the group here. Until you do, the bot invites nobody to it (anyone can add a bot to their own group).</li></ol>` +
+      (t.groups.length ? `<div style="margin-top:8px">Your groups:${groups}</div>` : "") +
       `<p class="muted small" style="margin:8px 0 0">Members can then join from your page, and anyone whose membership ends is removed for you.</p>`;
     if (t.unmanaged && t.unmanaged.length) {
       el.innerHTML += `<div style="margin-top:10px">The bot is also in ${t.unmanaged.length === 1 ? "a group" : "these groups"} without admin rights, so it isn't managing ${t.unmanaged.length === 1 ? "it" : "them"}:<br>` +
-        t.unmanaged.map((g) => `<b>${escHtml(g.title)}</b> <button class="ghost" style="padding:4px 10px;font-size:13px" data-leave="${g.chat_id}">Remove the bot</button>`).join("<br>") + "</div>";
-      el.querySelectorAll("[data-leave]").forEach((b) => (b.onclick = async () => {
-        if (b.dataset.armed !== "1") { b.dataset.armed = "1"; b.textContent = "Press again to remove"; return; }
-        b.disabled = true;
-        const r = await fetch("/v1/creator/telegram/leave", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ session, chat_id: Number(b.dataset.leave) }) });
-        b.textContent = r.ok ? "Removed" : "Couldn't remove: " + (await r.text());
-        if (r.ok) setTimeout(renderTelegram, 1200);
-      }));
+        t.unmanaged.map((g) => `<b>${escHtml(g.title)}</b> <button ${sbtn} data-leave="${g.chat_id}">Remove the bot</button>`).join("<br>") + "</div>";
     }
+    el.querySelectorAll("[data-leave]").forEach((b) => (b.onclick = async () => {
+      if (b.dataset.armed !== "1") { b.dataset.armed = "1"; b.textContent = "Press again to remove"; return; }
+      b.disabled = true;
+      const r = await fetch("/v1/creator/telegram/leave", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ session, chat_id: Number(b.dataset.leave) }) });
+      b.textContent = r.ok ? "Removed" : "Couldn't remove: " + (await r.text());
+      if (r.ok) setTimeout(renderTelegram, 1200);
+    }));
+    el.querySelectorAll("[data-approve]").forEach((b) => (b.onclick = async () => {
+      if (b.dataset.armed !== "1") { b.dataset.armed = "1"; b.textContent = "Press again to approve"; return; }
+      b.disabled = true;
+      const r = await fetch("/v1/creator/telegram/approve", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ session, chat_id: Number(b.dataset.approve), for: b.dataset.for }) });
+      b.textContent = r.ok ? "Approved" : "Couldn't approve: " + (await r.text());
+      if (r.ok) setTimeout(renderTelegram, 1200);
+    }));
     $("tgLinks").innerHTML = t.links.length
       ? "<tr><th>Telegram</th><th>Wallet</th><th>Qualifies for</th><th>In groups</th></tr>" +
         t.links.map((l) => `<tr><td>${escHtml(l.name)}</td><td>${short(l.address)}</td><td>${l.qualifies ? (l.qualifies.map(escHtml).join(", ") || "None") : "checking…"}</td><td>${l.in.map(escHtml).join(", ") || "None"}</td></tr>`).join("")

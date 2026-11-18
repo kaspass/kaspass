@@ -112,6 +112,14 @@ pub struct FoundPass {
     /// v5: the voucher key this pass trusts (hex).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub voucher: Option<String>,
+    /// The coin isn't in the node's coin list right now, and the block reader hasn't handed over
+    /// a transaction that spent it (it runs a few seconds behind): shown as it was last known.
+    #[serde(skip)]
+    pub held: bool,
+    /// The coin this pass was, unchanged, before someone added to (or the owner took back) its
+    /// prepaid balance: same owner, same end date, only the coin and its value differ.
+    #[serde(skip)]
+    pub same_as: Option<(String, u32)>,
 }
 
 /// Saved scan progress, so the next scan only reads new blocks. It can only hide passes,
@@ -141,6 +149,9 @@ struct CachedPass {
     bought_by: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     voucher: Option<String>,
+    /// When the coin was first read, while the node's coin list hasn't shown it yet (0 otherwise).
+    #[serde(default, skip_serializing_if = "is_zero")]
+    first_seen: i64,
 }
 
 /// Friendly names for addresses, shown instead of hashes.
@@ -321,6 +332,15 @@ pub fn script_num(b: &[u8]) -> Option<i64> {
     Some(v)
 }
 
+/// How long a new pass coin is waited for when the node's coin list doesn't show it yet.
+const PASS_GRACE_MS: i64 = 10 * 60 * 1000;
+
+/// How long a pass keeps showing after its coin left the node's coin list while the block reader
+/// hasn't handed over the transaction that spent it. The reader runs a few seconds behind the
+/// coin list (it waits for confirmations), so without this every renewal, top-up or auto-renewal
+/// would make the member's pass vanish until the reader catches up.
+const PASS_HANDOVER_MS: i64 = 60 * 1000;
+
 pub struct Indexer {
     /// The time of the block being read (ms), for the events it creates.
     block_time: i64,
@@ -334,7 +354,22 @@ pub struct Indexer {
     prefix: kaspa_addresses::Prefix,
     seen: HashSet<Hash>,
     candidates: HashMap<TransactionOutpoint, PassState>,
+    /// When each new pass coin was first read (its block's time), so one the node's coin list
+    /// doesn't show yet isn't dropped on the first look.
+    first_seen: HashMap<TransactionOutpoint, i64>,
+    /// When each pass coin was last seen in the node's coin list, and its value then.
+    last_live: HashMap<TransactionOutpoint, (i64, u64)>,
+    /// Pass coins an accepted transaction has spent (read by the block reader).
+    spent: HashSet<TransactionOutpoint>,
+    /// A pass whose balance changed (its terms didn't): new coin -> (the coin it was, its value).
+    /// Until the next look at the coin list, then kept in `same_as`.
+    carried: Vec<(TransactionOutpoint, TransactionOutpoint, u64)>,
+    /// New coin -> the first coin of the same, unchanged pass that was seen in the coin list.
+    same_as: HashMap<TransactionOutpoint, TransactionOutpoint>,
     lanes: HashMap<TransactionOutpoint, Lane>,
+    /// The last few lanes seen spent, newest last: if no live lane is left, a coin with this plan's
+    /// covenant id at one of their addresses is that lane (the address fixes every term).
+    retired: Vec<Lane>,
     events: Vec<Event>,
     pub unmatched: usize,
     pub scanned_txs: usize,
@@ -368,6 +403,12 @@ impl Indexer {
             prefix,
             seen: HashSet::new(),
             candidates: HashMap::new(),
+            first_seen: HashMap::new(),
+            last_live: HashMap::new(),
+            spent: HashSet::new(),
+            carried: Vec::new(),
+            same_as: HashMap::new(),
+            retired: Vec::new(),
             lanes: HashMap::new(),
             events: Vec::new(),
             unmatched: 0,
@@ -417,6 +458,9 @@ impl Indexer {
             let op = TransactionOutpoint::new(p.txid.parse().ok()?, p.index);
             let st = PassState { owner: p.owner.parse().ok()?, expiry: p.expiry, rate: p.rate, life: p.life, credit: p.credit, paid: p.paid, voucher: p.voucher.and_then(|v| v.parse().ok()), bought_by: p.bought_by };
             self.candidates.insert(op, st);
+            if p.first_seen > 0 {
+                self.first_seen.insert(op, p.first_seen);
+            }
         }
         for k in &c.lanes {
             self.seed_lane(k);
@@ -441,6 +485,8 @@ impl Indexer {
                 paid: s.paid,
                 bought_by: s.bought_by.clone(),
                 voucher: s.voucher.map(|h| h.to_string()),
+                // Only while the coin hasn't been seen in the coin list yet.
+                first_seen: if self.last_live.contains_key(op) { 0 } else { self.first_seen.get(op).copied().unwrap_or(0) },
             })
             .collect();
         let lanes = self.lanes.iter().map(|(op, l)| KnownLane { txid: op.transaction_id.to_string(), index: op.index, lane: *l }).collect();
@@ -465,10 +511,18 @@ impl Indexer {
 
     pub fn process(&mut self, tx: &Transaction) {
         let id = tx.id();
-        // A lane that's spent is gone (sales recreate it as a new output below).
-        if !self.lanes.is_empty() {
-            for inp in &tx.inputs {
-                self.lanes.remove(&inp.previous_outpoint);
+        for inp in &tx.inputs {
+            // A lane that's spent is gone (sales recreate it as a new output below).
+            if let Some(l) = self.lanes.remove(&inp.previous_outpoint) {
+                self.retired.retain(|r| *r != l);
+                self.retired.push(l);
+                if self.retired.len() > 8 {
+                    self.retired.remove(0);
+                }
+            }
+            // A pass coin that's spent: from here on its successor (if any) is the pass.
+            if self.candidates.contains_key(&inp.previous_outpoint) {
+                self.spent.insert(inp.previous_outpoint);
             }
         }
         let ours: Vec<usize> =
@@ -477,11 +531,15 @@ impl Indexer {
             self.scanned_txs += 1;
             return;
         }
-        // Only our own transactions are remembered, so memory stays small on a busy network.
-        if !self.seen.insert(id) {
+        // Only our own transactions are remembered, so memory stays small on a busy network. An id
+        // counts as handled once its body was understood: a transaction's id doesn't cover its
+        // unlock data, so a block can carry a copy with the same id that can't be read, and that
+        // copy must not make the real one be skipped.
+        if self.seen.contains(&id) {
             return;
         }
         self.scanned_txs += 1;
+        let mut understood = false;
         for (i, input) in tx.inputs.iter().enumerate() {
             let Some(p) = pushes(&input.signature_script) else { continue };
             if p.len() < 2 {
@@ -493,7 +551,7 @@ impl Indexer {
             let from_sale = self.minter.tags.contains_key(&tag);
             if let Some(entry) = self.minter.tags.get(&tag).cloned() {
                 if let Some(prev) = self.minter.decode(redeem) {
-                    self.follow_lane(tx, i, &entry, &prev, args, &ours);
+                    understood |= self.follow_lane(tx, i, &entry, &prev, args, &ours);
                 }
             }
             let mut event: Option<(String, i64)> = None; // (kind, amount)
@@ -574,18 +632,36 @@ impl Indexer {
                             self.events.push(ev);
                         }
                     }
-                    self.candidates.insert(TransactionOutpoint::new(id, j as u32), state);
+                    let op = TransactionOutpoint::new(id, j as u32);
+                    // A balance change keeps the pass's terms: the new coin is the same pass. If the
+                    // old coin was known good, the new one is too, even if someone moves it again
+                    // before the coin list is next looked at (anyone can add to a pass's balance).
+                    if !from_sale && self.candidates.get(&input.previous_outpoint).is_some_and(|prev| prev.values() == state.values()) {
+                        self.carried.push((op, input.previous_outpoint, tx.outputs[j].value));
+                    }
+                    // Read a second time (after a restart), the coin it replaced may be forgotten
+                    // already: keep what is known about who bought the pass.
+                    let mut state = state;
+                    if state.bought_by.is_none() {
+                        state.bought_by = self.candidates.get(&op).and_then(|c| c.bought_by.clone());
+                    }
+                    self.first_seen.insert(op, self.block_time);
+                    self.candidates.insert(op, state);
+                    understood = true;
                 }
                 None => self.unmatched += 1,
             }
         }
+        if understood {
+            self.seen.insert(id);
+        }
     }
 
     /// A sales lane was spent: work out the lane(s) it became and find them in the outputs.
-    fn follow_lane(&mut self, tx: &Transaction, input: usize, entry: &str, prev: &BTreeMap<String, ArtifactValue>, args: &[Vec<u8>], ours: &[usize]) {
+    fn follow_lane(&mut self, tx: &Transaction, input: usize, entry: &str, prev: &BTreeMap<String, ArtifactValue>, args: &[Vec<u8>], ours: &[usize]) -> bool {
         let get = |k: &str| prev.get(k).and_then(int_of);
         let (Some(price), Some(life), Some(credit), Some(remaining)) = (get("price"), get("life_price"), get("credit"), get("remaining")) else {
-            return;
+            return false;
         };
         let (tp, tl) = (get("term_price").unwrap_or(0), get("term_length").unwrap_or(0));
         let v5 = self.tier.v4.as_ref().is_some_and(|v| v.record_id.is_some());
@@ -629,6 +705,7 @@ impl Indexer {
             _ => vec![], // retire
         };
         let id = tx.id();
+        let mut found = false;
         for l in next {
             let values = self.lane_values(&l);
             let Ok(spk) = self.minter.spk(&values) else { continue };
@@ -636,20 +713,64 @@ impl Indexer {
                 let o = &tx.outputs[j];
                 if o.covenant.map(|c| c.authorizing_input as usize) == Some(input) && o.script_public_key == spk {
                     self.lanes.insert(TransactionOutpoint::new(id, j as u32), l);
+                    found = true;
                 }
             }
         }
+        found
     }
 
     /// The tier's live sales lanes, each checked unspent on-chain right now. (A lane the node
     /// can't see yet stays known and shows up on a later check.)
-    pub async fn verified_lanes(&self, chain: &Chain) -> Result<Vec<FoundLane>> {
+    pub async fn verified_lanes(&mut self, chain: &Chain) -> Result<Vec<FoundLane>> {
         let mut out = vec![];
+        let mut gone: Vec<Lane> = vec![];
         for (op, l) in &self.lanes {
             let spk = self.minter.spk(&self.lane_values(l))?;
             match chain.utxos_at(&spk).await?.into_iter().find(|u| u.op == *op && u.entry.covenant_id == Some(self.cov)) {
                 Some(u) => out.push(FoundLane { txid: op.transaction_id.to_string(), index: op.index, value: u.entry.amount, lane: *l }),
-                None => {}
+                None => gone.push(*l),
+            }
+        }
+        // A known lane whose coin is gone has most likely just sold a pass: the block reader hands
+        // that sale over a few seconds later (it waits for confirmations). Until then the lane it
+        // became is looked for where a sale puts it: the same address for an unlimited lane, the
+        // "one fewer left" address for a limited one (a few steps, for sales in quick succession).
+        // Only this plan's covenant can make a coin with its id, and the address fixes the lane's
+        // terms, so a coin there is the lane.
+        let mut found: Vec<(TransactionOutpoint, Lane, u64)> = vec![];
+        for l in &gone {
+            let mut next = *l;
+            for step in 0..5 {
+                if step > 0 {
+                    if next.remaining <= 0 {
+                        break; // unlimited or sold out: a sale doesn't move it to another address
+                    }
+                    next.remaining -= 1;
+                }
+                let spk = self.minter.spk(&self.lane_values(&next))?;
+                let hit = chain.utxos_at(&spk).await?.into_iter().find(|u| u.entry.covenant_id == Some(self.cov) && !self.lanes.contains_key(&u.op) && !found.iter().any(|f| f.0 == u.op));
+                if let Some(u) = hit {
+                    found.push((u.op, next, u.entry.amount));
+                    break;
+                }
+            }
+        }
+        for (op, l, value) in found {
+            self.lanes.insert(op, l);
+            out.push(FoundLane { txid: op.transaction_id.to_string(), index: op.index, value, lane: l });
+        }
+        // No live lane known: look where the recent ones lived. Only this plan's covenant can make a
+        // coin with its id, and the address fixes the lane's terms, so a coin there is the lane.
+        if out.is_empty() {
+            for l in self.retired.clone().iter().rev() {
+                let spk = self.minter.spk(&self.lane_values(l))?;
+                if let Some(u) = chain.utxos_at(&spk).await?.into_iter().find(|u| u.entry.covenant_id == Some(self.cov)) {
+                    eprintln!("sales lane found again at {}:{}", u.op.transaction_id, u.op.index);
+                    self.lanes.insert(u.op, *l);
+                    out.push(FoundLane { txid: u.op.transaction_id.to_string(), index: u.op.index, value: u.entry.amount, lane: *l });
+                    break;
+                }
             }
         }
         out.sort_by(|a, b| a.txid.cmp(&b.txid).then(a.index.cmp(&b.index)));
@@ -833,13 +954,39 @@ impl Indexer {
                 }
             }
         }
-        // Spent or never-accepted candidates are dropped for good.
-        self.candidates.retain(|op, _| live.contains_key(op));
+        for (op, amount) in &live {
+            self.last_live.insert(*op, (now, *amount));
+        }
+        // A pass whose balance changed stands where its old coin stood.
+        for (new, old, value) in std::mem::take(&mut self.carried) {
+            if self.last_live.contains_key(&old) {
+                self.last_live.entry(new).or_insert((now, value));
+                let first = self.same_as.get(&old).copied().unwrap_or(old);
+                self.same_as.insert(new, first);
+            }
+        }
+        // A pass whose coin has just left the coin list keeps showing until the block reader hands
+        // over the transaction that spent it (then its successor, if any, takes over in the same
+        // step), or for PASS_HANDOVER_MS at most. Other candidates that aren't in the coin list are
+        // dropped for good, except a new one the list may simply not show yet (a node a moment
+        // behind, or one just reconnected): that one gets a grace period before it's given up on.
+        let (first_seen, last_live, spent) = (&self.first_seen, &self.last_live, &self.spent);
+        let held = |op: &TransactionOutpoint| !live.contains_key(op) && !spent.contains(op) && last_live.get(op).is_some_and(|(t, _)| now - *t < PASS_HANDOVER_MS);
+        self.candidates.retain(|op, _| live.contains_key(op) || held(op) || first_seen.get(op).is_some_and(|t| now - *t < PASS_GRACE_MS));
+        let candidates = &self.candidates;
+        let held: HashSet<TransactionOutpoint> = candidates.keys().filter(|op| held(op)).copied().collect();
+        self.first_seen.retain(|op, _| candidates.contains_key(op));
+        self.last_live.retain(|op, _| candidates.contains_key(op));
+        self.spent.retain(|op| candidates.contains_key(op));
+        self.same_as.retain(|op, _| candidates.contains_key(op));
+        let (last_live, same_as) = (&self.last_live, &self.same_as);
         let bond = self.tier.bond;
         let v4 = self.tier.v4.is_some();
+        let value_of = |op: &TransactionOutpoint| live.get(op).copied().or(last_live.get(op).map(|(_, v)| *v)).unwrap_or(bond);
         let mut out: Vec<FoundPass> = self
             .candidates
             .iter()
+            .filter(|(op, _)| live.contains_key(op) || held.contains(op))
             .map(|(op, s)| FoundPass {
                 txid: op.transaction_id.to_string(),
                 index: op.index,
@@ -852,11 +999,13 @@ impl Indexer {
                 lifetime_price_sompi: s.life as u64,
                 credit: s.credit == 1,
                 paid_sompi: s.paid as u64,
-                value_sompi: live.get(op).copied().unwrap_or(bond),
-                balance_sompi: if v4 { live.get(op).copied().unwrap_or(bond).saturating_sub(bond) } else { 0 },
+                value_sompi: value_of(op),
+                balance_sompi: if v4 { value_of(op).saturating_sub(bond) } else { 0 },
                 bought_by: s.bought_by.clone(),
                 owner_address: s.bought_by.clone().filter(|a| owner_hash_of(a).map(|h| h == s.owner).unwrap_or(false)),
                 voucher: s.voucher.map(|h| h.to_string()),
+                held: held.contains(op),
+                same_as: same_as.get(op).map(|o| (o.transaction_id.to_string(), o.index)),
             })
             .collect();
         out.sort_by(|a, b| a.txid.cmp(&b.txid).then(a.index.cmp(&b.index)));

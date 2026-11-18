@@ -455,7 +455,7 @@ async fn watch_once(s: &AppState) {
                     crate::prices::log_payment(&s.home, &txid, crate::prices::PayNote { currency: o.currency.clone(), amount, credit: o.credit, kind: kind.into() });
                     if o.action == "buy" {
                         crate::prices::log_paid(&s.home, &s.card.covenant_id, &owner_hash_of(&o.buyer).map(|h| h.to_string()).unwrap_or_default(), charge as i64, &o.currency, o.price);
-                        s.recent_buys.lock().unwrap_or_else(|e| e.into_inner()).insert(format!("{}:{}", s.card.covenant_id, o.buyer), std::time::Instant::now());
+                        s.recent_buys.lock().unwrap_or_else(|e| e.into_inner()).insert(format!("{}:{}", s.card.covenant_id, o.buyer), (std::time::Instant::now(), txid.to_string()));
                     }
                     println!("pay-in: completed {} order {} ({} KAS to the creator), tx {txid}", o.action, &o.id[..8], kas_str(charge));
                     update(&s.home, &o.id, |x| {

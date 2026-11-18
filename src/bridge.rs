@@ -105,6 +105,12 @@ pub struct Payout {
 struct Book {
     vault: String,
     covenant_id: String,
+    /// The bridge's payout wallet and the two tokens' decimals, pinned with the vault (empty or
+    /// absent in a book saved before they were pinned: filled in from the next read).
+    #[serde(default)]
+    reserve: String,
+    #[serde(default)]
+    decimals: Option<(u32, u32)>,
     /// Kasplex op score of the newest deposit read, and the oldest (for the first read, which
     /// goes backwards and may take several refreshes).
     newest_score: u64,
@@ -189,8 +195,23 @@ async fn refresh(tick: &str, fresh: bool) -> Option<()> {
         return Some(());
     }
     let book = &mut entry.1;
-    if book.vault != st.vault || book.covenant_id != st.covenant_id {
-        *book = Book { vault: st.vault.clone(), covenant_id: st.covenant_id.clone(), ..Default::default() };
+    // The bridge's vault and token are pinned the first time they're read. If the bridge service
+    // later names others, nothing counts until the operator checks it: a changed answer from that
+    // one service would otherwise decide who qualifies for free passes.
+    if book.vault.is_empty() && book.covenant_id.is_empty() {
+        *book = Book { vault: st.vault.clone(), covenant_id: st.covenant_id.clone(), reserve: st.reserve.clone(), decimals: Some((st.kcc_dec, st.src_dec)), ..Default::default() };
+    } else if book.reserve.is_empty() && book.vault == st.vault && book.covenant_id == st.covenant_id {
+        // A book from before the payout wallet and decimals were pinned.
+        book.reserve = st.reserve.clone();
+        book.decimals = Some((st.kcc_dec, st.src_dec));
+    } else if book.vault != st.vault || book.covenant_id != st.covenant_id || book.reserve != st.reserve || book.decimals != Some((st.kcc_dec, st.src_dec)) {
+        eprintln!(
+            "bridge: the bridge service now names a different vault, token, payout wallet or decimals for {tick} than when it was first read ({} / {}); migration checks are paused. If the change is real, delete {} and restart.",
+            crate::log_safe(&st.vault),
+            crate::log_safe(&st.covenant_id),
+            book_path(&tick).map(|p| p.display().to_string()).unwrap_or_default()
+        );
+        return None;
     }
     let mut pages = 0;
     let score_of = |op: &Value| op["opScore"].as_str().and_then(|t| t.parse::<u64>().ok()).unwrap_or(0);

@@ -593,7 +593,7 @@ async fn send_free_pass(s: &AppState, ls: &AppState, shop: &crate::shop::Shop, c
     crate::prices::log_payment(&s.home, &txid, crate::prices::PayNote { currency: currency.clone(), amount: 0.0, credit: 0.0, kind: "promo".into() });
     // Paid nothing in the plan's currency, so it earns no upgrade credit on a higher plan.
     crate::prices::log_paid(&s.home, &level, &owner_hash_of(wallet).map(|h| h.to_string()).unwrap_or_default(), charge as i64, &currency, 0.0);
-    ls.recent_buys.lock().unwrap_or_else(|e| e.into_inner()).insert(format!("{}:{}", ls.card.covenant_id, wallet), std::time::Instant::now());
+    ls.recent_buys.lock().unwrap_or_else(|e| e.into_inner()).insert(format!("{}:{}", ls.card.covenant_id, wallet), (std::time::Instant::now(), txid.clone()));
     println!("promo: gave a free pass ({} KAS to the vault, paid by the keeper), tx {txid}", kas4(charge));
     Ok((txid, now + ls.card.settings.period_ms))
 }
@@ -992,8 +992,10 @@ pub async fn creator_set(State(s): State<AppState>, Json(req): Json<PromoRequest
         return Err(bad("this server doesn't hold the price-approval key this plan trusts, so it can't give free passes (see Payouts, Advanced: server key)"));
     }
     let needs = req.needs.checked().map_err(bad)?;
-    if needs.list.iter().any(|n| n.kind == "token" || n.kind == "kcc20") && req.max_claims == 0 {
-        return Err(bad("with a token requirement, set the most free passes: tokens can be moved to a new wallet to claim again, so a limit keeps that in check"));
+    // Every free pass costs the fees wallet about 1 KAS plus the deposit, and who qualifies rests on
+    // outside indexers, so every campaign has a most-claims limit (the worst case it can cost).
+    if req.max_claims == 0 {
+        return Err(bad("set the most free passes to give: every free pass is paid by your fees wallet, and who qualifies comes from outside services, so a limit caps what a campaign can cost"));
     }
     if req.end_ms <= req.start_ms {
         return Err(bad("the end must come after the start"));

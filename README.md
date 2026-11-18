@@ -288,7 +288,7 @@ The Open styles can also **highlight a plan** (a thicker outline, and the other 
 
 Only the creator's wallet can sign these actions: the contracts check the creator's signature, so a dashboard can't be used by anyone else even if they reach it.
 
-**Members-only content:** put your own HTML in a file called `members.html` next to `tier-card.json` and restart `serve`. It is only ever sent to visitors who proved they hold an active pass. It's inserted into the page as it is, so only put in HTML you wrote yourself, never HTML from someone else. It's in `.gitignore` so it never ends up in a public repo by accident.
+**Members-only content:** put your own HTML in a file called `members.html` next to `tier-card.json` and restart `serve`. It is only ever sent to visitors who proved they hold an active pass. It's inserted into the page as it is, so only put in HTML you wrote yourself, never HTML from someone else. It's in `.gitignore` so it never ends up in a public repo by accident. Without that file members see no members-area box (the built-in text is setup help for you).
 
 ## KasPass's own website
 
@@ -382,7 +382,7 @@ A membership's site can also run a **holder club**: access by which NFTs a membe
 - **Listed NFTs** (for sale on a marketplace) don't count unless the rules set `"count_listed": true`.
 - **Linked wallets:** members sign in, click **Add another wallet**, switch Kaspire to that wallet and sign a short message with it. A wallet belongs to one member at a time.
 - **Discord:** every level gets a role, created automatically (paid passes get **Pass Holder**).
-- **Telegram:** each group belongs to one level; an admin sends `/kaspass <level>` in the group to choose (or `/kaspass pass` for paid pass holders).
+- **Telegram:** each group belongs to one level; an admin sends `/kaspass <level>` in the group to choose (or `/kaspass pass` for paid pass holders), and the site's owner approves it in the dashboard.
 - **Checks:** holdings are re-checked every minute for linked members; anyone who stops qualifying loses that role or group, and gets it back automatically (Discord) or with `/status` (Telegram) once they qualify again. If the NFT indexer can't be reached, nothing changes.
 - **Data source:** KaspaCom's KRC-721 indexer (`krc721-indexer.kaspa.com` for mainnet, `dev-krc721-indexer.kaspa.com` for Testnet-10), or set `"indexer"` in the rules. This is the one part a club trusts a third party for; once collections move to KCC covenants, KasPass can read holdings straight from the chain.
 
@@ -404,7 +404,7 @@ KasPass can run a members-only Telegram group for a membership: pass holders get
 
 1. In Telegram, message [@BotFather](https://t.me/BotFather), send `/newbot`, and copy the bot token.
 2. Put the token in a file called `telegram.token` next to the membership card (on the server: `/var/lib/kaspass/telegram.token`, readable only by the `kaspass` user) and restart `serve`. It's in `.gitignore`.
-3. Add the bot to your private group and make it an admin with **Invite users** and **Ban users**. The first group it's made admin of becomes the membership's group.
+3. Add the bot to your private group and make it an admin with **Invite users** and **Ban users**. An admin of the group sends `/kaspass <level>` (or `/kaspass pass`) to say who it's for; on a site with one plan the first group is suggested for every paid member. Then approve it in the dashboard (Groups): the bot invites nobody to a group the owner hasn't approved, because anyone can add a public bot to a group they own. In @BotFather, `/setjoingroups` can also stop strangers adding the bot at all.
 4. In the group's settings, switch **Add members** off for members (Permissions), so people only get in through the bot. Someone added by another member is never checked against a pass.
 
 Members click **Join the Telegram group** in the members area. That opens the bot with a one-time code (10 minutes), which links their Telegram account to the signed-in wallet. If the wallet holds an active pass, the bot sends an invite link that asks to join; the bot approves the request only for that Telegram account. Every minute it re-checks linked members against the chain and removes anyone without an active pass (removed, not banned, so renewing and sending `/status` brings them back). The creator dashboard lists linked members, their pass status and whether they're in the group.

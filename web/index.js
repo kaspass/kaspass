@@ -122,9 +122,19 @@ const wordReady = fetch(L("/v1/offer")).then((r) => (r.ok ? r.json() : null)).th
 let holder = { bps: 0, enabled: false };
 const chainNow = () => Date.now() + clockOffset;
 
+// Whether a pass's prepaid balance pays for its next renewal at today's price (a little left over
+// after the last prepaid renewal doesn't: the membership would just end).
+function coversRenewal(p, kasToday) {
+  if (!p || p.lifetime || isTrialPass(p) || !(p.balance_sompi > 0) || p.auto_renew === "not_enough_balance") return false;
+  const due = Math.round(Number(kasToday || 0) * KAS);
+  return due > 0 ? p.balance_sompi >= due : p.auto_renew === "on";
+}
+
 function fmtExpiry(p) {
   if (p.lifetime) return "Never expires";
   const d = p.expiry_ms - chainNow();
+  const lq = QUOTES[p.level];
+  if (d >= 0 && coversRenewal(p, lq && (lq.kas_today || lq.kas_next))) return `Active, renews by itself before ${fmtDate(p.expiry_ms)}`;
   const abs = Math.abs(d);
   const days = Math.floor(abs / 86400000), h = Math.floor((abs % 86400000) / 3600000);
   const m = Math.floor((abs % 3600000) / 60000), s = Math.floor((abs % 60000) / 1000);
@@ -696,8 +706,11 @@ async function renderResult(out, focusTxid) {
     const r = await fetch("/v1/members?session=" + encodeURIComponent(session));
     if (r.ok) {
       const m = await r.json();
-      $("membersBody").innerHTML = m.html;
-      show("members");
+      // No members file yet: the built-in text is for the creator, so members see no box at all.
+      if (!m.default) {
+        $("membersBody").innerHTML = m.html;
+        show("members");
+      }
     }
   }
 }
@@ -1122,8 +1135,10 @@ async function loadOffer() {
       const n = Number($("autoN").value);
       $("autoAmt").textContent = `= ${kas(n * offer.monthly_sompi)} more, held in your ${pw()}. It's still yours: whatever isn't used comes back if you cancel.`;
     };
-    $("autoOn").onchange = () => {};
-    $("autoN").onchange = () => { $("autoOn").checked = true; autoAmt(); };
+    const fold = () => $("autoBox").classList.toggle("on", $("autoOn").checked);
+    $("autoOn").onchange = fold;
+    $("autoN").onchange = autoAmt;
+    fold();
     autoAmt();
   }
   const left = offer.remaining >= 0 ? (offer.remaining === 0 ? " Sold out." : ` ${offer.remaining} left.`) : "";
@@ -1156,6 +1171,15 @@ function busy(id, msg, sub = "Keep this page open until it's done.") {
   el.querySelector("b").textContent = msg;
   el.querySelector(".bsub").textContent = sub;
   show(id, true);
+  inView(el);
+}
+
+// Brings a status line into view (on a phone it would otherwise sit below the screen), without
+// gliding for people who turned motion off.
+function inView(el) {
+  if (!el || el.classList.contains("hidden")) return;
+  const calm = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  try { el.scrollIntoView({ block: "nearest", behavior: calm ? "auto" : "smooth" }); } catch {}
 }
 
 // Every paid action works the same way: the server builds it, Kaspire signs only
@@ -1167,38 +1191,65 @@ async function runPaid({ url, body, statusId, errId, buttons, done, level, doneS
   done = done || ((j, txid) => j.passes.some((p) => p.txid === txid));
   say(errId, "");
   buttons.forEach((b) => (b.disabled = true));
+  // The pay box's button says what's happening, since it's where the person is looking.
+  const stage = (t) => buttons.forEach((b) => { if (b.id === "payGo") b.textContent = t; });
+  let finished = false;
   try {
     if (!address || !session) throw new Error("Sign in with Kaspire first.");
     const kaspire = await detectKaspire();
     await ensureSigningWallet(kaspire);
     busy(statusId, "Getting your payment ready…", "This takes a few seconds.");
+    stage("Getting it ready…");
     const prep = await fetch(withLevel(url, lv), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
     if (!prep.ok) throw new Error(await prep.text());
     const { quote, request, summary, price } = await prep.json();
     // v5: what this costs in the plan's currency today (with founding or upgrade credit).
     const v5note = price ? `${money(price.currency, price.amount)} today${price.founding ? " (founding price)" : ""}${price.credit > 0 ? `, after a ${money(price.currency, price.credit)} credit for your unused time` : ""}: ` : "";
-    say(statusId, `${v5note}${summary.text}. Total ${kas(summary.total_sompi)}. ${WC ? "The Kaspire app on your phone" : "Kaspire"} will show these same lines. Check they match, then approve.`);
+    // One plain line first: the total being approved. Then the details, and the outputs to match
+    // with Kaspire in a fold (the change coming back is greyed: it isn't being sent anywhere).
+    const st = $(statusId);
+    st.textContent = "";
+    const lead = document.createElement("div");
+    lead.className = "approving";
+    lead.textContent = `You're approving ${kas(summary.total_sompi)} in ${WC ? "the Kaspire app on your phone" : "Kaspire"}.`;
+    const det = document.createElement("div");
+    det.className = "muted";
+    det.textContent = `${v5note}${summary.text}.`;
+    st.append(lead, det);
     if (summary.outputs) {
+      const fold = document.createElement("details");
+      fold.className = "outsfold";
+      const sum = document.createElement("summary");
+      sum.textContent = "Match these with Kaspire";
       const ul = document.createElement("ul");
       ul.className = "outs";
       for (const o of summary.outputs) {
         const li = document.createElement("li");
+        const change = /^Change/.test(o.label);
+        if (change) li.className = "change";
         const n = document.createElement("span"); n.className = "n"; n.textContent = "Output " + o.index;
-        const w = document.createElement("span"); w.className = "what" + (o.label.startsWith("KasPass fee") ? " fee" : ""); w.textContent = `${o.kas} · ${o.label}`;
+        const w = document.createElement("span"); w.className = "what" + (o.label.startsWith("KasPass fee") ? " fee" : ""); w.textContent = change ? `${o.kas} · comes straight back to you` : `${o.kas} · ${o.label}`;
         const a = document.createElement("span"); a.className = "addr"; a.textContent = "to the address ending in " + String(o.address).slice(-4); a.title = o.address;
         li.append(n, w, a);
         ul.append(li);
       }
-      $(statusId).append(ul);
+      fold.append(sum, ul);
+      st.append(fold);
     }
+    show(statusId, true);
+    inView(st);
+    stage("Waiting for Kaspire…");
     const signed = await kaspire.request({ method: "signPskt", params: request });
     const signedJson = typeof signed === "string" ? signed : signed.psktTransactionJson;
     txBusy = true;
     busy(statusId, "Sending to the network…");
+    stage("Sending…");
     const sub = await fetch("/v1/submit", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ quote, psktTransactionJson: signedJson }) });
     if (!sub.ok) throw new Error(await sub.text());
     const { txid } = await sub.json();
+    if (PAY && buttons.some((b) => b.id === "payGo")) SENT[PAY] = { at: Date.now(), txid };
     busy(statusId, "Sent. Waiting for the network to confirm…", `Keep this page open until it's done. Transaction ${txid.slice(0, 12)}…`);
+    stage("Sent, confirming…");
     for (let i = 0; i < 40; i++) {
       await sleep(2500);
       const r = await fetch(withLevel("/v1/check?address=" + encodeURIComponent(address), lv));
@@ -1213,19 +1264,28 @@ async function runPaid({ url, body, statusId, errId, buttons, done, level, doneS
         else await showLevelResult();
         await loadOffer();
         renderLevels();
+        finished = true;
         renderPay();
         if (doneScreen) showDone(j, txid, lv, action || (body && body.action));
         return;
       }
     }
+    finished = true;
+    stage("Sent, still confirming");
+    // Sent but not seen yet: keep the button off so nobody pays twice (a refresh resets it).
+    buttons.forEach((b) => { if (b.id === "payGo") b.dataset.off = "1"; });
     say(statusId, "Your payment was sent and is still being confirmed. Please don't pay again. Refresh this page in a minute.");
+    inView($(statusId));
   } catch (e) {
     say(statusId, "");
     if (e.code === 4001) say(errId, "Cancelled in Kaspire. Nothing was sent.");
     else oops(errId, e);
+    inView($(errId));
   } finally {
     txBusy = false;
     buttons.forEach((b) => (b.disabled = b.dataset.off === "1"));
+    // Put the pay button's own words back unless it's done (then the page has moved on).
+    if (!finished && buttons.some((b) => b.id === "payGo") && repaintPay) repaintPay();
   }
 }
 
@@ -1419,7 +1479,22 @@ function showDone(j, txid, lv, action) {
   const auto = p.balance_sompi > 0 && action !== "trial";
   say("doneLine", p.lifetime || action === "trial" ? "" : auto
     ? `Prepaid (auto-renew): it renews itself from your prepaid KAS before ${fmtDate(p.expiry_ms)}.`
-    : `It won't renew by itself. Come back before ${fmtDate(p.expiry_ms)} to renew, or prepay future ${unitNow()}s in "Manage your ${m}".`);
+    : `It won't renew by itself. Come back before ${fmtDate(p.expiry_ms)} to renew, or prepay future ${unitNow()}s in "Manage ${m}".`);
+  // The next step for most members is the creator's own site: one clear button for it (a visit that
+  // came from that site already has its "back" button).
+  $("doneSite").textContent = "";
+  const site = !RETURN && page && page.links && /^https:\/\//i.test(page.links.website || "") ? page.links.website : "";
+  if (site) {
+    const a = document.createElement("a");
+    a.className = "btn";
+    a.href = site;
+    a.rel = "noopener noreferrer";
+    let host = site;
+    try { host = new URL(site).host.replace(/^www\./, ""); } catch {}
+    a.textContent = `Open ${host}`;
+    $("doneSite").append(a);
+  }
+  show("doneSite", !!site);
   $("switchSlot").append($("switchBox"));
   $("passDetails").open = false;
   FOLDLIST = true;
@@ -1431,6 +1506,7 @@ function showDone(j, txid, lv, action) {
 }
 function hideDone() {
   show("doneTitle", false);
+  show("doneSite", false);
   say("doneLine", "");
   FOLDLIST = false;
   if ($("tgBox").parentElement === $("doneNext")) $("noAccess").after($("tgBox"), $("dcBox"));
@@ -2002,7 +2078,7 @@ function foldCard(d, l) {
 function manageBtn(d, id) {
   const b = document.createElement("button");
   b.className = "ghost manage";
-  b.textContent = `Manage your ${pw()}`;
+  b.textContent = `Manage ${pw()}`;
   b.onclick = () => goManage(id);
   d.append(b);
 }
@@ -2104,7 +2180,7 @@ function v5Card(d, l) {
     }
     d.querySelector(".ln").insertAdjacentHTML("beforeend", `<span class="yours">Your ${escH(lw())}</span>`);
     const hp = heldPasses.filter((x) => x.level === l.level && x.active).sort((a, b) => b.expiry_ms - a.expiry_ms)[0];
-    const onAuto = !!(hp && hp.balance_sompi > 0 && !isTrialPass(hp));
+    const onAuto = coversRenewal(hp, q.kas_next || q.kas_today);
     lp.innerHTML = `<div class="have">You have this ${escH(lw())}</div>${q.until_ms ? `<div class="per">${onAuto ? "Renews by itself" : `Ends ${escH(fmtDate(q.until_ms))}. Nothing is charged automatically.`}</div>` : ""}`;
     const next = q.regular ? `Renewing costs ${escH(money(cur, q.regular))} a ${escH(unitOf(l.period_ms))}` : "";
     const opens = q.renew_opens_ms ? ` (you can renew from ${escH(fmtDate(q.renew_opens_ms))})` : "";
@@ -2123,8 +2199,14 @@ function v5Card(d, l) {
     d.querySelector(".ln").insertAdjacentHTML("beforeend", `<span class="yours">Your ${escH(lw())}</span>`);
     const p = heldPasses.filter((x) => x.level === l.level).sort((a, b) => b.expiry_ms - a.expiry_ms)[0];
     const end = p && p.expiry_ms;
-    const onAuto = !!(p && p.balance_sompi > 0 && !isTrialPass(p));
+    const onAuto = coversRenewal(p, q.kas_today);
     lp.innerHTML = !p || p.active ? `<div class="have">You have this ${escH(lw())}</div>${end ? `<div class="per">${onAuto ? `Renews by itself before ${escH(fmtDate(end))}` : `Ends ${escH(fmtDate(end))}. Nothing is charged automatically.`}</div>` : ""}` : `<div class="have">Your ${escH(lw())} has ended</div>${end ? `<div class="per">Ended ${escH(fmtDate(end))}</div>` : ""}`;
+    if (onAuto && p.active) {
+      // Prepaid: it renews itself, so there's nothing to press here (renewing early stays in "Manage").
+      lp.insertAdjacentHTML("afterend", `<div class="noact">It renews itself from your prepaid balance. Nothing to pay now.</div>`);
+      manageBtn(d, l.level);
+      return;
+    }
     lp.insertAdjacentHTML("afterend", `<div class="noact">${!p || p.active ? "Renewing now adds" : "Renewing brings it back for"} a ${escH(unitOf(l.period_ms))} for ${escH(money(cur, q.amount))} (about ${kasAbout(q.kas_today)} today).</div>`);
     // Optional while it's still running: the quieter button.
     btn(`Renew for ${cur === "KAS" ? money(cur, q.amount) : "about " + kasAbout(q.kas_today)}`, !p || p.active || PAY === l.level ? "ghost" : "");
@@ -2262,6 +2344,8 @@ async function chooseKind(id, kind) {
 let PAY = null, BUY_AFTER = null;
 // The open pay box redraws its rows and Pay button with this (set by openPay, cleared when it closes).
 let repaintPay = null;
+// Payments just sent from the pay box, by plan: { at, txid }.
+const SENT = {};
 async function openPay(id) {
   if (LEVEL !== id) await selectLevel(id, { quiet: true });
   // Paying keeps the plan in view: that plan alone, with the sign-in (signed out) or the pay box
@@ -2285,6 +2369,14 @@ function renderPay() {
   repaintPay = null;
   const v5 = v5Site();
   for (const id of ["payInfo", "payGoBox"]) show(id, v5 && !!PAY);
+  // Progress and errors sit right under the Pay button while the pay box is open, where the person
+  // is looking; otherwise they go back to their usual place.
+  {
+    const inPay = v5 && !!PAY;
+    const home = $("buyStatusHome");
+    if (inPay && $("buyStatus").previousElementSibling !== $("payGo")) $("payGo").after($("buyStatus"), $("buyErr"));
+    else if (!inPay && home && $("buyStatus").previousElementSibling === $("payGo")) home.after($("buyStatus"), $("buyErr"));
+  }
   if (!v5) return;
   const l = levelOf(PAY);
   if (!PAY || !l) { show("join", false); return; }
@@ -2378,6 +2470,7 @@ function renderPay() {
     }
     if (q.action === "upgrade" && q.from_level) rows.push(["Afterwards", `You can end your ${escH(levelName(q.from_level))} ${escH(pw())} to get its ${kas(bond)} deposit back.`]);
     $("payInfo").innerHTML = rows.map(([k, v]) => `<dt>${escH(k)}</dt><dd>${v}</dd>`).join("");
+    $("autoBox").classList.toggle("on", $("autoOn").checked);
     if (autoOk) $("autoAmt").textContent = `= about ${kasAbout(Number($("autoN").value) * Number(q.kas_next || 0) * (1 + cush()))} more (today's price${cush() > 0 ? ` plus a ${Math.round(cush() * 100)}% cushion` : ""}), set aside in your ${pw()}'s contract. Whatever isn't used comes back if you cancel.`;
     // With a free period, this one button claims it (and then asks Kaspire for the prepay only).
     $("payGo").textContent = !free ? `Pay ${kasOf(total())} in Kaspire` : ahead() ? `Claim my free ${u}, then prepay ${kasOf(ahead())}` : `Claim my free ${u}`;
@@ -2387,13 +2480,18 @@ function renderPay() {
   show("payInfo", true);
   repaintPay = paint;
   $("autoOn").onchange = paint;
-  // Choosing how many renewals to pay ahead turns auto-renew on.
-  $("autoN").onchange = () => { $("autoOn").checked = true; paint(); };
-  wireCushion("autoCushion", "autoCushionRow", "autoCushionWhy", () => { $("autoOn").checked = true; paint(); });
+  // Choosing a number or a cushion doesn't switch prepay on: only the tick does.
+  $("autoN").onchange = paint;
+  wireCushion("autoCushion", "autoCushionRow", "autoCushionWhy", paint);
   show("autoCushionRow", autoOk && cur !== "KAS");
   paint();
-  $("payGo").disabled = !!q.price_unavailable;
-  $("payGo").dataset.off = q.price_unavailable ? "1" : "0";
+  // A payment for this plan was sent in the last 10 minutes and its membership hasn't shown yet: the
+  // button stays off, so nobody pays twice (the server refuses a second one too).
+  const sent = SENT[PAY];
+  const waiting = !!(sent && Date.now() - sent.at < 600000 && !heldPasses.some((x) => x.txid === sent.txid));
+  $("payGo").disabled = !!q.price_unavailable || waiting;
+  $("payGo").dataset.off = q.price_unavailable || waiting ? "1" : "0";
+  if (waiting) $("payGo").textContent = "Sent, still confirming";
   // Paying from another wallet: a one-time address and amount, shown as a QR code.
   show("qrGo", !free && kind === "monthly" && !q.price_unavailable && typeof qrcode === "function" && !!(offer && offer.payin));
   $("qrGo").onclick = () => startQr(q, autoOk && $("autoOn").checked ? Number($("autoN").value) : 0);

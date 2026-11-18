@@ -1060,7 +1060,8 @@ impl Shop {
     }
 
     /// v4: anyone adds prepaid balance to a pass (`periods` renewals at its locked rate, or `add` sompi).
-    pub async fn prepare_deposit(&self, chain: &Chain, payer_addr: &str, pass: &FoundPass, add: u64) -> Result<(Quote, Value)> {
+    /// `renew_sompi` is what one renewal costs today, for the "enough for N renewals" line.
+    pub async fn prepare_deposit(&self, chain: &Chain, payer_addr: &str, pass: &FoundPass, add: u64, renew_sompi: u64) -> Result<(Quote, Value)> {
         let addr: Address = payer_addr.try_into().map_err(|_| anyhow!("not a valid Kaspa address"))?;
         if addr.version != Version::PubKey {
             bail!("only regular (P2PK) addresses can pay");
@@ -1077,7 +1078,7 @@ impl Shop {
         let unsigned: Vec<usize> = (0..tx.inputs.len()).filter(|&i| &entries[i].script_public_key == payer.spk()).collect();
         let request = pskt::sign_request(&tx, &entries, payer_addr, &unsigned);
         let balance = value.saturating_sub(tier.bond);
-        let covers = balance / pass.rate_sompi.max(1);
+        let covers = balance / renew_sompi.max(1);
         let mut summary = json!({
             "action": "deposit",
             "price_sompi": add,
@@ -1085,7 +1086,7 @@ impl Shop {
             "total_sompi": add + net_fee,
             "balance_sompi": balance,
             "text": format!(
-                "Add {} to your membership's balance ({} network fee). Balance becomes {}, enough for {} auto-renewal{}. It stays yours: take it back any time",
+                "Add {} to your membership's balance ({} network fee). Balance becomes {}, enough for about {} renewal{} at today's price. It stays yours: take it back any time",
                 kas(add), kas(net_fee), kas(balance), covers, if covers == 1 { "" } else { "s" }
             ),
         });

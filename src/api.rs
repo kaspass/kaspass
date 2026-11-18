@@ -97,7 +97,9 @@ struct AppState {
     quotes: Arc<Mutex<HashMap<String, (String, Quote)>>>,
     /// Wallets that just bought a pass, so a second tab or a double click can't buy another
     /// before the indexer has seen the first.
-    recent_buys: Arc<Mutex<HashMap<String, std::time::Instant>>>,
+    /// "<plan>:<wallet>" of a purchase just sent, with its transaction id: no second purchase
+    /// until that pass shows up (or RECENT_BUY passes).
+    recent_buys: Arc<Mutex<HashMap<String, (std::time::Instant, String)>>>,
     telegram: Option<Arc<crate::telegram::Bot>>,
     discord: Option<Arc<crate::discord::Discord>>,
     club: Arc<std::sync::RwLock<Option<Arc<crate::clubs::Club>>>>,
@@ -156,7 +158,14 @@ async fn top_rank(levels: &[Level], owners: &[String]) -> Option<Option<usize>> 
     Some(top)
 }
 
-const RECENT_BUY: std::time::Duration = std::time::Duration::from_secs(120);
+/// How long a wallet that just bought is refused a second purchase of the same plan while its
+/// pass hasn't shown up yet. Longer than the page waits (100 s) and than any normal delay; once
+/// the pass shows, "already a member" takes over.
+const RECENT_BUY: std::time::Duration = std::time::Duration::from_secs(600);
+/// A purchase isn't prepared when the chain was last read longer ago than this: a payment that
+/// already went through may not show yet, and the buyer could pay twice. (Generous, because one
+/// read of a plan with many passes can take a while.)
+const STALE_MS: i64 = 180_000;
 
 const QUOTE_TTL: std::time::Duration = std::time::Duration::from_secs(600);
 /// At most this many prepared transactions wait for a signature; the oldest go first.
@@ -432,13 +441,23 @@ pub async fn serve(setups: Vec<LevelSetup>, chain: Chain, port: u16, members_htm
                             Some(ok) => {
                                 *CROSS_CHECK.lock().unwrap_or_else(|e| e.into_inner()) = "on";
                                 let before = passes.len();
-                                passes.retain(|p| ok.contains(&(p.txid.clone(), p.index)));
+                                // A pass that is shown only until the reader hands over its coin's
+                                // spend is on neither node's coin list any more: it stays if the
+                                // second node confirmed that coin earlier.
+                                // Likewise a pass whose balance was just changed again (same owner, same
+                                // end date, a new coin): it stays if the second node confirmed the coin
+                                // it was.
+                                let earlier = confirmed.get(&ix.card.covenant_id).cloned().unwrap_or_default();
+                                passes.retain(|p| {
+                                    let k = (p.txid.clone(), p.index);
+                                    ok.contains(&k) || (p.held && (earlier.contains(&k) || p.same_as.as_ref().is_some_and(|f| earlier.contains(f))))
+                                });
                                 if passes.len() < before {
                                     eprintln!("second-node pass check: {} pass(es) not seen on the second node yet; holding them back", before - passes.len());
                                 }
                                 let mine = confirmed.entry(ix.card.covenant_id.clone()).or_default();
                                 let before_set = mine.clone();
-                                mine.retain(|k| passes.iter().any(|p| p.txid == k.0 && p.index == k.1));
+                                mine.retain(|k| passes.iter().any(|p| (p.txid == k.0 && p.index == k.1) || p.same_as.as_ref() == Some(k)));
                                 mine.extend(ok.into_iter().filter(|k| passes.iter().any(|p| p.txid == k.0 && p.index == k.1)));
                                 if *mine != before_set {
                                     if let Ok(t) = serde_json::to_string(&confirmed) {
@@ -454,7 +473,7 @@ pub async fn serve(setups: Vec<LevelSetup>, chain: Chain, port: u16, members_htm
                                 second.chain = None;
                                 // Only passes it confirmed earlier still count until it answers again.
                                 let mine = confirmed.get(&ix.card.covenant_id);
-                                passes.retain(|p| mine.is_some_and(|m| m.contains(&(p.txid.clone(), p.index))));
+                                passes.retain(|p| mine.is_some_and(|m| m.contains(&(p.txid.clone(), p.index)) || p.same_as.as_ref().is_some_and(|f| m.contains(f))));
                             }
                         }
                     }
@@ -541,6 +560,7 @@ pub async fn serve(setups: Vec<LevelSetup>, chain: Chain, port: u16, members_htm
         .route("/v1/creator/pass-word", post(creator_pass_word))
         .route("/v1/names", get(names_info))
         .route("/v1/creator/telegram/leave", post(creator_telegram_leave))
+        .route("/v1/creator/telegram/approve", post(creator_telegram_approve))
         .route("/v1/creator/switch", post(creator_switch))
         .route("/v1/creator/discount", post(creator_discount))
         .route("/v1/levels", get(levels_info))
@@ -718,6 +738,22 @@ async fn creator_level_price(State(s): State<AppState>, Query(lq): Query<LevelQ>
     if let Some(o) = &old {
         if (o.currency == "KAS") != (req.currency == "KAS") {
             return Err(bad("a plan priced in KAS stays in KAS, and a plan priced in a currency stays in a currency; launch a new level to switch"));
+        }
+    }
+    // Members' renewals are promised in the plan's currency, with 30 days' notice of any rise. A
+    // switch (say CAD to USD) would skip that notice, so it's only allowed before anyone joins.
+    if let Some(o) = old.as_ref().filter(|o| o.currency != req.currency) {
+        // Everyone a renewal can still be charged for: active passes, and ended ones that still
+        // hold a prepaid balance (auto-renew picks those up for one more period). (The chain has
+        // been read by now: `current_lane` above refuses until it has.)
+        let members = s.snap.read().await.passes.iter().filter(|p| !p.lifetime && (p.active || p.balance_sompi > 0)).count();
+        if members > 0 {
+            return Err(bad(format!(
+                "this plan has {members} member{}, so its currency stays {}: their renewals are promised in it. Change the amount instead (a rise waits 30 days for them), or launch a new level priced in {}",
+                if members == 1 { "" } else { "s" },
+                o.currency,
+                req.currency
+            )));
         }
     }
     for (what, amount, offered) in [("lifetime", req.lifetime_amount, lane_now.life > 0), ("commitment", req.term_amount, lane_now.term_price > 0)] {
@@ -1390,6 +1426,11 @@ async fn login(State(s): State<AppState>, Query(lq): Query<LevelQ>, headers: Hea
     if !ok_net {
         return Err(bad(format!("this site lives on {}; switch your wallet to that network", club_net.unwrap_or_else(|| s.card.network.clone()))));
     }
+    // One key has many address strings that decode to it (unused padding bits). Only the standard
+    // one is accepted, so every check that compares addresses sees one string per wallet.
+    if addr.to_string() != req.address {
+        return Err(bad("please use the wallet's address exactly as the wallet shows it"));
+    }
     if addr.version != kaspa_addresses::Version::PubKey {
         return Err(bad("only regular (P2PK) addresses can sign in"));
     }
@@ -1449,7 +1490,9 @@ async fn members(State(s): State<AppState>, Query(q): Query<MembersQuery>) -> Re
     if let Some(e) = examples::current() {
         return Ok(Json(serde_json::json!({ "address": address, "html": format!("<p>Welcome in. This is where {}'s members-only content would go: anything the creator writes for members, shown only to wallets holding an active pass.</p><p class=\"muted small\">An example creator, made up for the KasPass demo.</p>", esc(e.creator)) })));
     }
-    Ok(Json(serde_json::json!({ "address": address, "html": s.members_html.as_str() })))
+    // The built-in text is setup help for creators; the page doesn't show it to members.
+    let default = s.members_html.as_str() == DEFAULT_MEMBERS_HTML;
+    Ok(Json(serde_json::json!({ "address": address, "html": s.members_html.as_str(), "default": default })))
 }
 
 fn shop_of(s: &AppState) -> Result<Arc<Shop>, ApiError> {
@@ -2921,6 +2964,9 @@ async fn names_info(State(s): State<AppState>, headers: HeaderMap, Query(q): Que
 struct LeaveRequest {
     session: String,
     chat_id: i64,
+    /// Approve only: who the dashboard showed the group is asked to be for.
+    #[serde(default, rename = "for")]
+    wanted: Option<String>,
 }
 
 /// The creator removes the bot from a Telegram group (for example one it was added to by mistake).
@@ -2929,6 +2975,14 @@ async fn creator_telegram_leave(State(s): State<AppState>, Json(req): Json<Leave
     let bot = bot_of(&s)?;
     let title = bot.leave(req.chat_id).await.map_err(bad)?;
     Ok(Json(serde_json::json!({ "left": title })))
+}
+
+/// The owner approves a group for the members its admin chose (until then the bot invites nobody).
+async fn creator_telegram_approve(State(s): State<AppState>, Json(req): Json<LeaveRequest>) -> Result<Json<serde_json::Value>, ApiError> {
+    creator_of(&s, &req.session)?;
+    let bot = bot_of(&s)?;
+    let (title, label) = bot.approve(req.chat_id, req.wanted.as_deref()).await.map_err(bad)?;
+    Ok(Json(serde_json::json!({ "approved": title, "for": label })))
 }
 
 /// Sends a direct message on Telegram and Discord to whoever linked a wallet that owns `owner_hash`.
@@ -3424,14 +3478,23 @@ pub(crate) fn cushion(pct: Option<u64>) -> Result<u64, ApiError> {
 /// creator's tool with --force.)
 async fn no_duplicate(s: &AppState, address: &str) -> Result<(), ApiError> {
     let conflict = |m: &str| (StatusCode::CONFLICT, m.to_string());
-    let (active, _) = passes_for(s, address).await?;
+    let (active, mine) = passes_for(s, address).await?;
+    if wall_ms() - s.snap.read().await.read_at_ms > STALE_MS {
+        return Err((StatusCode::SERVICE_UNAVAILABLE, "the site is catching up with the network, so it can't tell yet whether this wallet already paid. Nothing was charged; try again in a minute".into()));
+    }
     if active {
         return Err(conflict(if s.levels.len() > 1 { "this wallet already has this level, so there's nothing to buy. Sign in again to see it" } else { "this wallet is already a member, so there's nothing to buy. Sign in again to see it" }));
     }
     let mut recent = s.recent_buys.lock().unwrap_or_else(|e| e.into_inner());
-    recent.retain(|_, t| t.elapsed() < RECENT_BUY);
-    if recent.contains_key(&format!("{}:{address}", s.card.covenant_id)) {
-        return Err(conflict("this wallet just bought this level; give it a moment to show up"));
+    recent.retain(|_, (t, _)| t.elapsed() < RECENT_BUY);
+    let key = format!("{}:{address}", s.card.covenant_id);
+    if let Some((_, txid)) = recent.get(&key) {
+        // Once that purchase's pass has shown up, the pass itself decides (above).
+        if mine.iter().any(|p| p.txid == *txid) {
+            recent.remove(&key);
+        } else {
+            return Err(conflict("this wallet's payment for this level was sent a moment ago and is still being confirmed. Please don't pay again; it shows up here by itself"));
+        }
     }
     Ok(())
 }
@@ -3567,6 +3630,12 @@ async fn pass_prepare(State(s): State<AppState>, headers: HeaderMap, Query(lq): 
         (_, Some(k)) if k > 0.0 && k <= 1e9 => (k * crate::SOMPI as f64).round() as u64,
         _ => 0,
     };
+    // What one renewal costs today, for "enough for N renewals" (on a currency plan the pass's own
+    // rate is its KAS ceiling, far above today's price).
+    let renew_now = match &v5 {
+        Some(q) => crate::discounted_ppm(pass.rate_sompi, crate::prices::ppm_for(pass.rate_sompi, q.kas_today, s.card.settings.v4.as_ref().map(|v| v.max_discount_bps * 100).unwrap_or(0))),
+        None => pass.rate_sompi,
+    };
     if req.action == "deposit" && add == 0 {
         return Err(bad("choose how much to add: 1 to 36 renewals, or an amount in KAS"));
     }
@@ -3575,7 +3644,7 @@ async fn pass_prepare(State(s): State<AppState>, headers: HeaderMap, Query(lq): 
         match action {
             Some(a) => shop.prepare_pass_v4(&chain, &req.address, &pass, a, bps).await,
             None if req.action == "transfer" => shop.prepare_transfer(&chain, &req.address, &pass, req.to.as_deref().unwrap_or_default()).await,
-            None if req.action == "deposit" => shop.prepare_deposit(&chain, &req.address, &pass, add).await,
+            None if req.action == "deposit" => shop.prepare_deposit(&chain, &req.address, &pass, add, renew_now).await,
             None if req.action == "withdraw" => shop.prepare_withdraw(&chain, &req.address, &pass).await,
             None => shop.prepare_close(&chain, &req.address, &pass).await,
         }
@@ -3672,7 +3741,7 @@ async fn buy_submit_inner(s: AppState, req: SubmitRequest) -> Result<Json<serde_
         snap.lanes.insert(0, lane);
     }
     if let Some(o) = &owner {
-        s.recent_buys.lock().unwrap_or_else(|e| e.into_inner()).insert(format!("{}:{o}", s.card.covenant_id), std::time::Instant::now());
+        s.recent_buys.lock().unwrap_or_else(|e| e.into_inner()).insert(format!("{}:{o}", s.card.covenant_id), (std::time::Instant::now(), txid.clone()));
         members::remember(&s.home, o);
     }
     members::remember(&s.home, &buyer);
@@ -4077,7 +4146,7 @@ async fn creator_telegram(State(s): State<AppState>, Query(q): Query<SessionQuer
     let groups: Vec<serde_json::Value> = bot
         .groups()
         .into_iter()
-        .map(|g| serde_json::json!({ "title": g.title, "for": g.key.as_deref().map(crate::telegram::key_label), "assigned": g.key.is_some() }))
+        .map(|g| serde_json::json!({ "title": g.title, "chat_id": g.chat_id, "for": g.key.as_deref().map(crate::telegram::key_label), "assigned": g.key.is_some(), "pending": g.pending.as_deref().map(crate::telegram::key_label) }))
         .collect();
     let titles: HashMap<i64, String> = bot.groups().into_iter().map(|g| (g.chat_id, g.title)).collect();
     let mut links = Vec::new();
@@ -4364,6 +4433,11 @@ struct WalletLinkRequest {
 async fn wallet_link(State(s): State<AppState>, headers: HeaderMap, Json(req): Json<WalletLinkRequest>) -> Result<Json<serde_json::Value>, ApiError> {
     let primary = s.sessions.lock().unwrap_or_else(|e| e.into_inner()).address_for(&req.session).ok_or((StatusCode::UNAUTHORIZED, "please sign in again".to_string()))?;
     let addr: kaspa_addresses::Address = req.address.as_str().try_into().map_err(|_| bad("not a valid Kaspa address"))?;
+    // One key has many address strings that decode to it (unused padding bits). Only the standard
+    // one is accepted, so every check that compares addresses sees one string per wallet.
+    if addr.to_string() != req.address {
+        return Err(bad("please use the wallet's address exactly as the wallet shows it"));
+    }
     if addr.version != kaspa_addresses::Version::PubKey {
         return Err(bad("only regular (P2PK) addresses can be linked"));
     }

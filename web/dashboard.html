@@ -1023,7 +1023,7 @@ body:has(#creatorArea.hidden) .main { padding-bottom: 64px; }
       <div class="pagehead"><div><h1 class="page">Prices &amp; sales</h1><p class="lead panehint" id="pricesHint">Price and sales are set for each plan: pick the plan at the top.</p></div><div class="pickslot"></div></div>
       <section class="panel hidden" id="v5PriceBox">
         <h2>Price</h2>
-        <p class="muted small">Buyers pay this in KAS at today's rate. A new price applies to new members straight away. A lower price reaches current members at their next renewal; a higher one only after 30 days, and members with prepaid renewals are told.</p>
+        <p class="muted small">Buyers pay this in KAS at today's rate. A new price applies to new members straight away. A lower price reaches current members at their next renewal; a higher one only after 30 days, and members with prepaid renewals are told. The currency can only change while the plan has no members.</p>
         <div class="grid" style="margin-top:var(--s4)">
           <label>Currency<select id="vpCur"><option>CAD</option><option>USD</option><option>EUR</option><option value="KAS">KAS</option></select></label>
           <label>Price each period<input id="vpAmount" type="number" min="0.5" step="any"></label>
@@ -1115,7 +1115,7 @@ body:has(#creatorArea.hidden) .main { padding-bottom: 64px; }
         <div class="grid" style="margin-top:14px">
           <label>Starts<input id="prStart" type="datetime-local"></label>
           <label>Ends<input id="prEnd" type="datetime-local"></label>
-          <label>Most free months to give<input id="prMax" type="number" min="0" step="1" value="100" placeholder="No limit"></label>
+          <label>Most free months to give<input id="prMax" type="number" min="1" step="1" value="100" required><span class="hint">Each one costs your fees wallet about 1 KAS plus the deposit.</span></label>
         </div>
         <label class="check hidden" id="prNewBox" style="margin-top:10px"><input type="checkbox" id="prNew"> Start a new campaign (NFTs and wallets that claimed before can claim again)</label>
         <p class="small" id="prCost"></p>
