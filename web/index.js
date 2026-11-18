@@ -2181,37 +2181,53 @@ function promoBlock(d, l) {
 const cap = (t) => (t ? t[0].toUpperCase() + t.slice(1) : t);
 const fmtNum = (x) => Number(x).toLocaleString(undefined, { maximumFractionDigits: 4 });
 
-async function claimPromo(l, b) {
+// Claims the free period. From the pay box it can also prepay future periods: first the free
+// period (sent by the creator's fees wallet, no approval), then, once it's confirmed, the prepay
+// into that new membership (one Kaspire approval). Declining the prepay keeps the free period.
+async function claimPromo(l, b, opts = {}) {
   if (claiming) return;
+  const st = opts.statusId || "promoStatus", er = opts.errId || "promoErr";
+  const prepay = opts.prepay && opts.prepay.periods > 0 ? opts.prepay : null;
   claiming = true;
   b.disabled = true;
-  say("promoErr", "");
-  busy("promoStatus", `Sending your free ${pw()}…`, "No wallet approval needed. Keep this page open until it's done.");
+  say(er, "");
+  busy(st, `Sending your free ${unitOf(l.period_ms)}…`, prepay ? "No approval needed for this part. Then Kaspire asks you to approve only the prepay." : "No wallet approval needed. Keep this page open until it's done.");
   try {
     const r = await fetch("/v1/promo/claim", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ session }) });
     if (!r.ok) throw new Error(await r.text());
     const { txid } = await r.json();
-    busy("promoStatus", "Sent. Waiting for the network to confirm…", `Transaction ${txid.slice(0, 12)}…`);
+    busy(st, "Sent. Waiting for the network to confirm…", `Transaction ${txid.slice(0, 12)}…`);
     for (let i = 0; i < 40; i++) {
       await sleep(2500);
       const c = await fetch(withLevel("/v1/check?address=" + encodeURIComponent(address), l.level));
       if (!c.ok) continue;
-      const j = await c.json();
-      if (j.passes.some((p) => p.txid === txid)) {
+      let j = await c.json();
+      const mine = j.passes.find((p) => p.txid === txid);
+      if (mine) {
         claiming = false;
+        if (prepay) {
+          // The prepay goes into the membership that just arrived. runPaid shows its own steps
+          // (and "Cancelled in Kaspire" if they decline); the free period stays either way.
+          if (LEVEL !== l.level) await selectLevel(l.level, { quiet: true });
+          await runPaid({ url: "/v1/pass/prepare", body: { address, txid: mine.txid, index: mine.index, action: "deposit", periods: prepay.periods, cushion_pct: prepay.cushion }, statusId: st, errId: er, buttons: [b], level: l.level, doneScreen: false });
+          const again = await fetch(withLevel("/v1/check?address=" + encodeURIComponent(address), l.level)).catch(() => null);
+          if (again && again.ok) j = await again.json();
+        }
+        if (PAY === l.level) PAY = null;
         await refreshHeld();
         await loadQuotes();
         if (l.level === LEVEL) await renderResult(j, txid); else await showLevelResult();
         await loadOffer();
         renderLevels();
-        showDone(j, txid, l.level, "promo");
+        renderPay();
+        showDone(j, prepay ? (j.passes.filter((p) => p.active).sort((a, b) => b.expiry_ms - a.expiry_ms)[0] || mine).txid : txid, l.level, "promo");
         return;
       }
     }
-    say("promoStatus", "Your free membership was sent and is still being confirmed. Refresh this page in a minute.");
+    say(st, `Your free ${pw()} was sent and is still being confirmed. Refresh this page in a minute.`);
   } catch (e) {
-    say("promoStatus", "");
-    oops("promoErr", e, "That didn't work. Please try again.");
+    say(st, "");
+    oops(er, e, "That didn't work. Please try again.");
     b.disabled = false;
   } finally {
     claiming = false;
@@ -2325,7 +2341,13 @@ function renderPay() {
   const u = unitOf(l.period_ms);
   const cush = () => (cur === "KAS" ? 0 : Number($("autoCushion").value)) / 100;
   const ahead = () => (autoOk && $("autoOn").checked ? Number($("autoN").value) * Number(q.kas_next || 0) * (1 + cush()) : 0);
-  const total = () => Number(q.kas_today || 0) + (q.action === "renew" ? 0 : bond / KAS) + ahead();
+  // A free period waiting for this wallet on this plan: it covers the price and the deposit (the
+  // creator's fees wallet pays both), so the member pays only what they choose to prepay.
+  const free = !!(PROMO && PROMO.level === l.level && PROMO_ME && PROMO_ME.eligible && q.action !== "renew" && kind === "monthly" && !q.price_unavailable);
+  const total = () => (free ? 0 : Number(q.kas_today || 0) + (q.action === "renew" ? 0 : bond / KAS)) + ahead();
+  // The holder discount as its own line: the price before it, then minus the discount.
+  const hp = Number(q.holder_pct || 0);
+  const fullKas = hp > 0 && hp < 100 ? Math.round((Number(q.kas_today) * 100) / (100 - hp) * 100) / 100 : Number(q.kas_today);
   const heldP = heldPasses.filter((x) => x.level === PAY && x.active).sort((a, b) => b.expiry_ms - a.expiry_ms)[0];
   const passAuto = q.action === "renew" && heldP && heldP.balance_sompi > 0;
   // The rows, in the order money moves: what you get, the price, the deposit, the total, then what
@@ -2337,12 +2359,15 @@ function renderPay() {
       rows.push(["Price today", "Price unavailable right now; try again in a minute."]);
     } else {
       const label = q.action === "renew" ? "renewal price" : q.founding ? "founding price" : kind === "lifetime" ? "lifetime price" : kind === "term" ? "commitment price" : "";
-      const bits = [cur === "KAS" ? "" : escH(money(cur, q.amount)), label, q.holder_pct ? `${q.holder_pct}% holder discount` : ""].filter(Boolean).join(", ");
-      rows.push(["Price today", `<b>${kasOf(q.kas_today)}</b>${bits ? ` (${bits})` : ""}` +
+      const fullAmt = hp > 0 && hp < 100 ? (q.amount * 100) / (100 - hp) : q.amount;
+      const bits = [cur === "KAS" ? "" : escH(money(cur, fullAmt)), label].filter(Boolean).join(", ");
+      rows.push(["Price today", `<b>${kasOf(fullKas)}</b>${bits ? ` (${bits})` : ""}` +
         (q.credit > 0 ? `<div class="sub">${escH(money(cur, q.founding ? q.amount + q.credit : q.regular))} minus ${escH(money(cur, q.credit))} for your unused ${escH(levelName(q.from_level))} time${q.from_until_ms ? ` (until ${escH(until(q.from_until_ms))})` : ""}</div>` : "")]);
-      if (q.action !== "renew") rows.push(["Refundable deposit", `${kas(bond)}. You get it back when you end your ${escH(pw())}.`]);
+      if (free) rows.push(["Free " + escH(u), `<b>−${kasOf(fullKas)}</b> <span class="sub">(${escH(PROMO.label)})</span>`]);
+      else if (hp > 0) rows.push(["Holder discount", `<b>−${kasOf(Math.max(0, fullKas - Number(q.kas_today)))}</b> <span class="sub">(${hp}% off, for holders)</span>`]);
+      if (q.action !== "renew") rows.push(["Refundable deposit", free ? `${kas(bond)}, paid with your free ${escH(u)}. You get it back when you end your ${escH(pw())}.` : `${kas(bond)}. You get it back when you end your ${escH(pw())}.`]);
       if (ahead()) rows.push(["Paid ahead", `about ${kasAbout(ahead())} prepaid for future ${escH(u)}s (auto-renew). It stays yours until it's used, and each ${escH(u)} is charged at its own day's price.`]);
-      rows.push(["Total now", `<b>${kasOf(total())}</b>, plus a tiny network fee`]);
+      rows.push(["Total now", free && !ahead() ? "<b>Nothing to pay.</b> No wallet approval needed." : `<b>${kasOf(total())}</b>, plus a tiny network fee`]);
       if (kind !== "lifetime" && q.until_ms) {
         const after = `After ${until(q.until_ms)}`;
         const price = `${escH(money(cur, q.regular))} a ${escH(u)}`;
@@ -2354,12 +2379,9 @@ function renderPay() {
     if (q.action === "upgrade" && q.from_level) rows.push(["Afterwards", `You can end your ${escH(levelName(q.from_level))} ${escH(pw())} to get its ${kas(bond)} deposit back.`]);
     $("payInfo").innerHTML = rows.map(([k, v]) => `<dt>${escH(k)}</dt><dd>${v}</dd>`).join("");
     if (autoOk) $("autoAmt").textContent = `= about ${kasAbout(Number($("autoN").value) * Number(q.kas_next || 0) * (1 + cush()))} more (today's price${cush() > 0 ? ` plus a ${Math.round(cush() * 100)}% cushion` : ""}), set aside in your ${pw()}'s contract. Whatever isn't used comes back if you cancel.`;
-    $("payGo").textContent = `Pay ${kasOf(total())} in Kaspire`;
-    // A free period is waiting for this wallet on this plan: point at the claim first, so nobody
-    // pays for what they could have had free.
-    const free = !!(PROMO && PROMO.level === l.level && PROMO_ME && PROMO_ME.eligible && q.action !== "renew");
-    $("payGo").classList.toggle("ghost", free);
-    $("freeFirst").textContent = free ? `A free ${u} is waiting for you: press "Claim my free ${u}" first. This button pays for the ${u} with your own KAS instead.` : "";
+    // With a free period, this one button claims it (and then asks Kaspire for the prepay only).
+    $("payGo").textContent = !free ? `Pay ${kasOf(total())} in Kaspire` : ahead() ? `Claim my free ${u}, then prepay ${kasOf(ahead())}` : `Claim my free ${u}`;
+    $("freeFirst").textContent = free ? `Your free ${u} comes from the promotion, so there's nothing to pay for it.${autoOk ? " Prepaying future " + u + "s is optional: Kaspire asks you to approve only that part." : ""}` : "";
     show("freeFirst", free);
   };
   show("payInfo", true);
@@ -2373,11 +2395,16 @@ function renderPay() {
   $("payGo").disabled = !!q.price_unavailable;
   $("payGo").dataset.off = q.price_unavailable ? "1" : "0";
   // Paying from another wallet: a one-time address and amount, shown as a QR code.
-  show("qrGo", kind === "monthly" && !q.price_unavailable && typeof qrcode === "function" && !!(offer && offer.payin));
+  show("qrGo", !free && kind === "monthly" && !q.price_unavailable && typeof qrcode === "function" && !!(offer && offer.payin));
   $("qrGo").onclick = () => startQr(q, autoOk && $("autoOn").checked ? Number($("autoN").value) : 0);
   if (QR && QR.level === PAY) { show("payGo", false); show("payGoNote", false); show("qrGo", false); }
   $("payGo").onclick = async () => {
     if (LEVEL !== PAY) await selectLevel(PAY, { quiet: true });
+    if (free) {
+      const n = autoOk && $("autoOn").checked ? Number($("autoN").value) : 0;
+      claimPromo(l, $("payGo"), { statusId: "buyStatus", errId: "buyErr", prepay: n ? { periods: n, cushion: cushionOf("autoCushion") } : null });
+      return;
+    }
     if (q.action === "renew") {
       const p = heldPasses.find((x) => x.level === PAY) ;
       if (!p) { say("buyErr", `Your ${pw()} isn't showing yet. Refresh the page, then try again.`); return; }

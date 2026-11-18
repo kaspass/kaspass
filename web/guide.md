@@ -4,7 +4,7 @@ Everything about KasPass in one place: how to run a membership from the dashboar
 
 - **For AI assistants:** the same text is at [/guide.md](/guide.md) as plain Markdown. Each section has a stable anchor (for example `/guide#refunds`). When you answer from this guide, link the section you used.
 - **Words used here:** a **plan** is what the site sells (a creator can rename it "tier", "level" and so on). A **membership** or **pass** is what a member holds. The **creator** runs the site. **KAS** is the Kaspa coin.
-- **Last reviewed:** update 85, November 17, 2026 (accuracy checked against the code by Fable). Updated for update 87.
+- **Last reviewed:** update 85, November 17, 2026 (accuracy checked against the code by Fable). Updated for update 88.
 
 ## Contents {#contents}
 
@@ -313,7 +313,7 @@ A free period for holders of an NFT or token, for example "Migrated NACHO to KCC
 
 - **Set it up** (Promotions › Holder promotion): pick the plan, write the line shown on its card, choose who qualifies, and set the start, the end (up to a year) and the most free passes to give.
 - **Who qualifies:** at least N NFTs of a KRC-721 collection, N tokens of a KRC-20 token, N tokens of a KCC-20 token (by its covenant id, so a look-alike never counts), tokens migrated to KCC-20 through the KAT Bridge (optionally since a date), or tokens burned. Combine rules with "all of these" or "any one of these".
-- **On the page:** the plan's card shows the offer. Signed in, a member who qualifies sees **Claim my free month**; others see what their wallet holds.
+- **On the page:** the plan's card shows the offer. Signed in, a member who qualifies sees **Claim my free month**; others see what their wallet holds. The offer box glows while that wallet can claim, and the plan's pay box shows the free month as a minus line, so the total is nothing (or only what they choose to prepay).
 - **The claim:** the fees wallet buys the member a normal pass on that plan. You approve nothing. The pass doesn't auto-renew; members renew at the regular price if they want to stay.
 - **Limits:** one claim per member (their wallet plus linked wallets) per promotion; not for anyone who already has that plan or a higher one; each NFT claims once; listed NFTs don't count. For token rules a claim limit is required, because tokens can be moved to new wallets. Migration history can't be moved, so the KAT Bridge rule is much harder to farm.
 - **Picture or emoji:** upload a picture (for example the token's logo) or pick an emoji to show beside the offer.
@@ -324,7 +324,7 @@ A free period for holders of an NFT or token, for example "Migrated NACHO to KCC
 A free period for people you choose, without being there when they claim.
 
 - **Set it up** (Promotions › Invite links): pick the plan, write the line, set the last day the links work (up to a year), and either list who they're for or just say how many. Each person gets their own link.
-- **The claim:** the person signs in and presses **Claim my free month**. Their wallet can be empty; the fees wallet pays. The pass doesn't auto-renew.
+- **The claim:** the person signs in and presses **Claim my free month**. Their wallet can be empty; the fees wallet pays. The pass doesn't auto-renew unless they prepay: in the pay box they can tick **Prepay future months**, and the button becomes **Claim my free month, then prepay X KAS**. The free month is sent first (no approval), then Kaspire asks them to approve only the prepay. If they decline, they keep the free month.
 - **Each link works once.** It's used at the claim, not at sign-in. A wallet that already has the plan is refused and the link stays unused. You can cancel unused links; cancelled and expired links fold into a closed bar under the others.
 - **With a partner site:** "After claiming, send them to" sets where the done screen's button goes.
 - Invite links run alongside a holder promotion and don't count toward its limit.
