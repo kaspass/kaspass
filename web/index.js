@@ -2188,7 +2188,7 @@ function v5Card(d, l) {
     d.querySelector(".ln").insertAdjacentHTML("beforeend", `<span class="yours">Your ${escH(lw())}</span>`);
     const hp = heldPasses.filter((x) => x.level === l.level && x.active).sort((a, b) => b.expiry_ms - a.expiry_ms)[0];
     const onAuto = coversRenewal(hp, q.kas_next || q.kas_today);
-    lp.innerHTML = `<div class="have">You have this ${escH(lw())}</div>${q.until_ms ? `<div class="per">${onAuto ? "Renews by itself" : `Ends ${escH(fmtDate(q.until_ms))}. Nothing is charged automatically.`}</div>` : ""}`;
+    lp.innerHTML = `<div class="have">You have this ${escH(lw())}</div>${q.until_ms ? `<div class="per endline">${onAuto ? "Renews by itself" : `Ends ${escH(fmtDate(q.until_ms))}. Nothing is charged automatically.`}</div>` : ""}`;
     const next = q.regular ? `Renewing costs ${escH(money(cur, q.regular))} a ${escH(unitOf(l.period_ms))}` : "";
     const opens = q.renew_opens_ms ? ` (you can renew from ${escH(fmtDate(q.renew_opens_ms))})` : "";
     if (next) d.insertAdjacentHTML("beforeend", `<div class="noact">${next}${opens}. Nothing to pay now.</div>`);
@@ -2207,7 +2207,7 @@ function v5Card(d, l) {
     const p = heldPasses.filter((x) => x.level === l.level).sort((a, b) => b.expiry_ms - a.expiry_ms)[0];
     const end = p && p.expiry_ms;
     const onAuto = coversRenewal(p, q.kas_today);
-    lp.innerHTML = !p || p.active ? `<div class="have">You have this ${escH(lw())}</div>${end ? `<div class="per">${onAuto ? `Renews by itself before ${escH(fmtDate(end))}` : `Ends ${escH(fmtDate(end))}. Nothing is charged automatically.`}</div>` : ""}` : `<div class="have">Your ${escH(lw())} has ended</div>${end ? `<div class="per">Ended ${escH(fmtDate(end))}</div>` : ""}`;
+    lp.innerHTML = !p || p.active ? `<div class="have">You have this ${escH(lw())}</div>${end ? `<div class="per endline">${onAuto ? `Renews by itself before ${escH(fmtDate(end))}` : `Ends ${escH(fmtDate(end))}. Nothing is charged automatically.`}</div>` : ""}` : `<div class="have">Your ${escH(lw())} has ended</div>${end ? `<div class="per">Ended ${escH(fmtDate(end))}</div>` : ""}`;
     if (onAuto && p.active) {
       // Prepaid: it renews itself, so there's nothing to press here (renewing early stays in "Manage").
       lp.insertAdjacentHTML("afterend", `<div class="noact">It renews itself from your prepaid balance. Nothing to pay now.</div>`);

@@ -29,7 +29,11 @@
   --cs-card: #FFFFFF; --cs-inset: #F4F9F7; --cs-ink2: #2F4D48; --cs-warm: #B35A0E; --cs-soft: #E0ECE8; --cs-kas: #3F8F8C;
 }
 :root[data-cards="kaspa-vision"] body { background: var(--bg); color: var(--text); }
-:root[data-cards="kaspa-vision"] a { color: var(--teal); }
+:root[data-cards="kaspa-vision"] a:not(.btn) { color: var(--teal); }
+/* Filled buttons keep their dark ink on the teal (a link colour of teal made their text vanish). */
+:root[data-cards="kaspa-vision"] a.btn { color: var(--accent-ink); }
+/* A plan picked by link already says "Your plan" above its name: no second "Your plan" chip. */
+.lvl:has(> .yourtag) .yours { display: none; }
 
 /* The plans get the page's full width (up to about 1200 px), straight on the background. */
 /* kaspa.vision's widths: the header and the plans span about 1150 px; text stays under 760 px,
@@ -53,6 +57,8 @@
 .cards-open .lvl .lp { font: 700 44px/1.1 var(--font-head); font-variant-numeric: tabular-nums; }
 .cards-open .lvl .lp .cs-reg { white-space: nowrap; }
 .cards-open .lvl .lp .per { font: 400 16px/1.4 var(--font-body); color: var(--muted); margin-left: 2px; white-space: nowrap; }
+/* A whole sentence under "You have this plan" wraps inside the card. */
+.cards-open .lvl .lp .per.endline { display: block; margin: 4px 0 0; white-space: normal; }
 .cards-open .lvl .lp s { font: 400 18px var(--font-body); color: var(--muted); }
 .cards-open .lvl .lp s.cs-reg { font-size: 18px; margin-left: 2px; }
 .cards-open .lvl .cs-early { display: flex; width: fit-content; margin-bottom: 6px; padding: 4px 10px; border-radius: 999px; background: var(--cs-warm); color: var(--cs-card); font: 600 12px/1.3 var(--font-body); letter-spacing: .8px; text-transform: uppercase; }
