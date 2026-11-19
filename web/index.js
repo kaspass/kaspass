@@ -2227,7 +2227,18 @@ function v5Card(d, l) {
   lp.innerHTML = plain
     ? (cur !== "KAS" && q.kas_today != null ? `${was}` + kasLead(kasAbout(q.kas_today), setAt(escH(money(cur, q.amount)), unitOf(l.period_ms)), ` <span class="per">a ${escH(unitOf(l.period_ms))}</span>`) + localLine(cur, q.amount)
       : `${was}${escH(money(cur, q.amount))} <span class="per">a ${escH(unitOf(l.period_ms))}</span>${localLine(cur, q.amount)}${cur === "KAS" ? "" : `<div class="kasline">about ${kasAbout(q.kas_today)} today</div>`}`)
-    : `${was}${cur !== "KAS" && q.kas_today != null ? kasLead(kasAbout(q.kas_today), setAt(escH(money(cur, q.amount)), unitOf(l.period_ms)), "") : escH(money(cur, q.amount)) + (cur === "KAS" ? "" : `<div class="kasline">about ${kasAbout(q.kas_today)} today</div>`)}${localLine(cur, q.amount)}<div class="per">${q.action === "renew" ? "for the next " + escH(unitOf(l.period_ms)) : q.credit > 0 ? "now, then " + escH(money(cur, q.regular)) + " a " + escH(unitOf(l.period_ms)) : "your first " + escH(unitOf(l.period_ms))}</div>`;
+    : (() => {
+      // Renewing, an early price or a credit: one plain line under the KAS amount says what the
+      // amount is for, in the same words as kaspa.vision's cards.
+      const u = unitOf(l.period_ms);
+      const tail = q.action === "renew" ? `for the next ${u}` : q.credit > 0 ? `now, then ${money(cur, q.regular)} a ${u}` : `for your first ${u}`;
+      const line = q.credit > 0
+        ? `${escH(money(cur, q.amount))} ${escH(tail)}, so the KAS amount follows today's rate`
+        : `Set at ${escH(money(cur, q.amount))} ${escH(tail)}, so the KAS amount follows today's rate`;
+      return cur !== "KAS" && q.kas_today != null
+        ? `${was}${kasLead(kasAbout(q.kas_today), line, "")}${localLine(cur, q.amount)}`
+        : `${was}${escH(money(cur, q.amount))}${cur === "KAS" ? "" : `<div class="kasline">about ${kasAbout(q.kas_today)} today</div>`}${localLine(cur, q.amount)}<div class="per endline">${escH(tail)}</div>`;
+    })();
   if (q.credit > 0) lp.insertAdjacentHTML("afterend", `<div class="credit">${escH(money(cur, q.amount))} today because your unused ${escH(levelName(q.from_level))} time counts toward it (${escH(money(cur, q.credit))}).</div>`);
   if (q.action === "renew") d.querySelector(".ln").insertAdjacentHTML("beforeend", `<span class="yours">Your ${escH(lw())}</span>`);
   const verb = q.action === "upgrade" ? "Upgrade" : q.action === "renew" ? "Renew" : "Buy";
