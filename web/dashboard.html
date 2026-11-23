@@ -8,6 +8,7 @@
 <title>Creator dashboard · KasPass</title>
 <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
 <script src="/assets/dash-theme-boot.js?v=1"></script>
+<script src="/assets/stream.js?v=1"></script>
 <style>
 /* ==========================================================================
    KasPass creator dashboard, redesign prototype.
@@ -131,6 +132,10 @@ input[type="checkbox"], input[type="radio"] { width: 18px; height: 18px; min-hei
 .grid { display: grid; gap: var(--s4); grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
 .grid > .wide { grid-column: 1 / -1; }
 .grid > label:not(.check) { display: flex; flex-direction: column; justify-content: space-between; }
+/* Rows whose boxes must line up even when one label wraps or has a hint under its box: each label
+   shares three rows with its neighbours (words, box, hint), so every box sits on the same line. */
+.grid.align > label:not(.check):not(.wide) { display: grid; grid-row: span 3; grid-template-rows: subgrid; row-gap: 6px; align-content: start; }
+.grid.align > label > .hint { margin-top: 0; }
 .perm { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 600; color: var(--muted); margin-left: 6px; }
 .perm svg.i { width: 12px; height: 12px; }
 .tip { box-shadow: none !important; width: 18px; height: 18px; min-height: 0; padding: 0; margin-left: 5px; border-radius: 50%; background: transparent; border: 1px solid var(--line); color: var(--muted); font: 700 11px/1 var(--font-body); vertical-align: 1px; cursor: help; }
@@ -165,6 +170,7 @@ input[type="checkbox"], input[type="radio"] { width: 18px; height: 18px; min-hei
 .sidefoot .tools { display: flex; gap: 8px; }
 .sidefoot .tools button { flex: 1; }
 .net { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; padding: 3px 9px; border: 1px solid color-mix(in srgb, var(--warn) 45%, transparent); color: var(--warn); border-radius: 999px; margin-left: auto; white-space: nowrap; }
+.net[hidden] { display: none; }
 .modebtn svg.sun { display: none; }
 :root[data-tone="light"] .modebtn svg.sun { display: block; }
 :root[data-tone="light"] .modebtn svg.moon { display: none; }
@@ -249,6 +255,12 @@ footer.foot { color: var(--muted); font-size: 13px; margin-top: var(--s6); }
 .key li:first-child { border-top: 0; }
 .key i { width: 12px; height: 12px; border-radius: 3px; }
 .key .n { font: 600 16px var(--font-head); font-variant-numeric: tabular-nums; }
+/* Each plan's part has its own fill as well as its own colour (solid, stripes, pale, dots), so the
+   parts stay easy to tell apart in one-colour themes, in print and for colour-blind eyes. */
+.split i.pp0, .key i.pp0 { background: var(--chart-1); }
+.split i.pp1, .key i.pp1 { background: repeating-linear-gradient(135deg, var(--chart-2) 0 3px, transparent 3px 6px); box-shadow: inset 0 0 0 1.5px var(--chart-2); }
+.split i.pp2, .key i.pp2 { background: color-mix(in srgb, var(--chart-3) 35%, transparent); box-shadow: inset 0 0 0 1.5px var(--chart-3); }
+.split i.pp3, .key i.pp3 { background: radial-gradient(var(--chart-4) 1.3px, transparent 1.7px) 0 0 / 5px 5px; box-shadow: inset 0 0 0 1.5px var(--chart-4); }
 .p1 { background: var(--chart-1); }
 .p2 { background: var(--chart-2); }
 .p3 { background: var(--chart-3); }
@@ -682,6 +694,7 @@ body:has(#creatorArea.hidden) .main { padding-bottom: 64px; }
   <symbol id="i-copy" viewBox="0 0 24 24"><path d="M9 9h10.5v11.5H9zM5 15V3.5h10.5"/></symbol>
   <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5 9.5 17 19 7.5"/></symbol>
   <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/></symbol>
+  <symbol id="i-eyeoff" viewBox="0 0 24 24"><path d="M3 3l18 18"/><path d="M10.6 5.1A10.6 10.6 0 0 1 12 5c5.5 0 9 5.5 9.5 7a13 13 0 0 1-2.6 3.6M6.3 6.6C4.2 8 2.9 10.2 2.5 12c.5 1.5 4 7 9.5 7 1.6 0 3-.4 4.3-1.1"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></symbol>
   <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4 8.5 8.5 0 1 0 20 14.5z"/></symbol>
   <symbol id="i-more" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
   <symbol id="i-chev" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></symbol>
@@ -725,6 +738,7 @@ body:has(#creatorArea.hidden) .main { padding-bottom: 64px; }
     <div class="sidefoot">
       <div class="wallet"><svg class="i"><use href="#i-wallet"/></svg><span id="sideAddr">Not signed in</span></div>
       <label class="sw night"><svg class="i"><use href="#i-moon"/></svg><span>Night mode</span><input type="checkbox" id="nightSw"></label>
+      <label class="sw night" title="Hides wallet addresses, amounts, dates and names while you share your screen. Also on your membership page in this browser."><svg class="i"><use href="#i-eyeoff"/></svg><span>Stream mode</span><input type="checkbox" id="streamSw" data-stream-toggle></label>
       <div class="tools">
         <button class="ghost sm" type="button" data-go="settings" data-sub="theme"><svg class="i"><use href="#i-theme"/></svg>Themes</button>
         <button class="ghost sm hidden" id="logout" type="button">Sign out</button>
@@ -875,7 +889,7 @@ body:has(#creatorArea.hidden) .main { padding-bottom: 64px; }
             <label id="pgHighlightL">Highlight a plan<select id="pgHighlight"><option value="">None</option></select><span class="hint">A thicker outline and the main button, like "best value". Open and Kaspa Vision styles only.</span></label>
             <label>How visitors see prices<select id="pgPriceDisplay"><option value="plan">My currency only</option><option value="viewer">Mine, plus the visitor's</option></select><span class="hint">With "Mine, plus the visitor's", visitors outside your country also see, for example, "about US$7 in your currency" under each price.</span></label>
             <label class="check wide"><input type="checkbox" id="pgCount"> Show how many members have joined</label>
-            <label class="check wide"><input type="checkbox" id="pgClub"> Show the NFT holder club on this page</label>
+            <label class="check wide"><input type="checkbox" id="pgClub"> <span>Show a "Join the holder club" link on this page <span class="hint" id="pgClubHint" style="display:block;margin-top:2px">The holder club gives free access (Telegram, Discord) to people who hold your NFTs or tokens. Set it up in Groups › Holder club.</span></span></label>
           </div>
           <div class="row" style="margin-top:var(--s5)"><button id="pgGo">Save page</button><span class="small muted hidden" id="pgMsg"></span></div>
           <div class="err hidden" id="pgErr"></div>
@@ -1047,7 +1061,7 @@ body:has(#creatorArea.hidden) .main { padding-bottom: 64px; }
         </details>
       </section>
       <section class="panel" id="salePanel">
-        <h2>Run a sale</h2>
+        <h2 id="saleTitle">Run a sale</h2>
         <div id="saleOn" class="hidden">
           <div class="salebox" id="saleNow"></div>
           <p class="small hidden" id="saleEnded" style="color:var(--warn)"></p>
@@ -1055,16 +1069,29 @@ body:has(#creatorArea.hidden) .main { padding-bottom: 64px; }
         </div>
         <div id="saleForm">
           <p class="muted small">A percent off for new members joining (monthly, commitment and lifetime). Your site shows the regular price crossed out with the discount. Renewals stay at the regular price, and nothing needs approving in Kaspire.</p>
-          <div class="grid" style="margin-top:var(--s4)">
+          <div class="grid align" style="margin-top:var(--s4)">
             <label id="sPctL">Percent off<input id="sPct" type="number" min="1" max="90" step="1" value="20"></label>
             <label>Sale name (optional)<input id="sLabel" maxlength="40" placeholder="Launch sale"></label>
             <label>Ends (optional: the sale stops by itself then)<input id="sEnds" type="datetime-local"></label>
           </div>
+          <label class="check hidden" id="sAllBox" style="margin-top:12px"><input type="checkbox" id="sAll"> <span id="sAllText">Run it on every plan</span></label>
           <p class="small" id="sPreview"></p>
           <div class="row" style="margin-top:12px"><button id="sGo">Start sale</button></div>
         </div>
         <div id="sStatus" class="small hidden" style="margin-top:12px"></div>
         <div class="err hidden" id="sErr"></div>
+      </section>
+      <section class="panel hidden" id="discountBox">
+        <h2 id="dTitle">Holder discount</h2>
+        <p class="muted small">A lasting percent off this paid plan for members who hold your NFTs or tokens: on joining and again at every renewal, re-checked each time. Who qualifies comes from your holder club (Groups › Holder club). This isn't the free month: that's a Holder promotion, in Promotions.</p>
+        <div class="warnbox hidden" id="dNoClub" style="margin-top:var(--s3)">Set up a holder club first (Groups › Holder club). Until then nobody qualifies, so a discount here would do nothing.</div>
+        <div class="grid" style="margin-top:var(--s4)">
+          <label>Holder discount (%, 0 = off)<input id="dPct" type="number" min="0" step="1"></label>
+        </div>
+        <p class="muted small" id="dNote"></p>
+        <div class="row" style="margin-top:12px"><button id="dGo">Save discount</button></div>
+        <div class="small hidden" id="dStatus" style="margin-top:10px"></div>
+        <div class="err hidden" id="dErr"></div>
       </section>
     </div>
 
@@ -1088,16 +1115,6 @@ body:has(#creatorArea.hidden) .main { padding-bottom: 64px; }
             <p class="muted small" id="kWhat"></p>
           </div>
         </div>
-        <div id="discountBox">
-          <div class="subhead">Holder discount</div>
-          <div class="grid">
-            <label>Holder discount (%, 0 = off)<input id="dPct" type="number" min="0" step="1"></label>
-          </div>
-          <p class="muted small" id="dNote"></p>
-          <div class="row" style="margin-top:12px"><button id="dGo">Save discount</button></div>
-          <div class="small hidden" id="dStatus" style="margin-top:10px"></div>
-          <div class="err hidden" id="dErr"></div>
-        </div>
       </section>
       <section class="panel hidden" id="promoPanel">
         <h2>Holder promotion</h2>
@@ -1112,7 +1129,7 @@ body:has(#creatorArea.hidden) .main { padding-bottom: 64px; }
         <div class="small" style="margin:14px 0 6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span><b>Who qualifies:</b> holders of</span> <select id="prMatch" style="width:auto"><option value="all">all of these</option><option value="any">any one of these</option></select></div>
         <div id="prNeeds"></div>
         <button class="ghost sm" id="prAddNeed" style="margin-top:6px">Add something to hold</button>
-        <div class="grid" style="margin-top:14px">
+        <div class="grid align" style="margin-top:14px">
           <label>Starts<input id="prStart" type="datetime-local"></label>
           <label>Ends<input id="prEnd" type="datetime-local"></label>
           <label>Most free months to give<input id="prMax" type="number" min="1" step="1" value="100" required><span class="hint">Each one costs your fees wallet about 1 KAS plus the deposit.</span></label>
@@ -1231,6 +1248,7 @@ body:has(#creatorArea.hidden) .main { padding-bottom: 64px; }
             <section class="panel" style="flex:1 1 320px">
               <h2>Payments for your taxes</h2>
               <p class="muted small">Every member payment: date, plan, KAS paid and the price quoted. No member addresses.</p>
+              <p class="muted small">A record to help with your books. It isn't tax or legal advice: ask an accountant how to report it where you live.</p>
               <div class="row" style="margin-top:var(--s3)"><select id="payYear" style="flex:0 1 120px"></select><button id="payCsv" class="ghost"><svg class="i"><use href="#i-payout"/></svg>Download payments (spreadsheet)</button></div>
               <div class="err hidden" id="payErr"></div>
             </section>
@@ -1292,6 +1310,8 @@ body:has(#creatorArea.hidden) .main { padding-bottom: 64px; }
         <section class="panel">
           <h2>Display</h2>
           <label class="check" style="margin-top:var(--s3)"><input type="checkbox" id="statExact"> Show exact KAS amounts (with decimals) in the Overview</label>
+          <label class="check" style="margin-top:var(--s3)"><input type="checkbox" data-stream-toggle> Stream mode: hide private details while I share my screen</label>
+          <p class="muted small" style="margin:6px 0 0 28px">Wallet addresses, .kas and .k names, amounts, dates, transaction ids and members' notes turn into grey bars, here and on your membership page in this browser. Click a bar (or Reveal beside an address) to show just that one. A box you type in shows while you type. Turning it off takes two presses, so one slip can't show everything. The switch is also at the bottom of the side menu. <span data-stream-hint></span></p>
         </section>
       </div>
 

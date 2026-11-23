@@ -120,6 +120,17 @@ pub fn read_claims(home: &std::path::Path) -> Result<Vec<Claim>, String> {
     }
 }
 
+/// The payments the fees wallet made for free months, by transaction id: "promotion" or
+/// "invite". The dashboard's activity list names them instead of calling them a 1 KAS sale.
+pub fn free_txids(home: &std::path::Path) -> std::collections::HashMap<String, &'static str> {
+    read_claims(home)
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|c| !c.txid.is_empty())
+        .map(|c| (c.txid, if c.campaign.starts_with("invite:") { "invite" } else { "promotion" }))
+        .collect()
+}
+
 fn write_claims(home: &std::path::Path, all: &[Claim]) -> std::io::Result<()> {
     let tmp = home.join("promo-claims.json.tmp");
     std::fs::write(&tmp, serde_json::to_string(all).map_err(std::io::Error::other)?)?;

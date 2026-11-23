@@ -88,7 +88,6 @@ async function detectKaspire(timeoutMs = 3000) {
 function setAddress(a) {
   address = a;
   $("addr").textContent = a ? (session ? `Signed in as the wallet ending in ${a.slice(-4)}` : `Kaspire wallet found (ends in ${a.slice(-4)})`) : "";
-  $("addr").title = a || "";
   show("addr", !!a);
   show("signin", !session && !(window.KaspireMobile && window.KaspireMobile.isPhone));
   const phone = !!(window.KaspireMobile && window.KaspireMobile.isPhone);
@@ -100,7 +99,6 @@ function setAddress(a) {
   show("wcOtherLine", !!session && !!MOBILE);
   show("logout", !!session);
   $("sideAddr").textContent = a ? (session ? `Signed in, wallet ending ${a.slice(-4)}` : `Wallet ending ${a.slice(-4)}, not signed in`) : "Not signed in";
-  $("sideAddr").title = a || "";
   // Signed in: the sign-in panel shrinks to one line.
   $("signPanel").classList.toggle("in", !!session);
   show("signTitle", !session);
@@ -259,7 +257,7 @@ async function renderSetup() {
   try {
     const t = await (await fetch("/v1/creator/telegram?session=" + encodeURIComponent(session))).json();
     if (t.enabled && (t.groups || []).some((g) => g.pending)) items.push(["A Telegram group is waiting for approval: check it's yours", "groups"]);
-    else if (t.enabled && !(t.groups || []).some((g) => g.assigned)) items.push(["Connect your Telegram group", "groups"]);
+    else if (t.enabled && !(t.groups || []).some((g) => g.assigned) && !noTelegram()) items.push(["Connect your Telegram group", "groups", "tg"]);
   } catch {}
   if (pageCfg && !pageCfg.intro_html) items.push(["Write an intro for your page", "page"]);
   if (data.v4 && data.v4.keeper && data.v4.keeper.balance_sompi < KAS) items.push([`Turn on auto-renew: send 2 ${card && card.network === "mainnet" ? "KAS" : "test KAS"} to your fees wallet. It pays the tiny network fee each time a member's plan renews itself (2 KAS covers about 60 renewals).`, "promos"]);
@@ -267,9 +265,17 @@ async function renderSetup() {
   // Progress: six things to set up in all.
   const all = 6, done = Math.max(0, all - items.length);
   $("setupList").innerHTML = `<p class="muted small" style="margin:0">${done} of ${all} done</p><div class="meter" role="progressbar" aria-valuemin="0" aria-valuemax="${all}" aria-valuenow="${done}"><i style="width:${Math.round((done / all) * 100)}%"></i></div>` +
-    items.map(([t, tab]) => `<div class="setup"><i class="ring" aria-hidden="true"></i><span class="t">${escHtml(t)}</span><button class="ghost sm" data-go="${tab}">Open</button></div>`).join("");
+    items.map(([t, tab, skip]) => `<div class="setup"><i class="ring" aria-hidden="true"></i><span class="t">${escHtml(t)}</span>${skip ? `<button class="ghost sm" data-skip="${skip}" title="Take this off the list. Connecting a group later still works.">I don't have one</button>` : ""}<button class="ghost sm" data-go="${tab}">Open</button></div>`).join("");
   show("setupPanel", items.length > 0);
 }
+// "I don't have a Telegram group": remembered in this browser, for this site.
+const noTelegram = () => { try { return localStorage.getItem("kaspass.noTelegram") === "1"; } catch { return false; } };
+$("setupList").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-skip]");
+  if (!b) return;
+  try { localStorage.setItem("kaspass.noTelegram", "1"); } catch {}
+  renderSetup();
+});
 
 $("signin").onclick = async () => {
   setError("");
@@ -806,10 +812,10 @@ function renderByPlan() {
   const per = (ALL && ALL.per) || [], total = per.reduce((a, p) => a + p.active, 0);
   show("byPlanPanel", per.length > 1 && total > 0);
   if (!(per.length > 1 && total > 0)) return;
-  const col = (i) => `var(--chart-${(i % 4) + 1})`;
-  $("byPlanBar").innerHTML = per.map((p, i) => (p.active ? `<i style="flex:${p.active};background:${col(i)}"></i>` : "")).join("");
+  const col = (i) => `pp${i % 4}`;
+  $("byPlanBar").innerHTML = per.map((p, i) => (p.active ? `<i class="${col(i)}" style="flex:${p.active}"></i>` : "")).join("");
   $("byPlanBar").setAttribute("aria-label", per.map((p) => `${p.name}: ${p.active}`).join(", "));
-  $("byPlanKey").innerHTML = per.map((p, i) => `<li><i style="background:${col(i)}"></i><span>${escHtml(p.name)}</span><span class="n">${p.active}</span></li>`).join("");
+  $("byPlanKey").innerHTML = per.map((p, i) => `<li><i class="${col(i)}"></i><span>${escHtml(p.name)}</span><span class="n">${p.active}</span></li>`).join("");
 }
 
 // ---- Tiers on this site ----------------------------------------------------
@@ -989,6 +995,8 @@ async function renderClub() {
   const el = $("clubStatus");
   try {
     const c = await (await fetch("/v1/creator/club?session=" + encodeURIComponent(session))).json();
+    clubOn = !!c.enabled;
+    renderClubDeps();
     if (!c.enabled) {
       el.textContent = "No holder club yet. A holder club gives free access to people who own your NFTs. Upload its rules under Advanced below, or message KasPass and we'll help you set one up.";
       $("clubBands").innerHTML = ""; $("clubTiersT").innerHTML = "";
@@ -1207,7 +1215,7 @@ function render() {
   $("stats").innerHTML = !any ? "" : [
     stat(kasStat(t.earned_sompi), "Earned so far"),
     stat(`${t.active}`, "Members now"),
-    stat(`${t.renewals}`, `Renewals${t.autorenewals ? ` (${t.autorenewals} by auto-renew)` : ""}`),
+    stat(`${t.renewals}`, `Renewals${t.autorenewals ? ` (<span class="kp-priv">${t.autorenewals}</span> by auto-renew)` : ""}`),
     stat(`${t.upgrades}`, "Upgrades"),
     ...(v4 ? [stat(`${t.auto_renewing}`, "On auto-renew")] : []),
     ...(t.trials ? [stat(`${t.trials}`, "Free trials")] : []),
@@ -1254,14 +1262,14 @@ function render() {
   const whoHtml = (a, fallback) => {
     if (!a) return fallback;
     const names = nameOf(a);
-    return (names.length ? names.map((x) => `<span class="name">${escHtml(x)}</span>`).join(" ") + "<br>" : "") + `<span class="mono ${names.length ? "muted small" : ""}" title="${escHtml(a)}">${short(a)}</span>`;
+    return (names.length ? names.map((x) => `<span class="name">${escHtml(x)}</span>`).join(" ") + "<br>" : "") + `<span class="mono ${names.length ? "muted small" : ""}">${short(a)}</span>`;
   };
   $("members").innerHTML = `<tr><th>Member</th><th>Your note</th><th>Kind</th><th>Status</th><th>Paid</th>${s.v4 ? "<th>Prepaid</th>" : ""}<th>Bought by</th></tr>` + (rows.length ? rows.map((p, i) => {
     const left = p.expiry_ms - chainNow();
     const status = p.lifetime ? "Never expires" : left > 0 ? `${timeLeft(left)} left` : "Expired";
     const who = whoHtml(p.owner_address, `<span class="muted small" title="This site hasn't seen this member's wallet yet. It fills in when they sign in here.">Wallet not seen yet</span><br><span class="mono muted small">${p.owner_hash.slice(0, 10)}…</span>`);
     const by = p.bought_by_keeper ? "Your fees wallet (free month)" : !p.bought_by ? `<span class="muted small">Not known</span>` : p.bought_by === p.owner_address ? "The member" : whoHtml(p.bought_by, "");
-    return `<tr><td>${who}</td><td data-l="Your note"><input class="mnote" data-owner="${escHtml(p.owner_hash)}" maxlength="120" placeholder="Add a note" value="${escHtml(p.note || "")}" aria-label="Your note on this member" style="min-width:140px"></td><td data-l="Kind">${escHtml(p.kind)}</td><td data-l="Status"><span class="pill ${p.active ? "ok" : "no"}">${status}</span></td><td data-l="Paid">${kas(p.paid_sompi)}</td>${bal(p)}<td data-l="Bought by">${by}</td></tr>`;
+    return `<tr><td>${who}</td><td data-l="Your note"><input class="mnote" data-owner="${escHtml(p.owner_hash)}" maxlength="120" placeholder="Add a note" value="${escHtml(p.note || "")}" aria-label="Your note on this member" style="min-width:140px"></td><td data-l="Kind">${escHtml(p.kind)}</td><td data-l="Status"><span class="pill ${p.active ? "ok" : "no"}">${p.lifetime ? status : `<span class="kp-priv">${status}</span>`}</span></td><td data-l="Paid">${kas(p.paid_sompi)}</td>${bal(p)}<td data-l="Bought by">${by}</td></tr>`;
   }).join("") : `<tr><td colspan="7" class="muted">No members yet. Share your page to get your first one. <button class="ghost" id="copyPage" style="padding:4px 10px;font-size:13px">Copy my page link</button></td></tr>`);
   if ($("copyPage")) $("copyPage").onclick = () => navigator.clipboard.writeText(location.origin + "/").then(() => { $("copyPage").textContent = "Copied"; setTimeout(() => ($("copyPage").textContent = "Copy my page link"), 1500); }).catch(() => {});
   document.querySelectorAll("#members .mnote").forEach((inp) => {
@@ -1281,7 +1289,10 @@ function render() {
 
   const label = { monthly: "Sale", lifetime: "Lifetime sale", term: "Commitment sale", trial: "Free trial", self_trial: "Free trial", renew: "Renewal", autorenew: "Auto-renewal", upgrade: "Upgrade to lifetime", transfer: "Resale royalty" };
   const when = (e) => (e.time_ms ? new Date(e.time_ms).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "");
-  const row = (e, plan) => `<tr><td data-l="Date" class="nowrap">${escHtml(when(e))}</td><td>${label[e.kind] || escHtml(e.kind)}${plan ? ` <span class="muted small">${escHtml(plan)}</span>` : ""}</td><td data-l="Paid">${kas(e.amount_sompi)}</td><td data-l="To you">${kas(e.creator_sompi)}</td><td data-l="KasPass fee">${e.fee_sompi ? kas(e.fee_sompi) : "none"}</td></tr>`;
+  // Free months paid by the fees wallet show as what they are, not as a 1 KAS sale.
+  const free = { promotion: "Free month (promotion)", invite: "Free month (invite link)" };
+  const what = (e) => free[(data.free_txids || {})[e.txid]] || label[e.kind] || escHtml(e.kind);
+  const row = (e, plan) => `<tr><td data-l="Date" class="nowrap">${escHtml(when(e))}</td><td>${what(e)}${plan ? ` <span class="muted small">${escHtml(plan)}</span>` : ""}</td><td data-l="Paid">${kas(e.amount_sompi)}</td><td data-l="To you">${kas(e.creator_sompi)}</td><td data-l="KasPass fee">${e.fee_sompi ? kas(e.fee_sompi) : "none"}</td></tr>`;
   const head = "<tr><th>Date</th><th>What</th><th>Paid</th><th>To you</th><th>KasPass fee</th></tr>";
   const ev = [...data.events].sort((a, b) => (a.time_ms || 0) - (b.time_ms || 0)).reverse().slice(0, 50);
   $("activity").innerHTML = head + (ev.length ? ev.map((e) => row(e)).join("") : `<tr><td colspan="5" class="muted">No payments yet.</td></tr>`);
@@ -1358,10 +1369,24 @@ function renderV4() {
   show("discountBox", v4.max_discount_bps > 0);
   if (document.activeElement !== $("dPct")) $("dPct").value = v4.holder_bps / 100;
   $("dPct").max = v4.max_discount_bps / 100;
+  $("dTitle").textContent = data.levels && data.levels.length > 1 ? `Holder discount on ${(data.level && data.level.name) || "this plan"}` : "Holder discount";
+  // 99.99% is the plan's own limit: its contract always takes a payment, however small.
   $("dNote").textContent = v4.discounts
-    ? `Members who qualify in your holder club pay this much less, checked again at every renewal. The most you can set is ${v4.max_discount_bps / 100}%.`
+    ? `The most this plan allows is ${v4.max_discount_bps / 100}% (set when it was created). It can't be 100%: Kaspa needs every payment to be at least a little KAS.`
     : "Holder discounts can't be turned on for this plan. Message KasPass.";
-  $("dGo").disabled = !v4.discounts;
+  renderClubDeps();
+}
+
+// What the holder discount and the page's club link depend on: a holder club existing.
+let clubOn = null;
+function renderClubDeps() {
+  const noClub = clubOn === false;
+  show("dNoClub", noClub);
+  $("dGo").disabled = !(data && data.v4 && data.v4.discounts) || (noClub && !(data.v4.holder_bps > 0));
+  $("pgClub").disabled = noClub;
+  $("pgClubHint").textContent = noClub
+    ? "You don't have a holder club yet, so there's nothing to link to. Set one up in Groups › Holder club: it gives free access (Telegram, Discord) to people who hold your NFTs or tokens."
+    : "The holder club gives free access (Telegram, Discord) to people who hold your NFTs or tokens. Its rules are in Groups › Holder club.";
 }
 
 $("dGo").onclick = async () => {
@@ -1383,7 +1408,7 @@ function renderOutputs(statusId, outputs) {
     const li = document.createElement("li");
     const n = document.createElement("span"); n.className = "n"; n.textContent = "Output " + o.index;
     const w = document.createElement("span"); w.className = "what" + (o.label.startsWith("KasPass fee") ? " fee" : ""); w.textContent = `${o.kas} · ${o.label}`;
-    const a = document.createElement("span"); a.className = "addr"; a.textContent = "to the address ending in " + String(o.address).slice(-4); a.title = o.address;
+    const a = document.createElement("span"); a.className = "addr"; a.textContent = "to the address ending in " + String(o.address).slice(-4);
     li.append(n, w, a);
     ul.append(li);
   }
@@ -1448,9 +1473,11 @@ function salePct() {
 
 function updatePreview() {
   const pct = salePct();
-  $("sPreview").textContent = pct ? `Buyers will see the regular price crossed out and ${pct}% off when they join. Renewals stay at the regular price.` : "Pick a discount between 1% and 90%.";
+  const plan = (data && data.level && data.level.name) || "this plan", all = $("sAll").checked && data && data.levels && data.levels.length > 1;
+  $("sPreview").textContent = pct ? `Buyers of ${all ? "every plan" : plan} will see the regular price crossed out and ${pct}% off when they join. Renewals stay at the regular price.` : "Pick a discount between 1% and 90%.";
 }
 $("sPct").addEventListener("input", updatePreview);
+$("sAll").addEventListener("change", updatePreview);
 
 function renderCeiling(lane) {
   if (!lane || !(card.settings.v4 && card.settings.v4.record_id)) return;
@@ -1468,6 +1495,11 @@ function renderSale(lane) {
   curLane = lane || null;
   renderCeiling(lane);
   const sale = data.sale;
+  // A sale belongs to one plan: name it, and offer every plan at once when there are several.
+  const many = data.levels && data.levels.length > 1, plan = (data.level && data.level.name) || "this plan";
+  $("saleTitle").textContent = many ? `Run a sale on ${plan}` : "Run a sale";
+  show("sAllBox", many);
+  if (many) $("sAllText").textContent = `Run it on all ${data.levels.length} plans, not just ${plan}`;
   show("saleOn", !!sale); show("saleForm", !sale);
   if (sale) {
     const ends = sale.ends_ms ? new Date(sale.ends_ms).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : null;
@@ -1490,9 +1522,22 @@ $("sGo").onclick = async () => {
   const endsVal = $("sEnds").value;
   const ends_ms = endsVal ? new Date(endsVal).getTime() : null;
   if (ends_ms && ends_ms < Date.now()) { say("sErr", "The end date is in the past."); return; }
+  const all = $("sAll").checked && data.levels && data.levels.length > 1;
   try {
-    await postSale({ action: "start", pct, label: $("sLabel").value, ends_ms });
-    say("sStatus", "Done: the sale is on.");
+    if (all) {
+      // One request per plan; say which ones worked if any didn't.
+      const done = [], failed = [];
+      for (const l of data.levels) {
+        const r = await fetch("/v1/creator/sale?level=" + encodeURIComponent(l.covenant_id), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ session, action: "start", pct, label: $("sLabel").value, ends_ms }) });
+        (r.ok ? done : failed).push(l.name);
+      }
+      if (failed.length) say("sErr", `The sale started on ${done.join(", ") || "no plans"}, but not on ${failed.join(", ")}. Pick that plan at the top and try again.`);
+      else say("sStatus", `Done: the sale is on for all ${done.length} plans.`);
+      $("sAll").checked = false;
+    } else {
+      await postSale({ action: "start", pct, label: $("sLabel").value, ends_ms });
+      say("sStatus", "Done: the sale is on.");
+    }
     await refresh();
   } catch (e) { plainSay("sErr", e); }
 };
@@ -1807,7 +1852,9 @@ addTips();
 
 (async () => {
   card = await (await fetch("/v1/tier")).json();
-  $("net").textContent = $("netPh").textContent = card.network === "testnet-10" ? "Testnet-10" : card.network === "mainnet" ? "Mainnet" : card.network;
+  // Mainnet is the normal case and carries no badge; a test network is the one to point out.
+  $("net").textContent = $("netPh").textContent = card.network === "testnet-10" ? "Testnet-10" : card.network;
+  $("net").hidden = $("netPh").hidden = card.network === "mainnet";
   // The create form starts from sensible settings: a month, no trial, renew up to a week ahead on
   // mainnet; short test periods (minutes) on a test network so renewals can be watched.
   if (card.network === "mainnet") { setDur("lPeriod", 30 * 86400000); $("lTrialU").value = "0"; setDur("lAhead", 7 * 86400000); }
@@ -2074,6 +2121,7 @@ function needRow(n) {
     <label class="small prIdBox hidden" style="flex:1 1 260px">Token id (covenant id)<input class="prId mono" maxlength="64" placeholder="64 letters and digits, from the token's official page"></label>
     <label class="small prSinceBox hidden">Only since (optional)<input class="prSince" type="date"></label>
     <label class="check prPlainBox hidden" style="align-self:center"><input type="checkbox" class="prPlain"> Also count plain burns</label>
+    <span class="small muted prBridgeNote hidden" style="flex-basis:100%">Only migrations made through the KAT Bridge count (the official route, for example at nachothekat.xyz). Tokens moved any other way don't.</span>
     <button class="ghost prDel" style="padding:4px 10px">Remove</button>`;
   d.querySelector(".prMin").value = n ? n.min : 1;
   d.querySelector(".prKind").value = n ? n.kind : "nft";
@@ -2086,6 +2134,7 @@ function needRow(n) {
     d.querySelector(".prIdBox").classList.toggle("hidden", !k);
     d.querySelector(".prSinceBox").classList.toggle("hidden", kind !== "migrated" && kind !== "burned");
     d.querySelector(".prPlainBox").classList.toggle("hidden", kind !== "burned");
+    d.querySelector(".prBridgeNote").classList.toggle("hidden", kind !== "migrated" && kind !== "burned");
     // NACHO's official KCC-20 id (nachothekat.xyz › Migration), filled in for convenience.
     if (k && !d.querySelector(".prId").value && d.querySelector(".prTick").value.trim().toUpperCase() === "NACHO") d.querySelector(".prId").value = NACHO_KCC20;
   };
@@ -2199,6 +2248,18 @@ $("ivMake").onclick = async () => {
   } catch (e) { plainSay("ivErr", e); }
 };
 
+// A claim's "nfts" holds NFT ids ("TICK:id") and, for KAT Bridge rules, the migrations or burns
+// that counted ("mig:<txid>", "burn:<txid>"). Say it in words; the full list is in the tooltip.
+function whatCounted(list) {
+  const mig = list.filter((x) => x.startsWith("mig:")).length, burn = list.filter((x) => x.startsWith("burn:")).length;
+  const nfts = list.filter((x) => !x.startsWith("mig:") && !x.startsWith("burn:"));
+  const parts = [];
+  if (mig) parts.push(`${mig} KAT Bridge migration${mig === 1 ? "" : "s"}`);
+  if (burn) parts.push(`${burn} burn${burn === 1 ? "" : "s"}`);
+  if (nfts.length) parts.push(nfts.length > 3 ? `${nfts.slice(0, 3).join(", ")} and ${nfts.length - 3} more NFTs` : nfts.join(", "));
+  return parts.join(" + ") || "Tokens held";
+}
+
 function renderPromo() {
   const p = PR.promo, v = PR.view, unit = PR.network === "mainnet" ? "KAS" : "test KAS";
   const sel = $("prLevel");
@@ -2230,23 +2291,23 @@ function renderPromo() {
   show("prNow", !!p);
   if (p) {
     const state = p.ended || (v && v.closed === "ended") ? "Ended" : v && v.closed === "not_started" ? "Starts " + new Date(p.start_ms).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : v && v.closed === "all_claimed" ? "Every free month has been claimed" : v && v.paused ? "Paused: top up your fees wallet" : "Running";
-    $("prNow").innerHTML = `${escHtml(p.label)}<div class="sub">${escHtml(state)} · ${PR.claims_count} claimed${p.max_claims ? ` of ${p.max_claims}` : ""} · ends ${escHtml(new Date(p.end_ms).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }))}<br>${escHtml(v ? v.requirement : "")}</div>`;
+    $("prNow").innerHTML = `${escHtml(p.label)}<div class="sub">${escHtml(state)} · <span class="kp-priv">${PR.claims_count}</span> claimed${p.max_claims ? ` of <span class="kp-priv">${p.max_claims}</span>` : ""} · ends ${escHtml(new Date(p.end_ms).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }))}<br>${escHtml(v ? v.requirement : "")}</div>`;
   }
   const per = PR.cost_per_claim_sompi, vault = PR.vault_per_claim_sompi;
   const tokenRule = [...$("prNeeds").querySelectorAll(".prKind")].some((x) => x.value === "token" || x.value === "kcc20");
   $("prCost").textContent = (tokenRule ? "Tokens can be moved to a new wallet to claim again, so a token requirement needs a limit. " : "") + `Each free month: about ${kas(vault)} goes into your vault (so it comes back to you), ${kas(PR.deposit_sompi)} becomes the member's refundable deposit, plus a tiny network fee. Your fees wallet pays it, and keeps ${kas(PR.spare_sompi)} spare for fees.`;
   const bal = PR.keeper_sompi;
   // The fees wallet itself is the first panel on this tab; here, just what it means for free months.
-  $("prKeeper").innerHTML = `Paid from your <b>fees wallet</b> (top of this tab): balance <b>${bal == null ? "unknown" : kas(bal)}</b>${bal != null ? `, enough for about <b>${PR.claims_affordable}</b> free month${PR.claims_affordable === 1 ? "" : "s"}` : ""}. ${kas(PR.keeper_floor_sompi)} always stays for auto-renewal fees. For 25 free months, send it about ${Math.ceil((per * 25 + PR.keeper_floor_sompi) / KAS)} ${unit}. Claims pause by themselves when it runs low, and you get a message.` +
+  $("prKeeper").innerHTML = `Paid from your <b>fees wallet</b> (top of this tab): balance <b>${bal == null ? "unknown" : kas(bal)}</b>${bal != null ? `, enough for about <b class="kp-priv">${PR.claims_affordable}</b> free month${PR.claims_affordable === 1 ? "" : "s"}` : ""}. ${kas(PR.keeper_floor_sompi)} always stays for auto-renewal fees. For 25 free months, send it about ${Math.ceil((per * 25 + PR.keeper_floor_sompi) / KAS)} ${unit}. Claims pause by themselves when it runs low, and you get a message.` +
     (PR.can_discount ? "" : `<br><span style="color:var(--bad)">Free months can't be turned on for your plans yet. Message KasPass.</span>`);
   if (bal != null) { $("kFree").textContent = Number(PR.claims_affordable).toLocaleString(); show("kFreeBox", true); }
   const t = $("prClaims");
   t.replaceChildren();
   if (PR.claims.length) {
-    t.innerHTML = "<tr><th>When</th><th>Wallet</th><th>NFTs used</th><th>Transaction</th></tr>";
+    t.innerHTML = "<tr><th>When</th><th>Wallet</th><th>What counted</th><th>Transaction</th></tr>";
     for (const c of PR.claims) {
       const tr = document.createElement("tr");
-      for (const x of [new Date(c.at_ms).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }), c.wallet.slice(0, 14) + "…" + c.wallet.slice(-6), (c.nfts || []).join(", ") || "none", c.txid.slice(0, 12) + "…"]) {
+      for (const x of [new Date(c.at_ms).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }), c.wallet.slice(0, 14) + "…" + c.wallet.slice(-6), whatCounted(c.nfts || []), c.txid.slice(0, 12) + "…"]) {
         const td = document.createElement("td"); td.textContent = x; tr.append(td);
       }
       tr.children[1].className = "mono"; tr.children[3].className = "mono";

@@ -236,10 +236,10 @@ Also worth doing: **top up the fees wallet** (needed for auto-renewals and free 
 
 - **The payout vault:** what's waiting to be withdrawn, with a **Withdraw** button (only your wallet can take it out; Kaspire asks first).
 - **The numbers:** earned so far, members now, renewals, upgrades, members on auto-renew. All read from the blockchain.
-- **Still to set up:** what's left, with a button for each.
+- **Still to set up:** what's left, with a button for each. If you don't run a Telegram group, **I don't have one** takes that step off the list.
 - **Messages from your website:** notes from the "Get your own page" form (on KasPass's own site).
-- **Latest activity:** the most recent payments across every plan, newest first, each with its date, what went to you and the KasPass fee. "Sale" is a regular purchase of one period, whatever its length.
-- **Members by plan.**
+- **Latest activity:** the most recent payments across every plan, newest first, each with its date, what went to you and the KasPass fee. "Sale" is a regular purchase of one period, whatever its length. A free month paid by your fees wallet shows as **Free month (promotion)** or **Free month (invite link)**.
+- **Members by plan:** one bar split by plan. Each plan's part has its own fill (solid, stripes, pale, dots), so they're easy to tell apart in any theme.
 
 ### Your page {#tab-page}
 
@@ -252,7 +252,7 @@ Also worth doing: **top up the fees wallet** (needed for auto-renewals and free 
   - **Card style:** **KasPass** (compact cards whose details fold away), **Open** (every plan's details shown, in your look) or **Kaspa Vision** (Open, in Kaspa Vision's exact colours and fonts).
   - **Highlight a plan:** a thicker outline and the main button, like "best value" (Open and Kaspa Vision styles).
   - **How visitors see prices:** **My currency only**, or **Mine, plus the visitor's** (adds "about … in your currency" for visitors outside your country).
-  - **Show how many members have joined** and **Show the NFT holder club on this page.**
+  - **Show how many members have joined**, and **Show a "Join the holder club" link on this page** (only when you have a [holder club](#holder-club); greyed out until then).
 
 **Look and brand:** logo, profile photo, banner, colours (your own, or matched to your website), fonts, and a preview of your page.
 
@@ -274,13 +274,13 @@ Also worth doing: **top up the fees wallet** (needed for auto-renewals and free 
 
 - **Price:** change the price, plus lifetime, commitment and founding prices, with **Save price**. No wallet approval is needed. How it reaches existing members: [prices and existing members](#price-changes).
 - **Advanced: the most KAS a member can be charged:** the ceiling, changed with **Change ceiling** (one approval in Kaspire, never below today's price, new members only).
-- **Run a sale:** a percent off (1% to 90%), with an optional name and end date, for new purchases only. Nothing to approve. The page shows the regular price crossed out.
+- **Run a sale:** a percent off (1% to 90%), with an optional name and end date, for new purchases only. Nothing to approve. The page shows the regular price crossed out. A sale is for the plan picked at the top; tick **Run it on all … plans** to start the same sale on every plan at once.
+- **Holder discount:** a lasting percent off this paid plan for members who qualify in your [holder club](#holder-club), on joining and at every renewal (0 = off). It needs a holder club first. The most it can be is the plan's largest allowed discount, set when the plan was created (usually 99.99%: never 100%, because Kaspa needs every payment to be at least a little KAS). It isn't the free month: that's a [holder promotion](#promotions).
 - Warnings appear before you sign a price that doesn't make sense for buyers (for example a commitment that costs more than lifetime).
 
 ### Promotions {#tab-promotions}
 
 - **Fees wallet:** its address and balance (see [Fees wallet](#fees-wallet)).
-- **Holder discount:** a percent off for members who qualify in the holder club, on purchases and renewals, up to the plan's largest allowed discount (0 = off).
 - **Holder promotion** and **Invite links:** see [Promotions and invite links](#promotions).
 
 ### Groups {#tab-groups}
@@ -290,7 +290,7 @@ Telegram group, Discord server and holder club: see [Telegram, Discord and the h
 ### Payouts {#tab-payouts}
 
 - **Payouts:** turn on payouts (owner record and backup wallet) and withdraw from the vault. Under **Advanced: server key**, **Replace server key** if it may have been exposed; then **Move to the new key** moves existing plans and passes over, several per approval. Members do nothing.
-- **Payments for your taxes:** **Download payments (spreadsheet)**: one row per member payment with the date, plan, kind (purchase, upgrade, renewal, auto-renewal, gift, promo), KAS paid and the price in your currency. No member addresses.
+- **Payments for your taxes:** **Download payments (spreadsheet)**: one row per member payment with the date, plan, kind (purchase, upgrade, renewal, auto-renewal, gift, promo), KAS paid and the price in your currency. No member addresses. It's a record for your books, not tax or legal advice: ask an accountant how to report it where you live.
 - **Hand over ownership:** the backup wallet can give the owner record to new wallets. Existing passes keep paying the same vault.
 - If a payment ever went through below the server's price, you get a message and it's listed in this tab.
 
@@ -298,9 +298,27 @@ Telegram group, Discord server and holder club: see [Telegram, Discord and the h
 
 - **Who can see your page:** everyone, or only people with a private link.
 - **Sale alerts on Telegram:** a message from the site's bot when someone joins, and optionally on renewals and upgrades. **Connect my Telegram** links your chat.
-- **Display:** whether the Overview shows exact KAS amounts, with decimals.
+- **Display:** whether the Overview shows exact KAS amounts, with decimals, and [stream mode](#stream-mode).
 - **Dashboard theme** and **Effects:** colours for the dashboard itself (only you see them), day and night, and optional glow and background pattern.
 - **Technical details** and **Launch a new membership.**
+
+### Stream mode {#stream-mode}
+
+For sharing your screen on a live stream or a call, or recording a video.
+
+- **Turn it on:** the **Stream mode** switch at the bottom of the side menu (also in Settings › Display). A badge at the bottom right says it's on. Other open tabs of the same site turn on too.
+- **What it hides:** wallet addresses, .kas and .k names, KAS and money amounts, dates, times and time left, transaction ids, the big numbers and counts on the Overview and in Promotions, members' notes, Telegram and Discord names, holder club figures, QR codes and payment links. Each becomes a grey bar of the same width, so its length gives nothing away. Boxes with something in them are covered, and so are tooltips and link addresses that hold private details.
+- **Where:** the dashboard, and your membership page and holder club page in the same browser. It's set per site address (pass.example.com and www.pass.example.com are separate). A link ending in `?stream=1` turns it on; no link can turn it off.
+- **Showing one thing:** click its grey bar, or **Reveal** beside an address. It hides again by itself after 10 seconds. A box you click into shows while you type.
+- **Turning it off** takes two presses, at least a second apart (the badge's **Turn off**, then **Press again to show everything**), so a slip or a double-click can't show everything.
+- **What it can't hide:** anything outside the page, like your wallet's own windows, browser tabs and bookmarks, the address bar, notifications, or other apps.
+- **On the day of a stream:**
+  1. Sign in to Kaspire and the dashboard before you go live.
+  2. Share one browser tab, not the whole screen.
+  3. Turn stream mode on at each site address you'll open, and check each tab shows the badge.
+  4. Don't open links from the chat.
+  5. Don't use Upload buttons or "Connect my Telegram" on air.
+  6. Keep the browser in English: dates in other languages are only partly recognised.
 
 ### Fees wallet {#fees-wallet}
 
@@ -352,7 +370,7 @@ A free period for people you choose, without being there when they claim.
 - Access by which NFTs or tokens someone holds, with no paid pass needed. Members sign in at `/club` (a signed message, never a payment), see their standing and join the matching Telegram groups and Discord roles.
 - **Rules:** uploaded under **Advanced: upload holder club rules** (Groups tab), then **Check and apply**, with levels based on the number of NFTs, ranks and credits, specific token ids, other collections, KRC-20 or KCC-20 tokens, or holding a paid pass. **Check a wallet** previews any address.
 - **Linked wallets** add up across a member's wallets. NFTs listed for sale don't count unless the rules say so.
-- **Holder discount:** members who qualify can pay less for paid plans (Promotions tab).
+- **Holder discount:** members who qualify can pay less for paid plans (Prices & sales tab).
 - Holdings are re-checked every minute; anyone who stops qualifying loses that group or role.
 
 ### Writing a holder club rules file {#holder-club-rules}
@@ -424,7 +442,7 @@ Holdings add up across all the wallets a member has linked.
 - **Come back after paying:** add `&return=https://your-site/page`. The return site must be on the server's allowed list. The page then says whose payment page it is, and after paying (or claiming) a button goes back to that address with `paid=1` added. Always confirm the membership with the API rather than trusting `paid=1`.
 - **Match the look:** `&style=kaspass`, `&style=open` or `&style=kaspa-vision`, and `&theme=day` or `&theme=night`.
 - **Open one step:** `&do=manage`, `&do=renew` or `&do=topup` (after sign-in). It never pays or ends anything by itself.
-- **Read-only API for partner sites:** `GET /v1/levels` (plans and prices), `GET /v1/promo` (the running promotion), `GET /v1/quote?address=…&level=…` (what a wallet would pay), `GET /v1/check?address=…` (does it hold an active pass). `/v1/check` doesn't prove the visitor controls that address: have them sign in (a signed message) first, and gate access on `access_rank` so a higher plan counts for a lower one.
+- **Read-only API for partner sites:** `GET /v1/levels` (plans and prices), `GET /v1/promo` (the running promotion), `GET /v1/quote?address=…&level=…` (what a wallet would pay), `GET /v1/check?address=…` (does it hold an active pass). `GET /v1/owner` (who owns the site now, its owner record, payout vault and plans, for an app that counts the creator's KasPass income: accept the site only when `owner` is a wallet the user has signed in with). `/v1/check` doesn't prove the visitor controls that address: have them sign in (a signed message) first, and gate access on `access_rank` so a higher plan counts for a lower one.
 - The pages can't be shown inside another site's frame, so visitors always see the real address.
 
 ## Common messages and what to do {#messages}

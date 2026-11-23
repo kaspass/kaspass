@@ -26,3 +26,15 @@
     root.setAttribute("data-glow", look && look.glow === false ? "off" : "on");
   } catch (e) {}
 })();
+// Stream mode is on in this browser: keep the page hidden until stream.js has started, so if
+// stream.js ever fails to load the page stays blank instead of showing private details.
+(function () {
+  try {
+    if (localStorage.getItem("kaspass.stream") === "1" || /[?&]stream=1(?:&|$)/.test(location.search)) {
+      document.documentElement.classList.add("kp-wait");
+      var s = document.createElement("style");
+      s.textContent = "html.kp-wait body { visibility: hidden !important; }";
+      document.head.appendChild(s);
+    }
+  } catch (e) {}
+})();

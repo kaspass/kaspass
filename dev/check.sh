@@ -27,3 +27,6 @@ trap 'kill $SIM 2>/dev/null || true' EXIT
 for _ in $(seq 1 100); do curl -sf -o /dev/null "http://127.0.0.1:$PORT/" && break; sleep 3; done
 sleep 8
 node dev/pages.js "http://127.0.0.1:$PORT"
+
+echo "== the dashboard, signed in, and stream mode"
+node dev/dashboard.js "http://127.0.0.1:$PORT"

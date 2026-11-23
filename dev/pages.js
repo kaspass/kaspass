@@ -36,7 +36,7 @@ const text = (u, h = {}) => new Promise((resolve, reject) => {
   check('example page: a link preview with its own address', /<meta property="og:url" content="http:\/\/127\.0\.0\.1:\d+\/demo\/podcast">/.test(demo) && demo.includes('<meta property="og:title"'));
   check('example page: no stand-ins left in the preview', !demo.includes('%%PAGE_'));
 
-  const b = await chromium.launch();
+  const b = await chromium.launch(process.env.KASPASS_CHROME ? { executablePath: process.env.KASPASS_CHROME } : {});
   const contexts = {
     phone: await b.newContext({ ...devices['iPhone 13'] }),
     desk: await b.newContext({ viewport: { width: 1280, height: 800 } }),

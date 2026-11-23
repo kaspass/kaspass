@@ -269,7 +269,7 @@ function setAddress(a) {
     $("addr").innerHTML = "";
     $("addr").append(session ? "Signed in as " : "Kaspire wallet found ");
     if (n) { const b = document.createElement("b"); b.textContent = n + " "; $("addr").append(b); }
-    const m = document.createElement("span"); m.className = "a"; m.textContent = session && !n ? `the wallet ending in ${a.slice(-4)}` : `(ends in ${a.slice(-4)})`; m.title = a;
+    const m = document.createElement("span"); m.className = "a"; m.textContent = session && !n ? `the wallet ending in ${a.slice(-4)}` : `(ends in ${a.slice(-4)})`;
     $("addr").append(m);
     // Signed in with Kaspire mobile: a way to pair a different wallet.
     if (session && WC) {
@@ -869,6 +869,12 @@ try {
     if (u.searchParams.has("invite") && sessionStorage.getItem("kp_invite") === INVITE_CODE) { u.searchParams.delete("invite"); history.replaceState(null, "", u.pathname + u.search + u.hash); }
   }
 } catch {}
+// A private page's key (?k=) leaves the address bar once the page has loaded: the server has set
+// its cookie by then, and a key on screen could be read off a stream or a screenshot.
+try {
+  const u = new URL(location.href);
+  if (u.searchParams.has("k")) { u.searchParams.delete("k"); history.replaceState(history.state, "", u.pathname + u.search + u.hash); }
+} catch {}
 async function loadInvite() {
   if (!INVITE_CODE) return;
   // Signed in: the server also says whether this wallet is the one that used it.
@@ -1229,7 +1235,7 @@ async function runPaid({ url, body, statusId, errId, buttons, done, level, doneS
         if (change) li.className = "change";
         const n = document.createElement("span"); n.className = "n"; n.textContent = "Output " + o.index;
         const w = document.createElement("span"); w.className = "what" + (o.label.startsWith("KasPass fee") ? " fee" : ""); w.textContent = change ? `${o.kas} · comes straight back to you` : `${o.kas} · ${o.label}`;
-        const a = document.createElement("span"); a.className = "addr"; a.textContent = "to the address ending in " + String(o.address).slice(-4); a.title = o.address;
+        const a = document.createElement("span"); a.className = "addr"; a.textContent = "to the address ending in " + String(o.address).slice(-4);
         li.append(n, w, a);
         ul.append(li);
       }

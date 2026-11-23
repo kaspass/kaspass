@@ -4,9 +4,10 @@
 
 1. the unit tests (`cargo test`);
 2. every contract and the website's flows on a simulated chain (`membership-cli simulate`, which must end with "SIMULATION PASSED");
-3. the website's pages in a real browser (`dev/pages.js`), signed out, on a phone and a computer, in light and dark mode, against a local simulated site with example creators and a 7-day free trial.
+3. the website's pages in a real browser (`dev/pages.js`), signed out, on a phone and a computer, in light and dark mode, against a local simulated site with example creators and a 7-day free trial;
+4. the creator dashboard, signed in with the simulator's creator test key (`dev/dashboard.js`): every tab with stream mode on, with and without sample members, payments and claims, must show nothing private (addresses, amounts, dates, ids), plus the dashboard fixes of update 92.
 
-It needs Rust, Node 18 or newer, and Playwright with Chromium (`npm install playwright && npx playwright install chromium`).
+It needs Rust, Node 18 or newer, Playwright with Chromium, and the two signing libraries the dashboard test uses (`npm install playwright @noble/curves @noble/hashes && npx playwright install chromium`). To use a Chrome that's already installed instead, set `KASPASS_CHROME` to its path. `KASPASS_SHOTS=<folder>` saves screenshots of each dashboard tab.
 
 ```
 dev/check.sh

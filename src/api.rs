@@ -567,6 +567,7 @@ pub async fn serve(setups: Vec<LevelSetup>, chain: Chain, port: u16, members_htm
         .route("/v1/creator/discount", post(creator_discount))
         .route("/v1/levels", get(levels_info))
         .route("/v1/addresses", get(addresses))
+        .route("/v1/owner", get(owner_info))
         .route("/v1/promo", get(promo::info))
         .route("/v1/promo/check", post(promo::check_me))
         .route("/v1/promo/claim", post(promo::claim))
@@ -1221,6 +1222,7 @@ const ASSETS: &[(&str, &str, &[u8])] = &[
     ("dashboard.js", "text/javascript; charset=utf-8", include_bytes!("../web/dashboard.js")),
     // The creator dashboard's themes: the saved colours painted before the page shows, then the picker.
     ("dash-theme-boot.js", "text/javascript; charset=utf-8", include_bytes!("../web/dash-theme-boot.js")),
+    ("stream.js", "text/javascript; charset=utf-8", include_bytes!("../web/stream.js")),
     ("dash-theme.js", "text/javascript; charset=utf-8", include_bytes!("../web/dash-theme.js")),
     ("club.js", "text/javascript; charset=utf-8", include_bytes!("../web/club.js")),
     ("help.js", "text/javascript; charset=utf-8", include_bytes!("../web/help.js")),
@@ -1757,6 +1759,37 @@ fn keeper_of(s: &AppState) -> Option<String> {
 /// `GET /v1/addresses`: every fixed address this site's memberships use, in one place: each
 /// level's id (the covenant id on its sales lanes and passes), the vault, the KasPass fee address
 /// (when there's a fee) and the keeper.
+/// Public, read-only: who owns this site now, for a partner that books a creator's KasPass income
+/// (Kaspa Vision). The partner accepts the site only when `owner` is a wallet the account has
+/// signed in with, so nobody can add someone else's vault and count its payments as their own.
+///
+/// - `owner`: the owner record's current owner, the wallet the dashboard checks before any creator
+///   action. It follows a handover made through KasPass; `/v1/tier`'s `creator_address` doesn't.
+/// - `record_id`: the owner record on chain, for a partner that wants to check the owner without
+///   trusting this server.
+/// - `vault`: the site's one payout vault, shared by all its plans; `levels`: those plans.
+/// - No backup wallet: nobody else needs it.
+///
+/// A site without an owner record (an older membership) answers 404, and one whose record file
+/// can't be read answers 503: a partner shouldn't accept either.
+async fn owner_info(State(s): State<AppState>) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let shop = s.shop.as_ref().ok_or((StatusCode::NOT_FOUND, "This site has no owner record, so it has no owner to show.".to_string()))?;
+    if shop.record_broken() {
+        return Err((StatusCode::SERVICE_UNAVAILABLE, "This site's owner record can't be read right now.".to_string()));
+    }
+    let r = shop.record().ok_or((StatusCode::NOT_FOUND, "This site has no owner record (an older kind of membership), so its owner can't be shown here.".to_string()))?;
+    let levels: Vec<String> = s.levels.iter().filter(|l| !l.card.placeholder).map(|l| l.card.covenant_id.clone()).collect();
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0);
+    Ok(Json(serde_json::json!({
+        "network": s.card.network,
+        "owner": r.owner,
+        "record_id": r.record_id,
+        "vault": r.vault_address().ok(),
+        "levels": levels,
+        "updated_ms": now,
+    })))
+}
+
 async fn addresses(State(s): State<AppState>) -> Json<serde_json::Value> {
     let mut levels = Vec::new();
     for l in s.levels.iter().filter(|l| !l.card.placeholder) {
@@ -3964,6 +3997,7 @@ async fn creator_overview(State(s): State<AppState>, Query(lq): Query<LevelQ>, Q
         "lanes": snap.lanes,
         "passes": members::enrich(&s, &snap.passes),
         "events": snap.events,
+        "free_txids": promo::free_txids(&s.home),
         "now_ms": snap.updated_ms,
         "totals": {
             "paid_sompi": paid,
