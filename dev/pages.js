@@ -32,6 +32,14 @@ const text = (u, h = {}) => new Promise((resolve, reject) => {
   check('creators: the form heading', (await text('/creators')).body.includes('Tell us about your membership'));
   check('help on the KasPass site: its look and a way home', (await text('/help')).body.includes('Bricolage Grotesque') && (await text('/help')).body.includes('href="/">Home</a>'));
   check("help on a creator's site: the creator's look", !(await text('/help', { host: 'members.example.com' })).body.includes('Bricolage Grotesque'));
+  // Update 97 (UI88 M1): Help, Guide and Holder club on a creator's site in the membership page's
+  // look: its card style from the first frame, cards.css, the creator's name at the top instead of
+  // "KasPass", a day and night switch, and the membership page's footer sentence.
+  for (const u of ['/help', '/guide', '/club']) {
+    const h = (await text(u, { host: 'members.example.com' })).body;
+    const v = { style: /<html lang="en" data-cards="(?:kaspass|open|kaspa-vision)"/.test(h), css: h.includes('/assets/cards.css'), name: /<a class="brandlink" href="\/">(?:<img[^>]*>)?<span class="word">(?!KasPass<)[^<]+<\/span>/.test(h), sw: h.includes('id="themeToggle"') && !h.includes('<!--THEME-->'), foot: h.includes('Test network only. New software, not yet reviewed by an outside security firm.') };
+    check(`${u} on a creator's site: the membership page's look, name, switch and footer (97)`, Object.values(v).every(Boolean), v);
+  }
   const demo = (await text('/demo/podcast')).body;
   check('example page: a link preview with its own address', /<meta property="og:url" content="http:\/\/127\.0\.0\.1:\d+\/demo\/podcast">/.test(demo) && demo.includes('<meta property="og:title"'));
   check('example page: no stand-ins left in the preview', !demo.includes('%%PAGE_'));
@@ -51,6 +59,64 @@ const text = (u, h = {}) => new Promise((resolve, reject) => {
       check(`${name} ${u}: no sideways scrolling`, await p.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1));
       await p.close();
     }
+  }
+  // Update 97 (UI88 M1, M20): in Kaspa Vision's card style every page starts in the device's own
+  // look (day or night), with a 44 px switch that changes it; no sideways scrolling.
+  {
+    const L = S.replace('127.0.0.1', 'localhost');
+    for (const scheme of ['light', 'dark']) {
+      const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, colorScheme: scheme });
+      for (const u of ['/', '/help', '/guide', '/club']) {
+        const q = await ctx.newPage();
+        const errs = []; q.on('pageerror', (e) => errs.push(e.message));
+        await q.goto(`${L}${u}?style=kaspa-vision`); await q.waitForTimeout(u === '/' ? 3000 : 1000);
+        const v = await q.evaluate(() => { const t = document.getElementById('themeToggle'); const r = t ? t.getBoundingClientRect() : { width: 0, height: 0 }; return { theme: document.documentElement.dataset.theme, bg: getComputedStyle(document.body).backgroundColor, toggle: !!t && !t.classList.contains('hidden') && r.width >= 44 && r.height >= 44, flat: document.documentElement.scrollWidth <= innerWidth + 1 }; });
+        const want = scheme === 'light' ? 'rgb(244, 249, 247)' : 'rgb(8, 16, 19)';
+        check(`${u} in Kaspa Vision's style on a ${scheme} device: starts in that look, with a 44 px day and night switch, no sideways scrolling (97)`, v.theme === scheme && v.bg === want && v.toggle && v.flat && !errs.length, [v, errs]);
+        if (v.toggle) {
+          await q.click('#themeToggle'); await q.waitForTimeout(200);
+          const after = await q.evaluate(() => document.documentElement.dataset.theme);
+          check(`${u} in Kaspa Vision's style: the switch changes the look`, after === (scheme === 'light' ? 'dark' : 'light'), after);
+        }
+        await q.evaluate(() => { try { localStorage.removeItem('kp-theme'); } catch {} });
+        await q.close();
+      }
+      await ctx.close();
+    }
+    // The membership page: 44 px tap targets on a phone (UI88 M18), the menu closes on Escape and
+    // on a click outside it, and a 2 px focus ring for the keyboard (UI88 M19).
+    const q = await contexts.phone.newPage();
+    await q.goto(L + '/'); await q.waitForTimeout(3000);
+    const small = await q.evaluate(() => [...document.querySelectorAll('#navSignin, .brandmenu summary, #themeToggle, #signin, #qrGo, .lvl .chg, button.linkish, .welcome .close, details:not(.brandmenu) > summary, .meta a')].filter((e) => e.getClientRects().length && e.offsetParent).filter((e) => e.getBoundingClientRect().height < 44).map((e) => (e.id || e.className || e.tagName) + ' ' + Math.round(e.getBoundingClientRect().height)));
+    check('membership page on a phone: header, plan and fold buttons are at least 44 px tall (97, UI88 M18)', small.length === 0, small);
+    await q.click('.brandmenu summary'); await q.waitForTimeout(200);
+    const opened = await q.evaluate(() => document.querySelector('.brandmenu').open);
+    await q.keyboard.press('Escape'); await q.waitForTimeout(200);
+    const esc = await q.evaluate(() => !document.querySelector('.brandmenu').open && document.activeElement === document.querySelector('.brandmenu summary'));
+    await q.click('.brandmenu summary'); await q.waitForTimeout(200);
+    await q.mouse.click(12, 600); await q.waitForTimeout(200);
+    const outside = await q.evaluate(() => !document.querySelector('.brandmenu').open);
+    check('membership page: the menu closes on Escape and on a click outside it (97, UI88 M19)', opened && esc && outside, { opened, esc, outside });
+    await q.close();
+    const k = await contexts.desk.newPage();
+    await k.goto(L + '/'); await k.waitForTimeout(3000);
+    await k.keyboard.press('Tab'); await k.keyboard.press('Tab');
+    const ring = await k.evaluate(() => { const e = document.activeElement; const cs = getComputedStyle(e); return { el: e.tagName + '#' + e.id, w: cs.outlineWidth, s: cs.outlineStyle }; });
+    check('membership page: a 2 px focus ring for keyboard users (97, UI88 M19)', ring.w === '2px' && ring.s === 'solid', ring);
+    await k.close();
+  }
+  {
+    const g = (await text('/guide.md')).body;
+    check('guide: the plan badge, the card fields partner sites read, and the matching day and night look (97)', g.includes('its **badge**') && g.includes('`badge` (empty when none)') && g.includes('`highlight`') && g.includes('sun and moon button'));
+  }
+  // The guide on a phone: code blocks scroll inside themselves, not the page. (A plain 390 px window:
+  // a phone emulation widens the window to fit the page, so it can't see this.)
+  {
+    const nc = await b.newContext({ viewport: { width: 390, height: 844 } });
+    const q = await nc.newPage();
+    await q.goto(S.replace('127.0.0.1', 'localhost') + '/guide'); await q.waitForTimeout(800);
+    check('guide on a phone: no sideways scrolling (97)', await q.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+    await nc.close();
   }
   // Plan cards: "What's included" open, the trial explained once, buttons lined up.
   const p = await contexts.desk.newPage();

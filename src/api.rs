@@ -588,6 +588,7 @@ pub async fn serve(setups: Vec<LevelSetup>, chain: Chain, port: u16, members_htm
         .route("/v1/trial", get(trial::info))
         .route("/v1/trial/prepare", post(trial::prepare))
         .route("/v1/creator/perks", post(creator_perks))
+        .route("/v1/creator/badge", post(creator_badge))
         .route("/v1/creator/site-names", post(creator_site_names))
         .route("/v1/page", get(page_info))
         .route("/v1/creator/page", post(creator_page))
@@ -1143,6 +1144,80 @@ fn esc(t: &str) -> String {
     t.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;")
 }
 
+/// The name at the top of the creator's pages: the club's name, else the creator's chosen name, else
+/// the pass word ("Membership").
+fn site_heading(s: &AppState) -> String {
+    let first = s.levels.first().map(|l| &l.card).unwrap_or(&s.card);
+    let club = site_names(&s.home).club_name;
+    if !club.is_empty() {
+        return club;
+    }
+    if let Some(n) = creator_display(&s.home, &first.creator_address) {
+        return n;
+    }
+    let w = pass_word(&s.home, &first.covenant_id).one;
+    let mut c = w.chars();
+    c.next().map(|f| f.to_uppercase().collect::<String>() + c.as_str()).unwrap_or_default()
+}
+
+/// The footer sentence on every page, by network (the membership page sets the same words).
+pub(crate) const NOTE_TESTNET: &str = "Test network only. New software, not yet reviewed by an outside security firm.";
+pub(crate) const NOTE_MAINNET: &str = "New software. The code is public and has not had an outside security review.";
+
+/// The day and night switch, as on the membership page (`theme-boot.js` wires it up).
+fn theme_button(start: &str) -> String {
+    format!(r#"<button id="themeToggle" class="themetoggle" data-start="{start}" type="button" aria-label="Switch between light and dark"><svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg><svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button>"#)
+}
+
+/// Which start a day and night switch gets on this site, if any: Kaspa Vision's card style has both
+/// looks and starts from the visitor's device; a creator's own look with both starts as they chose.
+fn theme_start(style: &str, b: &brand::Brand) -> Option<String> {
+    if style == "kaspa-vision" {
+        Some("device".into())
+    } else if b.light.is_some() && b.dark.is_some() {
+        Some(if b.start.is_empty() { "light".into() } else { b.start.clone() })
+    } else {
+        None
+    }
+}
+
+/// `<html>` with the site's card style, so the page draws in it from the first frame.
+fn html_with_style(html: &str, style: &str) -> String {
+    let open = if style == "kaspass" { "" } else { r#" class="cards-open""# };
+    html.replacen(r#"<html lang="en">"#, &format!(r#"<html lang="en" data-cards="{style}"{open}>"#), 1)
+}
+
+/// Help, Guide and Holder club on a creator's site, in the membership page's look (UI88 M1): its
+/// card style and day and night looks, the creator's name and logo at the top, a day and night
+/// switch where the look has both, and the membership page's footer sentence.
+fn creator_look(s: &AppState, html: &str) -> String {
+    let style = card_style_of(&page_profile(&s.home).card_style);
+    let b = brand::load(&s.home);
+    let mut h = html_with_style(html, style)
+        .replacen(r#"<link rel="stylesheet" href="/brand/fonts.css">"#, &format!(r#"<link rel="stylesheet" href="/brand/fonts.css?v={}">"#, b.version), 1)
+        .replacen(r#"<link rel="stylesheet" href="/brand/theme.css">"#, &format!("<link rel=\"stylesheet\" href=\"/brand/theme.css?v={}\">\n<link rel=\"stylesheet\" href=\"/assets/cards.css\">", b.version), 1);
+    let logo = brand::picture_url(&b, "logo").map(|u| format!(r#"<img src="{}" alt="">"#, esc(&u))).unwrap_or_default();
+    if let (Some(a), Some(z)) = (h.find(BRANDLINK_OPEN), h.find(BRANDLINK_CLOSE)) {
+        if a < z {
+            h.replace_range(a..z + BRANDLINK_CLOSE.len(), &format!(r#"{BRANDLINK_OPEN}{logo}<span class="word">{}</span>{BRANDLINK_CLOSE}"#, esc(&site_heading(s))));
+        }
+    }
+    // Always there, hidden when the look has one mode: a link's ?style=kaspa-vision shows it.
+    let button = match theme_start(style, &b) {
+        Some(st) => theme_button(&st),
+        None => theme_button("device").replacen(r#"class="themetoggle""#, r#"class="themetoggle hidden""#, 1),
+    };
+    h = h.replacen("<!--THEME-->", &button, 1);
+    if s.card.network == "mainnet" {
+        h = h.replace(NOTE_TESTNET, NOTE_MAINNET);
+    }
+    h
+}
+
+/// Where the KasPass mark and name sit at the top of Help, Guide and Holder club.
+const BRANDLINK_OPEN: &str = r#"<a class="brandlink" href="/">"#;
+const BRANDLINK_CLOSE: &str = "</a><!--/brand-->";
+
 fn fill_site(s: &AppState) -> String {
     let first = s.levels.first().map(|l| &l.card).unwrap_or(&s.card);
     let w = pass_word(&s.home, &first.covenant_id);
@@ -1178,8 +1253,11 @@ fn fill_site(s: &AppState) -> String {
             html = html.replacen(&format!(r##"<a href="#" id="{id}" class="hidden">{arrow}Back to <span class="bh"></span></a>"##), &format!(r#"<a href="{}" id="{id}">{arrow}Back to <span class="bh">{}</span></a>"#, esc(&url), esc(&host)), 1);
         }
     }
-    if b.light.is_some() && b.dark.is_some() {
-        let start = if b.start.is_empty() { "light" } else { b.start.as_str() };
+    // The card style on <html> from the start, and the day and night switch wherever the look has
+    // both: a creator's own two looks, or Kaspa Vision's card style (starting from the device).
+    let style = card_style_of(&page_profile(&s.home).card_style);
+    html = html_with_style(&html, style);
+    if let Some(start) = theme_start(style, &b) {
         html = html.replacen(r#"<button id="themeToggle" class="themetoggle hidden""#, &format!(r#"<button id="themeToggle" class="themetoggle" data-start="{start}""#), 1);
     }
     if let Some(u) = brand::picture_url(&b, "banner") {
@@ -1593,6 +1671,7 @@ async fn offer_for(s: &AppState) -> Result<serde_json::Value, ApiError> {
         "count": s.levels.len(),
         "name": s.level_name(),
         "perks": level_perks(&s.home).get(&s.card.covenant_id).map(|v| v.iter().map(|x| fill_tax_year(x)).collect::<Vec<_>>()).unwrap_or_default(),
+        "badge": level_badges(&s.home).get(&s.card.covenant_id).cloned().unwrap_or_default(),
     });
     Ok(v)
 }
@@ -1720,6 +1799,14 @@ fn your_pass(s: &AppState) -> String {
 // ---------------------------------------------------------------------------
 // Levels: what's on sale, each level's perks, and the creator's list (levels.json).
 
+/// A short badge the creator writes for a plan's card ("Most popular"), by covenant id.
+fn level_badges(home: &std::path::Path) -> HashMap<String, String> {
+    if examples::current().is_some() {
+        return HashMap::new();
+    }
+    std::fs::read_to_string(home.join("level-badges.json")).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default()
+}
+
 fn level_perks(home: &std::path::Path) -> HashMap<String, Vec<String>> {
     if let Some(e) = examples::current() {
         return e.perks.clone();
@@ -1809,6 +1896,7 @@ async fn addresses(State(s): State<AppState>) -> Json<serde_json::Value> {
 
 async fn levels_info(State(s): State<AppState>) -> Json<serde_json::Value> {
     let perks = level_perks(&s.home);
+    let badges = level_badges(&s.home);
     let about = level_about(&s.home);
     let ar = access_ranks(&s.home, &s.levels);
     let mut out = Vec::new();
@@ -1829,6 +1917,7 @@ async fn levels_info(State(s): State<AppState>) -> Json<serde_json::Value> {
             "named": tier_name(&s.home, &l.card.covenant_id).is_some(),
             "perks": perks.get(&l.card.covenant_id).map(|v| v.iter().map(|x| fill_tax_year(x)).collect::<Vec<_>>()).unwrap_or_default(),
             "about_html": about.get(&l.card.covenant_id).map(|h| fill_tax_year(h)).unwrap_or_default(),
+            "badge": badges.get(&l.card.covenant_id).cloned().unwrap_or_default(),
             "period_ms": l.card.settings.period_ms,
             "price": offer.as_ref().and_then(|o| o.get("price")).cloned(),
             "founding": offer.as_ref().and_then(|o| o.get("founding")).cloned(),
@@ -1867,6 +1956,40 @@ async fn creator_perks(State(s): State<AppState>, Query(lq): Query<LevelQ>, Json
     }
     std::fs::write(s.home.join("level-perks.json"), serde_json::to_string_pretty(&all).unwrap_or_default()).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     Ok(Json(serde_json::json!({ "perks": list })))
+}
+
+#[derive(Deserialize)]
+struct BadgeRequest {
+    session: String,
+    #[serde(default)]
+    badge: String,
+    #[serde(default)]
+    covenant_id: Option<String>,
+}
+
+/// Longest badge a creator can write, in characters.
+const BADGE_MAX: usize = 24;
+
+/// The badge text as saved: no control characters, spaces squeezed, at most BADGE_MAX characters.
+fn clean_badge(t: &str) -> String {
+    let one: String = t.chars().map(|c| if c.is_control() { ' ' } else { c }).collect();
+    one.split_whitespace().collect::<Vec<_>>().join(" ").chars().take(BADGE_MAX).collect::<String>().trim().to_string()
+}
+
+/// The creator writes a short badge for a plan's card ("Most popular"); empty removes it.
+async fn creator_badge(State(s): State<AppState>, Query(lq): Query<LevelQ>, Json(req): Json<BadgeRequest>) -> Result<Json<serde_json::Value>, ApiError> {
+    let s = s.lv(&lq)?;
+    let me = creator_of(&s, &req.session)?;
+    let cov = target_covenant(&s, &me, req.covenant_id.as_deref())?;
+    let badge = clean_badge(&req.badge);
+    let mut all = level_badges(&s.home);
+    if badge.is_empty() {
+        all.remove(&cov);
+    } else {
+        all.insert(cov, badge.clone());
+    }
+    std::fs::write(s.home.join("level-badges.json"), serde_json::to_string_pretty(&all).unwrap_or_default()).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    Ok(Json(serde_json::json!({ "badge": badge })))
 }
 
 #[derive(Deserialize)]
@@ -3944,6 +4067,12 @@ fn creator_of(s: &AppState, session: &str) -> Result<String, ApiError> {
     Ok(address)
 }
 
+/// Whether a pass renews by itself: active, not lifetime, and its prepaid balance pays the next
+/// renewal at today's price (`renew_today`, capped by the pass's own rate), else at its own rate.
+fn renews_by_itself(active: bool, lifetime: bool, balance: u64, rate: u64, renew_today: Option<u64>) -> bool {
+    active && !lifetime && balance > 0 && balance >= renew_today.map(|d| d.min(rate)).unwrap_or(rate)
+}
+
 /// Everything the creator's dashboard shows, from the chain.
 async fn creator_overview(State(s): State<AppState>, Query(lq): Query<LevelQ>, Query(q): Query<SessionQuery>) -> Result<Json<serde_json::Value>, ApiError> {
     let s = s.lv(&lq)?;
@@ -3969,7 +4098,18 @@ async fn creator_overview(State(s): State<AppState>, Query(lq): Query<LevelQ>, Q
     let v4 = match (&s.card.settings.v4, &s.shop) {
         (Some(v), Some(shop)) => {
             let keeper = shop.keeper.as_ref().map(|k| serde_json::json!({ "address": k.addr.to_string(), "balance_sompi": keeper_bal.unwrap_or(0) }));
-            let auto_on = snap.passes.iter().filter(|p| !p.lifetime && p.balance_sompi >= p.rate_sompi).count();
+            // On auto-renew: an active pass whose prepaid balance pays its next renewal at today's
+            // price, the member's page's test (UI88 M15). On a plan priced in a currency the pass's
+            // own rate is its KAS ceiling, far above today's price, so comparing with it counted 0.
+            let renew_today: Option<u64> = if is_v5(&s.card) {
+                crate::prices::level_prices(&s.home).get(&s.card.covenant_id).and_then(|p| {
+                    let rates = if p.currency == "KAS" { Some(crate::prices::Rates::kas_only()) } else { crate::prices::fresh() };
+                    rates.and_then(|r| r.kas(&p.currency, p.renewal_amount()))
+                }).filter(|k| k.is_finite() && *k > 0.0).map(|k| (k * crate::SOMPI as f64).round() as u64)
+            } else {
+                None
+            };
+            let auto_on = snap.passes.iter().filter(|p| renews_by_itself(p.active, p.lifetime, p.balance_sompi, p.rate_sompi, renew_today)).count();
             serde_json::json!({
                 "max_discount_bps": v.max_discount_bps,
                 "auto_window_ms": v.auto_window_ms,
@@ -3989,7 +4129,7 @@ async fn creator_overview(State(s): State<AppState>, Query(lq): Query<LevelQ>, Q
         "pass_word": pass_word(&s.home, &s.card.covenant_id),
         "club_name": site_names(&s.home).club_name,
         "level_word": level_word(&s.home),
-        "level": { "covenant_id": s.card.covenant_id, "rank": s.rank(), "name": s.level_name(), "perks": level_perks(&s.home).get(&s.card.covenant_id).cloned().unwrap_or_default() },
+        "level": { "covenant_id": s.card.covenant_id, "rank": s.rank(), "name": s.level_name(), "perks": level_perks(&s.home).get(&s.card.covenant_id).cloned().unwrap_or_default(), "badge": level_badges(&s.home).get(&s.card.covenant_id).cloned().unwrap_or_default() },
         "levels": s.levels.iter().enumerate().map(|(i, l)| serde_json::json!({ "covenant_id": l.card.covenant_id, "id": short_id(&l.card.covenant_id), "rank": i, "name": level_name(&s.home, &s.levels, i) })).collect::<Vec<_>>(),
         "creator": address,
         "card": s.card,
@@ -4425,17 +4565,17 @@ async fn help_page(State(s): State<AppState>, headers: HeaderMap) -> impl IntoRe
         // KasPass's own look, following the visitor's light or dark setting, instead of the
         // site creator's: this help page belongs to the KasPass site here.
         home::to_demo(HELP_PAGE)
-            .replacen(r#"<a class="back" href="/demo">Back to the membership page</a>"#, r#"<a class="back" href="/">Home</a><a class="back" href="/demo/podcast">Example</a>"#, 1)
+            .replacen(r#"<a class="back" href="/demo">Back to membership</a>"#, r#"<a class="back" href="/">Home</a><a class="back" href="/demo/podcast">Example</a>"#, 1)
             .replacen("<link rel=\"stylesheet\" href=\"/brand/fonts.css\">\n<link rel=\"stylesheet\" href=\"/brand/theme.css\">", HELP_KASPASS_LOOK, 1)
     } else {
-        HELP_PAGE.to_string()
+        creator_look(&s, HELP_PAGE)
     };
     ([(header::CACHE_CONTROL, "public, max-age=300"), (header::VARY, "Host")], Html(home::fill_contact(&s.home, &html)))
 }
 
 /// The holder club's own page: sign in, see your standing, join the groups. No paid passes.
-async fn club_page(headers: HeaderMap) -> impl IntoResponse {
-    ([(header::CACHE_CONTROL, "no-store")], Html(if home::is_home(&headers) { home::to_demo(CLUB_PAGE) } else { CLUB_PAGE.to_string() }))
+async fn club_page(State(s): State<AppState>, headers: HeaderMap) -> impl IntoResponse {
+    ([(header::CACHE_CONTROL, "no-store")], Html(if home::is_home(&headers) { home::to_demo(CLUB_PAGE) } else { creator_look(&s, CLUB_PAGE) }))
 }
 
 #[derive(Deserialize)]
@@ -4634,5 +4774,41 @@ mod clean_html_test {
         assert!(!clean_html("<a href=\"/dashboard\">x</a>").contains("href"));
         assert_eq!(clean_html("<p><br></p>"), "");
         assert_eq!(clean_html("<h1>Big</h1><div>plain</div>"), "Bigplain");
+    }
+}
+
+#[cfg(test)]
+mod badge_test {
+    use super::{clean_badge, BADGE_MAX};
+
+    #[test]
+    fn badges_are_short_and_plain() {
+        assert_eq!(clean_badge("  Most   popular \n"), "Most popular");
+        assert_eq!(clean_badge(""), "");
+        assert_eq!(clean_badge("Best\u{0007}value"), "Best value");
+        assert_eq!(clean_badge(&"x".repeat(40)).chars().count(), BADGE_MAX);
+    }
+}
+
+#[cfg(test)]
+mod auto_renew_count_test {
+    use super::renews_by_itself;
+    const K: u64 = 100_000_000;
+
+    #[test]
+    fn counted_at_todays_price_not_the_ceiling() {
+        // UI88 M15: 478 KAS prepaid on a CA$ plan whose KAS ceiling is 10,000 KAS and whose renewal
+        // costs 72 KAS today renews by itself (the old count compared with the ceiling and said 0).
+        assert!(renews_by_itself(true, false, 478 * K, 10_000 * K, Some(72 * K)));
+        assert!(!renews_by_itself(true, false, 50 * K, 10_000 * K, Some(72 * K)));
+        // A plan priced in KAS, or no price at hand: the pass's own rate.
+        assert!(renews_by_itself(true, false, 72 * K, 72 * K, None));
+        assert!(!renews_by_itself(true, false, 71 * K, 72 * K, None));
+        // Today's price above the pass's locked rate: the locked rate.
+        assert!(renews_by_itself(true, false, 72 * K, 72 * K, Some(90 * K)));
+        // Ended, lifetime or empty passes never count.
+        assert!(!renews_by_itself(false, false, 478 * K, 10_000 * K, Some(72 * K)));
+        assert!(!renews_by_itself(true, true, 478 * K, 10_000 * K, Some(72 * K)));
+        assert!(!renews_by_itself(true, false, 0, 0, Some(0)));
     }
 }

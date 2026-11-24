@@ -24,11 +24,11 @@
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.6 var(--font-body); }
   .wrap { max-width: 780px; margin: 0 auto; padding: 32px 16px 64px; }
-  header { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
+  header { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 12px; margin-bottom: 24px; }
   header svg { width: 23.4px; height: 26px; flex: none; color: var(--teal); }
   header a.back + a.back { margin-left: 14px; }
   .word { font: 800 21px/1 var(--font-head); letter-spacing: -0.02em; }
-  header a.back { margin-left: auto; font-size: 14px; white-space: nowrap; }
+  header a.back { margin-left: auto; font-size: 14px; white-space: nowrap; min-height: 44px; display: inline-flex; align-items: center; }
   h1 { font: 800 clamp(28px, 6vw, 38px)/1.15 var(--font-head); letter-spacing: -0.6px; margin: 0 0 10px; }
   .lead { color: var(--muted); font-size: 17px; margin: 0 0 22px; }
   nav.toc { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 26px; }
@@ -48,7 +48,20 @@
   .muted b, .muted strong { color: var(--text); }
   .note { border-left: 3px solid var(--teal-dim); padding: 2px 0 2px 12px; color: var(--muted); font-size: 15px; }
   .ui { font-weight: 600; color: var(--teal); white-space: normal; }
-  footer { margin-top: 28px; color: var(--muted); font-size: 13px; text-align: center; }
+  footer { margin-top: 28px; color: var(--muted); font-size: 13px; text-align: center; line-height: 1.7; }
+  /* The site's name at the top (the creator's name and logo on their site), and the day and night
+     switch where the look has both (UI88 M1, M20). */
+  .brandlink { display: inline-flex; align-items: center; gap: 10px; min-height: 44px; color: var(--text); text-decoration: none; min-width: 0; }
+  .brandlink img { height: 32px; width: auto; max-width: 120px; border-radius: 8px; }
+  .brandlink .word { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .themetoggle { width: 44px; height: 44px; flex: none; padding: 0; border-radius: var(--r-btn, 999px); border: 1px solid var(--line); background: var(--panel); color: var(--text); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+  .themetoggle svg { width: 18px; height: 18px; }
+  .themetoggle.hidden { display: none; }
+  .themetoggle .sun { display: none; }
+  .themetoggle.isdark .sun { display: block; }
+  .themetoggle.isdark .moon { display: none; }
+  :focus-visible { outline: 2px solid var(--teal); outline-offset: 3px; }
+
   /* The guide: one long page of plain headings, lists and tables, readable without scripts. */
   main h1 { margin-bottom: 14px; }
   main h2 { font: 700 23px/1.25 var(--font-head); margin: 40px 0 12px; padding-top: 22px; border-top: 1px solid var(--line); scroll-margin-top: 16px; }
@@ -58,6 +71,16 @@
   main p { margin: 0 0 12px; }
   main code { font: 14px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; background: color-mix(in srgb, var(--teal) 10%, transparent); padding: 1px 5px; border-radius: 5px; overflow-wrap: anywhere; }
   .tablewrap { overflow-x: auto; margin: 0 0 16px; }
+  /* On a phone: the name and the day and night switch on the first row, the two links under them. */
+  @media (max-width: 520px) {
+    header .brandlink { flex: 1 1 auto; }
+    header .themetoggle { order: 1; }
+    header::after { content: ""; order: 2; flex-basis: 100%; height: 0; }
+    header a.back { order: 3; margin-left: 0; }
+    header a.back + a.back { margin-left: 18px; }
+  }
+  main pre { overflow-x: auto; max-width: 100%; margin: 0 0 16px; padding: 12px 14px; border-radius: 10px; background: color-mix(in srgb, var(--teal) 6%, var(--panel)); border: 1px solid var(--line); }
+  main pre code { background: none; padding: 0; overflow-wrap: normal; }
   main table { border-collapse: collapse; width: 100%; font-size: 15px; }
   main th, main td { text-align: left; vertical-align: top; padding: 9px 10px; border-bottom: 1px solid var(--line); }
   main th { font-weight: 600; color: var(--muted); }
@@ -69,14 +92,14 @@
 <body>
 <div class="wrap">
   <header>
-    <svg viewBox="19.6 14 64.7 72" aria-hidden="true"><path fill="currentColor" d="M28 61.61 28 86 42 86 42 73.36ZM28 38.39 42 26.64 42 14 28 14ZM41.39 50 84.28 14 62.51 14 19.61 50 62.51 86 84.28 86Z"/></svg>
-    <div class="word">KasPass</div>
-    <a class="back" href="/help">Quick help</a><a class="back" href="/">Membership page</a>
+    <a class="brandlink" href="/"><svg viewBox="19.6 14 64.7 72" aria-hidden="true"><path fill="currentColor" d="M28 61.61 28 86 42 86 42 73.36ZM28 38.39 42 26.64 42 14 28 14ZM41.39 50 84.28 14 62.51 14 19.61 50 62.51 86 84.28 86Z"/></svg><span class="word">KasPass</span></a><!--/brand-->
+    <a class="back" href="/help">Quick help</a><a class="back" href="/">Back to membership</a>
+    <!--THEME-->
   </header>
   <main id="main">
 <!--GUIDE-->
   </main>
-  <footer>Powered by <a href="https://kaspass.app/" target="_blank" rel="noopener">KasPass</a> · <a href="/guide.md">This guide as plain text</a> · <a href="https://github.com/kaspass/kaspass" target="_blank" rel="noopener">source code</a></footer>
+  <footer>Powered by <a href="https://kaspass.app/" target="_blank" rel="noopener">KasPass</a> · <a href="/guide.md">This guide as plain text</a> · <a href="https://github.com/kaspass/kaspass" target="_blank" rel="noopener">source code</a><br><span class="netnote">Test network only. New software, not yet reviewed by an outside security firm.</span></footer>
 </div>
 </body>
 </html>

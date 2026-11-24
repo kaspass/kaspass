@@ -195,6 +195,8 @@
   .lvl .inc { color: var(--muted); font-size: 13px; }
   .lvl ul { margin: 2px 0 0; padding-left: 18px; font-size: 14px; flex: 1; }
   .lvl ul li { margin: 2px 0; }
+  /* The creator's own badge for a plan ("Most popular"), above its price. */
+  .lvl .cs-badge { display: flex; width: fit-content; margin: 0 0 6px; padding: 3px 10px; border-radius: 999px; background: var(--teal); color: var(--accent-ink); font: 600 12px/1.3 var(--font-body); letter-spacing: .04em; text-transform: uppercase; overflow-wrap: anywhere; }
   .lvl .yours { font: 600 11px var(--font-body); letter-spacing: .04em; text-transform: uppercase; color: var(--accent-ink); background: var(--teal); border-radius: 999px; padding: 2px 8px; }
   .lvl button { margin-top: 8px; }
   .switchbox { border: 1px solid var(--teal-dim); border-radius: 12px; padding: 14px; margin-top: 14px; }
@@ -447,6 +449,19 @@
     #levelCards.focus .lvl .det, #levelCards.focus .lvl .grow { display: none; }
     #levelCards.focus .lvl { gap: 12px; }
   }
+  /* Update 97: tap targets at least 44 px (UI88 M18) and a clear keyboard focus ring, as in the
+     dashboard (UI88 M19). */
+  #navSignin, .lvl .chg, .welcome .close { min-height: 44px; display: inline-flex; align-items: center; padding-inline: 8px; }
+  button.linkish { min-height: 44px; display: inline-flex; align-items: center; }
+  .brandmenu summary, .themetoggle { width: 44px; height: 44px; }
+  #signin, #qrGo { min-height: 46px; }
+  .autobox select { min-height: 44px; }
+  label.check { min-height: 44px; align-items: center; }
+  .meta a { min-height: 44px; }
+  details:not(.brandmenu) > summary { min-height: 44px; padding-block: 11px; box-sizing: border-box; }
+  :focus-visible { outline: 2px solid var(--teal); outline-offset: 3px; }
+  .brandbar { justify-content: space-between; }
+  a.brandname { flex: 0 1 auto; }
 </style>
 <link rel="stylesheet" href="/brand/fonts.css?v=0">
 <link rel="stylesheet" href="/brand/theme.css?v=0">
@@ -717,6 +732,6 @@
 </div>
 
 <script src="/assets/qrcode.js?v=31"></script>
-<script src="/assets/index.js?v=76"></script>
+<script src="/assets/index.js?v=77"></script>
 </body>
 </html>

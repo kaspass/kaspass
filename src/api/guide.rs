@@ -27,12 +27,12 @@ pub(crate) fn guide_html() -> &'static str {
     })
 }
 
-pub(crate) async fn guide_page(headers: HeaderMap) -> impl IntoResponse {
+pub(crate) async fn guide_page(axum::extract::State(s): axum::extract::State<super::AppState>, headers: HeaderMap) -> impl IntoResponse {
     let html = if super::home::is_home(&headers) {
         // On KasPass's own site, KasPass's own look (as the help page does).
         guide_html().replacen("<link rel=\"stylesheet\" href=\"/brand/fonts.css\">\n<link rel=\"stylesheet\" href=\"/brand/theme.css\">", super::HELP_KASPASS_LOOK, 1)
     } else {
-        guide_html().to_string()
+        super::creator_look(&s, guide_html())
     };
     ([(header::CACHE_CONTROL, "public, max-age=300"), (header::VARY, "Host")], Html(html))
 }

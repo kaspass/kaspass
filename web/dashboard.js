@@ -85,12 +85,17 @@ async function detectKaspire(timeoutMs = 3000) {
   });
 }
 
+// On a phone with no Kaspire wallet in the page, the Kaspire app is the only way in. Inside the
+// Kaspire app's own browser (a wallet is in the page), the ordinary button works, as on the
+// membership page (UI88 M17).
+const appOnly = () => !!(window.KaspireMobile && window.KaspireMobile.isPhone) && !(window.kaspire && window.kaspire.isKaspire);
+
 function setAddress(a) {
   address = a;
   $("addr").textContent = a ? (session ? `Signed in as the wallet ending in ${a.slice(-4)}` : `Kaspire wallet found (ends in ${a.slice(-4)})`) : "";
   show("addr", !!a);
-  show("signin", !session && !(window.KaspireMobile && window.KaspireMobile.isPhone));
-  const phone = !!(window.KaspireMobile && window.KaspireMobile.isPhone);
+  show("signin", !session && !appOnly());
+  const phone = appOnly();
   const ios = phone && /iPhone|iPad|iPod/i.test(navigator.userAgent);
   show("wcGo", !session && !!window.KaspireMobile && !ios);
   if (ios && !session) $("signHint").textContent = "The Kaspire app isn't on iPhone yet. Sign in on a computer with the free Kaspire browser extension (kaspire.kaslab.space).";
@@ -357,7 +362,9 @@ $("wcOther").onclick = async (e) => {
   wcSignIn(true);
 };
 // No extensions on phones: the Kaspire app is the only button there.
-if (window.KaspireMobile && window.KaspireMobile.isPhone) { $("wcGo").className = ""; $("wcGo").textContent = "Sign in with the Kaspire app"; show("signin", false); }
+if (appOnly()) { $("wcGo").className = ""; $("wcGo").textContent = "Sign in with the Kaspire app"; show("signin", false); }
+// A wallet that appears after the page loads (the Kaspire app's browser) brings the ordinary button back.
+window.addEventListener("kaspire#initialized", () => { if (!session) setAddress(address); });
 
 // Several levels: which one the dashboard is managing (covenant id; null = the only or lowest one).
 let LEVEL = null;
@@ -770,6 +777,7 @@ async function refresh() {
   data = await r.json();
   renderLevelPick();
   if (document.activeElement !== $("perks")) $("perks").value = ((data.level && data.level.perks) || []).join("\n");
+  if (document.activeElement !== $("lBadge")) $("lBadge").value = (data.level && data.level.badge) || "";
   if (document.activeElement !== $("clubName")) $("clubName").value = data.club_name || "";
   if (document.activeElement !== $("lvWord")) $("lvWord").value = data.level_word && data.level_word.one !== "plan" ? data.level_word.one : "";
   applyLevelWord();
@@ -1337,15 +1345,19 @@ async function saveNames(msgId) {
   const word = fetch("/v1/creator/pass-word", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ session, one: $("pWord").value }) });
   const site = fetch("/v1/creator/site-names", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ session, club_name: $("clubName").value, level_word: $("lvWord").value }) });
   const perks = fetch(L("/v1/creator/perks"), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ session, perks: $("perks").value.split("\n") }) });
-  const [a, b, c, d, e] = await Promise.all([post("/v1/creator/display-name", $("cName").value), post(L("/v1/creator/name"), $("tName").value), word, perks, site]);
-  const bad = [a, b, c, d, e].find((r) => !r.ok);
+  const badge = fetch(L("/v1/creator/badge"), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ session, badge: $("lBadge").value }) });
+  const [a, b, c, d, e, f] = await Promise.all([post("/v1/creator/display-name", $("cName").value), post(L("/v1/creator/name"), $("tName").value), word, perks, site, badge]);
+  const bad = [a, b, c, d, e, f].find((r) => !r.ok);
   if (bad) { say(msgId, await bad.text()); return; }
   const [ja, jb, jc, jd, je] = [await a.json(), await b.json(), await c.json(), await d.json(), await e.json()];
   data.creator_name = ja.name; data.name = jb.name; data.pass_word = jc.pass_word; data.club_name = je.club_name; data.level_word = je.level_word;
   $("lvWord").value = je.level_word.one === "plan" ? "" : je.level_word.one;
   applyLevelWord(); showLaunch(!$("launch").classList.contains("hidden"));
+  const jf = await f.json();
+  $("lBadge").value = jf.badge;
   if (data.level) {
     data.level.perks = jd.perks;
+    data.level.badge = jf.badge;
     const mine = (data.levels || []).find((l) => l.covenant_id === data.level.covenant_id);
     if (mine && jb.name) { mine.name = jb.name; data.level.name = jb.name; }
   }
@@ -1498,8 +1510,12 @@ function updatePreview() {
   const plan = (data && data.level && data.level.name) || "this plan", all = $("sAll").checked && data && data.levels && data.levels.length > 1;
   $("sPreview").textContent = pct ? `Buyers of ${all ? "every plan" : plan} will see the regular price crossed out and ${pct}% off when they join. Renewals stay at the regular price.` : "Pick a discount between 1% and 90%.";
 }
-$("sPct").addEventListener("input", updatePreview);
-$("sAll").addEventListener("change", updatePreview);
+// Starting a sale changes what the public sees, so it takes a second press, like the dashboard's
+// other public changes (UI88 M13). Changing the form puts the button back.
+function disarmSale() { const b = $("sGo"); if (b.dataset.armed === "1") { b.dataset.armed = "0"; b.textContent = "Start sale"; clearTimeout(disarmSale.t); } }
+$("sPct").addEventListener("input", () => { disarmSale(); updatePreview(); });
+$("sAll").addEventListener("change", () => { disarmSale(); updatePreview(); });
+$("sEnds").addEventListener("input", disarmSale);
 
 function renderCeiling(lane) {
   if (!lane || !(card.settings.v4 && card.settings.v4.record_id)) return;
@@ -1545,6 +1561,14 @@ $("sGo").onclick = async () => {
   const ends_ms = endsVal ? new Date(endsVal).getTime() : null;
   if (ends_ms && ends_ms < Date.now()) { say("sErr", "The end date is in the past."); return; }
   const all = $("sAll").checked && data.levels && data.levels.length > 1;
+  const b = $("sGo");
+  if (b.dataset.armed !== "1") {
+    b.dataset.armed = "1";
+    b.textContent = `Press again to start ${pct}% off ${all ? "all plans" : (data.level && data.level.name) || "this plan"}`;
+    disarmSale.t = setTimeout(disarmSale, 6000);
+    return;
+  }
+  disarmSale();
   try {
     if (all) {
       // One request per plan; say which ones worked if any didn't.

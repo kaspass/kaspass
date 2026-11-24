@@ -1988,6 +1988,7 @@ function renderLevels() {
       v5Card(d, l);
       const save = OPEN && !d.classList.contains("owned") ? saveWords(l) : "";
       if (save) d.querySelector(".lp").insertAdjacentHTML("afterbegin", `<div class="cs-save">${escH(save)}</div>`);
+      if (l.badge && !d.classList.contains("owned")) d.querySelector(".lp").insertAdjacentHTML("afterbegin", `<div class="cs-badge">${escH(l.badge)}</div>`);
       if (hasMore && !OPEN) foldCard(d, l);
       const act = d.querySelector(":scope > .trialnote, :scope > button:not(.more-t), :scope > .noact");
       if (act) act.before(Object.assign(document.createElement("div"), { className: "grow" }));
@@ -2003,6 +2004,7 @@ function renderLevels() {
       else if (PAY === l.level) box.append($("join"));
       continue;
     }
+    if (l.badge) d.querySelector(".lp").insertAdjacentHTML("afterbegin", `<div class="cs-badge">${escH(l.badge)}</div>`);
     if (hasMore && !OPEN) foldCard(d, l);
     const b = document.createElement("button");
     b.textContent = sel ? `Viewing ${l.name}` : `Choose ${l.name}`;
@@ -2734,10 +2736,16 @@ function applyCardStyle() {
   if (!CARD_STYLES.includes(st)) st = page && CARD_STYLES.includes(page.card_style) ? page.card_style : "kaspass";
   r.dataset.cards = st;
   r.classList.toggle("cards-open", st !== "kaspass");
-  if (st === "kaspa-vision" && !r.dataset.theme) {
+  // Kaspa Vision's card style has both looks, so it always gets the day and night switch, starting
+  // in the visitor's own look (UI88 M20); the server already shows it when the creator chose it.
+  if (st === "kaspa-vision") {
     const b = $("themeToggle");
-    const start = b && !b.classList.contains("hidden") ? b.dataset.start : "dark";
-    r.dataset.theme = start === "device" ? (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light") : start === "light" ? "light" : "dark";
+    if (b && b.classList.contains("hidden")) { b.dataset.start = "device"; b.classList.remove("hidden"); }
+    if (!r.dataset.theme) {
+      const start = b ? b.dataset.start : "device";
+      r.dataset.theme = start === "device" ? (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light") : start === "light" ? "light" : "dark";
+    }
+    if (window.kpThemeSwitch) window.kpThemeSwitch();
   }
 }
 // "Save 17% vs monthly": a longer plan against the shortest one, at regular prices.
@@ -2819,19 +2827,17 @@ function syncTierSum() {
 
 loadLevels().then(loadPage).then(loadTier).then(loadOffer).then(renderWelcome).then(loadTrials).then(renderLevels);
 
-// Light/dark switch (shown when the creator set both): the visitor's choice is remembered.
-(function themeSwitch() {
-  const b = document.getElementById("themeToggle");
-  if (!b || b.classList.contains("hidden")) return;
-  const start = b.dataset.start || "light";
-  const current = () => document.documentElement.dataset.theme || (start === "device" ? (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light") : start);
-  const paint = () => { const d = current() === "dark"; b.classList.toggle("isdark", d); b.setAttribute("aria-label", d ? "Switch to light" : "Switch to dark"); };
-  b.onclick = () => {
-    const next = current() === "dark" ? "light" : "dark";
-    document.documentElement.dataset.theme = next;
-    try { localStorage.setItem("kp-theme", next); } catch {}
-    paint();
-  };
-  paint();
-})();
+// Light/dark switch (shown when the look has both): theme-boot.js wires it up and remembers the
+// visitor's choice.
+if (window.kpThemeSwitch) window.kpThemeSwitch();
 
+
+// The top-right menu closes on Escape (focus back on its button) and on a click outside it (UI88 M19).
+(function menuClose() {
+  const m = document.querySelector(".brandmenu");
+  if (!m) return;
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && m.open) { m.open = false; m.querySelector("summary").focus(); }
+  });
+  document.addEventListener("click", (e) => { if (m.open && !m.contains(e.target)) m.open = false; });
+})();

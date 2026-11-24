@@ -1,7 +1,7 @@
 // The creator dashboard, signed in, in a real browser: stream mode hides every private detail on
 // every tab, and the update 92 fixes hold (date boxes line up, no "Mainnet" badge on test
 // networks' look, plan parts with their own fills, the holder discount in Prices & sales), and
-// Give a membership's Plan choice and period names (95).
+// Give a membership's Plan choice and period names (95), and the update 97 dashboard fixes and plan badge.
 // Run by dev/check.sh against the local simulated site, after dev/pages.js.
 //
 // Signing in: a stand-in for Kaspire signs the sign-in message with the simulator's creator test
@@ -143,6 +143,39 @@ function leaks() {
     await p.click('#levelBtns button:not(.on)'); await p.waitForTimeout(2500);
     check('give a membership: the picker at the top moves the form\'s Plan choice too', await p.evaluate(() => document.getElementById('gPlan').value === (LEVEL || data.levels[0].covenant_id)));
   } else console.log('SKIP give a membership plan switch: one plan on this site');
+  // Update 97 (UI88 M13): "Start sale" starts nothing on the first press, and the percent is only an example.
+  await p.click('#tabs [data-tab="prices"]'); await p.waitForTimeout(800);
+  const sp = await p.evaluate(() => ({ v: document.getElementById('sPct').value, ph: document.getElementById('sPct').placeholder, sale: !!data.sale }));
+  check('run a sale: percent off starts empty, with 20 only as an example (97)', sp.v === '' && sp.ph === '20', sp);
+  if (!sp.sale) {
+    await p.fill('#sPct', '15'); await p.click('#sGo'); await p.waitForTimeout(1200);
+    const t = await p.textContent('#sGo');
+    const on = await p.evaluate(async () => !!(await (await fetch(L('/v1/creator?session=' + encodeURIComponent(session)))).json()).sale);
+    check('run a sale: the first press asks for a second, naming the discount, and starts nothing (97, UI88 M13)', /^Press again to start 15% off ./.test(t) && !on, [t, on]);
+    await p.fill('#sPct', '16'); await p.waitForTimeout(100);
+    check('run a sale: changing the form puts the button back', (await p.textContent('#sGo')) === 'Start sale');
+    await p.fill('#sPct', '');
+  } else console.log('SKIP start sale: a sale is already on');
+  // Update 97: a badge the creator writes for a plan ("Most popular"), in /v1/levels and on the card.
+  await p.click('#tabs [data-tab="levels"]'); await p.waitForTimeout(800);
+  await p.fill('#lBadge', '  Most   popular '); await p.click('#lvNameGo'); await p.waitForTimeout(2500);
+  const bd = await p.evaluate(async () => { const id = data.level.covenant_id; const l = (await (await fetch('/v1/levels')).json()).levels.find((x) => x.level === id); return { api: l && l.badge, box: document.getElementById('lBadge').value, id }; });
+  check('plan badge: saved cleaned up, in /v1/levels and back in the box (97)', bd.api === 'Most popular' && bd.box === 'Most popular', bd);
+  const mp = await ctx.newPage();
+  for (const st of ['kaspass', 'kaspa-vision']) {
+    await mp.goto(`${S}/?style=${st}`); await mp.waitForTimeout(3500);
+    const shown = await mp.evaluate(() => [...document.querySelectorAll('#levelCards .lvl .cs-badge')].map((e) => [e.textContent, e.getClientRects().length > 0]));
+    check(`plan badge: on its card in the ${st} style (97)`, shown.length === 1 && shown[0][0] === 'Most popular' && shown[0][1], shown);
+  }
+  await mp.close();
+  await p.fill('#lBadge', ''); await p.click('#lvNameGo'); await p.waitForTimeout(2500);
+  check('plan badge: an empty box removes it', await p.evaluate(async () => { const id = data.level.covenant_id; return (await (await fetch('/v1/levels')).json()).levels.find((x) => x.level === id).badge === ''; }));
+  // Update 97 (UI88 M14): the side menu fits a 768 px high laptop, Themes and Sign out included.
+  await p.setViewportSize({ width: 1366, height: 768 }); await p.waitForTimeout(500);
+  const side = await p.evaluate(() => { const s = document.querySelector('.side'); const lo = document.getElementById('logout').getBoundingClientRect(); const th = document.querySelector('.sidefoot [data-go="settings"]').getBoundingClientRect(); return { fits: s.scrollHeight <= s.clientHeight + 1, logout: Math.round(lo.bottom), themes: Math.round(th.bottom), h: s.scrollHeight }; });
+  check('side menu: Themes and Sign out fit on a 1366 x 768 laptop (97, UI88 M14)', side.fits && side.logout <= 768 && side.themes <= 768, side);
+  if (SHOTS) await p.screenshot({ path: SHOTS + '/side-1366x768.png' });
+  await p.setViewportSize({ width: 1366, height: 900 }); await p.waitForTimeout(300);
   await p.click('#tabs [data-tab="overview"]'); await p.waitForTimeout(800);
   const fills = await p.$$eval('#byPlanBar i', (els) => els.map((e) => e.className));
   check('members by plan: each part has its own fill', fills.length < 2 || new Set(fills).size === fills.length, fills);
@@ -258,6 +291,27 @@ function leaks() {
   const ml = await m.evaluate(leaks);
   check('stream mode: the membership page follows the switch and hides prices and dates', (await m.evaluate(() => document.documentElement.classList.contains('stream'))) && ml.length === 0, ml);
   if (SHOTS) await m.screenshot({ path: SHOTS + '/stream-member-page.png', fullPage: true });
+  // Update 97 (UI88 M16, M17): sign-in at 360 px fits, and a phone with a Kaspire wallet in the page
+  // (the Kaspire app's own browser) gets the ordinary sign-in button; a phone without one, the app.
+  {
+    const { devices } = require('playwright');
+    const n = await b.newContext({ viewport: { width: 360, height: 640 } });
+    const q = await n.newPage();
+    await q.goto(S + '/dashboard'); await q.waitForTimeout(2500);
+    const fit = await q.evaluate(() => { const r = [...document.querySelectorAll('#wcGo, #signin')].filter((e) => e.getClientRects().length).map((e) => Math.round(e.getBoundingClientRect().right)); return { flat: document.documentElement.scrollWidth <= innerWidth + 1, right: Math.max(0, ...r) }; });
+    check('dashboard sign-in at 360 px: nothing runs off the side (97, UI88 M16)', fit.flat && fit.right <= 360, fit);
+    if (SHOTS) await q.screenshot({ path: SHOTS + '/dash-signin-360.png' });
+    await n.close();
+    for (const wallet of [false, true]) {
+      const c = await b.newContext({ ...devices['Pixel 5'] });
+      if (wallet) await c.addInitScript(() => { window.kaspire = { isKaspire: true, request: async () => { throw new Error('not in this test'); } }; });
+      const w = await c.newPage();
+      await w.goto(S + '/dashboard'); await w.waitForTimeout(2500);
+      const v = await w.evaluate(() => ({ signin: !document.getElementById('signin').classList.contains('hidden'), app: document.getElementById('wcGo').textContent }));
+      check(wallet ? 'dashboard on a phone with a Kaspire wallet in the page: the ordinary sign-in button (97, UI88 M17)' : 'dashboard on a phone without a wallet in the page: the Kaspire app is the way in', wallet ? v.signin : !v.signin && /Kaspire app/.test(v.app), v);
+      await c.close();
+    }
+  }
   check('dashboard: no script errors', errs.length === 0, errs);
   await b.close();
   console.log(ok ? 'DASHBOARD OK' : 'DASHBOARD FAILED');

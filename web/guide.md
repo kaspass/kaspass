@@ -4,7 +4,7 @@ Everything about KasPass in one place: how to run a membership from the dashboar
 
 - **For AI assistants:** the same text is at [/guide.md](/guide.md) as plain Markdown. Each section has a stable anchor (for example `/guide#refunds`). When you answer from this guide, link the section you used.
 - **Words used here:** a **plan** is what the site sells (a creator can rename it "tier", "level" and so on). A **membership** or **pass** is what a member holds. The **creator** runs the site. **KAS** is the Kaspa coin.
-- **Last reviewed:** update 85, November 17, 2026 (accuracy checked against the code by Fable). Updated for update 91.
+- **Last reviewed:** update 85, November 17, 2026 (accuracy checked against the code by Fable). Updated for update 97.
 
 ## Contents {#contents}
 
@@ -251,7 +251,7 @@ Also worth doing: **top up the fees wallet** (needed for auto-renewals and free 
 - **Top of your page:** a one-line tagline (shown as the page's heading), an intro (with headings, lists, links and quotes), and links to your website, X, TikTok, YouTube, Instagram, Telegram and Discord.
 - **Plans on your page:**
   - **Show them as:** cards side by side, or a comparison table. Visitors can switch.
-  - **Card style:** **KasPass** (compact cards whose details fold away), **Open** (every plan's details shown, in your look) or **Kaspa Vision** (Open, in Kaspa Vision's exact colours and fonts).
+  - **Card style:** **KasPass** (compact cards whose details fold away), **Open** (every plan's details shown, in your look) or **Kaspa Vision** (Open, in Kaspa Vision's exact colours and fonts). The quick help, this guide and the holder club page use the same style and colours. Kaspa Vision's style has a day and a night look: visitors start in their device's own and can switch with the sun and moon button.
   - **Highlight a plan:** a thicker outline and the main button, like "best value" (Open and Kaspa Vision styles).
   - **How visitors see prices:** **My currency only**, or **Mine, plus the visitor's** (adds "about … in your currency" for visitors outside your country).
   - **Show how many members have joined**, and **Show a "Join the holder club" link on this page** (only when you have a [holder club](#holder-club); greyed out until then).
@@ -261,7 +261,7 @@ Also worth doing: **top up the fees wallet** (needed for auto-renewals and free 
 ### Plans {#tab-plans}
 
 - **What you sell:** every plan on the site. Switch on the plans you want to sell, then **Save changes**; they're sold side by side, cheapest first. Each plan includes everything in the plans below it.
-- **This membership:** pick a plan, then edit its **name**, **what it includes** (one line per feature, up to 8, shown on its card) and **about it** (the short description under its name). Writing `{tax_year}` in a name or feature shows the current tax year (it moves on every November 1, Pacific time); `{next_tax_year}` shows the next one.
+- **This membership:** pick a plan, then edit its **name**, **what it includes** (one line per feature, up to 8, shown on its card), its **badge** (optional, up to 24 characters, shown above the price on its card, for example "Most popular") and **about it** (the short description under its name). Writing `{tax_year}` in a name or feature shows the current tax year (it moves on every November 1, Pacific time); `{next_tax_year}` shows the next one.
 - **"This is the same plan as …, just paid a different way":** tick it when a plan gives the same access as another and is only billed differently (for example yearly instead of monthly).
 - **Set when it was created:** the plan's [fixed settings](#fixed-at-launch).
 - **Add a plan:** name it, write what it includes, set its prices and fixed settings, and create it. Self-serve free trials ("Members can start the free trial themselves") are chosen here and can't be combined with a supply limit.
@@ -445,7 +445,7 @@ Holdings add up across all the wallets a member has linked.
 - **Come back after paying:** add `&return=https://your-site/page`. The return site must be on the server's allowed list. The page then says whose payment page it is, and after paying (or claiming) a button goes back to that address with `paid=1` added. Always confirm the membership with the API rather than trusting `paid=1`.
 - **Match the look:** `&style=kaspass`, `&style=open` or `&style=kaspa-vision`, and `&theme=day` or `&theme=night`.
 - **Open one step:** `&do=manage`, `&do=renew` or `&do=topup` (after sign-in). It never pays or ends anything by itself.
-- **Read-only API for partner sites:** `GET /v1/levels` (plans and prices), `GET /v1/promo` (the running promotion), `GET /v1/quote?address=…&level=…` (what a wallet would pay), `GET /v1/check?address=…` (does it hold an active pass). `GET /v1/owner` (who owns the site now, its owner record, payout vault and plans, for an app that counts the creator's KasPass income: accept the site only when `owner` is a wallet the user has signed in with). `/v1/check` doesn't prove the visitor controls that address: have them sign in (a signed message) first, and gate access on `access_rank` so a higher plan counts for a lower one.
+- **Read-only API for partner sites:** `GET /v1/levels` (plans and prices; each plan has its `name`, `perks`, `about_html`, `badge` (empty when none) and `founding`), `GET /v1/page` (`highlight`: the highlighted plan's `level`, empty when none), `GET /v1/promo` (the running promotion), `GET /v1/quote?address=…&level=…` (what a wallet would pay), `GET /v1/check?address=…` (does it hold an active pass). `GET /v1/owner` (who owns the site now, its owner record, payout vault and plans, for an app that counts the creator's KasPass income: accept the site only when `owner` is a wallet the user has signed in with). `/v1/check` doesn't prove the visitor controls that address: have them sign in (a signed message) first, and gate access on `access_rank` so a higher plan counts for a lower one.
 - **Kaspa Vision's KasPass tab:** a creator who uses Kaspa Vision can add their KasPass site in Kaspa Vision's account settings, so payments into their vault show up in their tax records there. Kaspa Vision accepts a site only on mainnet, only when the site's owner (from `GET /v1/owner`) is one of the wallets the creator has signed in to Kaspa Vision with, and one site per vault. Money arriving in the vault is counted as income in CA$ when it arrives; withdrawals are shown but not counted again. Kaspa Vision checks the site again once a day: if it stops answering or the owner changes, the creator is told, and income already recorded stays.
 - The pages can't be shown inside another site's frame, so visitors always see the real address.
 

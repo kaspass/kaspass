@@ -422,6 +422,19 @@ details.fold > .foldbody { padding: 0 var(--s5) var(--s5); display: grid; gap: v
 
 /* ---- Phone ----------------------------------------------------------------- */
 .phonebar, .dock, .scrim { display: none; }
+/* Update 97: a 768 px high laptop shows the whole side menu, Themes and Sign out included; a short
+   phone shows more of the "More" sheet (UI88 M14). */
+@media (min-width: 861px) and (max-height: 820px) {
+  .side { gap: 10px; padding-top: 12px; padding-bottom: 10px; }
+  .brand svg { width: 28px; height: 28px; }
+  #tabs button { min-height: 36px; }
+  #tabs .grp { padding: 8px 10px 3px; }
+  .who { padding: 8px; }
+  .sidefoot { gap: 6px; padding-top: 10px; }
+}
+@media (max-width: 860px) and (max-height: 700px) {
+  #tabs .grp { padding: 8px 10px 3px; }
+}
 @media (max-width: 860px) {
   .app { display: block; background: none; }
   .pickslot { width: 100%; }
@@ -567,6 +580,10 @@ code { font: 13px var(--font-mono); background: var(--field); border: 1px solid 
 /* Signed in: the sign-in panel is only shown when there's something to say. */
 .signrow { display: flex; gap: 16px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
 .signtext { min-width: 0; flex: 1 1 260px; }
+/* Update 97: nothing runs off the side at 360 px (UI88 M16). */
+.signrow > .row { max-width: 100%; min-width: 0; }
+.signrow .row button { white-space: normal; max-width: 100%; text-align: center; }
+@media (max-width: 380px) { .phonebar .t { font-size: 15px; } }
 .signbar.in:not(:has(#wcOtherLine:not(.hidden))):not(:has(#walletErr:not(.hidden))) { display: none; }
 .signbar:not(.in) { max-width: 640px; margin-top: 8vh; padding: var(--s6); }
 .signbar:not(.in) h2 { font: 800 30px/1.1 var(--font-head); letter-spacing: -0.02em; margin-bottom: var(--s3); }
@@ -993,6 +1010,7 @@ body:has(#creatorArea.hidden) .main { padding-bottom: 64px; }
         </div>
         <label>What it includes, one per line (shown on its card; up to 8)
           <textarea id="perks" rows="4" placeholder="Members-only Telegram group&#10;Weekly market notes&#10;Early access to streams"></textarea></label>
+        <label>Badge on its card (optional, up to 24 characters)<input id="lBadge" maxlength="24" placeholder="For example: Most popular"></label>
         <div class="edlabel" id="lvAboutL">About it (shown when someone picks it on your page)</div>
         <div id="lvAboutEd" style="margin-bottom:12px"></div>
         <label class="check hidden" id="lvSameBox" style="margin:0 0 12px"><input type="checkbox" id="lvSame"> <span id="lvSameText"></span></label>
@@ -1071,7 +1089,7 @@ body:has(#creatorArea.hidden) .main { padding-bottom: 64px; }
         <div id="saleForm">
           <p class="muted small">A percent off for new members joining (monthly, commitment and lifetime). Your site shows the regular price crossed out with the discount. Renewals stay at the regular price, and nothing needs approving in Kaspire.</p>
           <div class="grid align" style="margin-top:var(--s4)">
-            <label id="sPctL">Percent off<input id="sPct" type="number" min="1" max="90" step="1" value="20"></label>
+            <label id="sPctL">Percent off<input id="sPct" type="number" min="1" max="90" step="1" placeholder="20"></label>
             <label>Sale name (optional)<input id="sLabel" maxlength="40" placeholder="Launch sale"></label>
             <label>Ends (optional: the sale stops by itself then)<input id="sEnds" type="datetime-local"></label>
           </div>
@@ -1463,6 +1481,6 @@ body:has(#creatorArea.hidden) .main { padding-bottom: 64px; }
 
 <script src="/assets/kaspire-mobile.js?v=2"></script>
 <script src="/assets/dash-theme.js?v=1"></script>
-<script src="/assets/dashboard.js?v=78"></script>
+<script src="/assets/dashboard.js?v=79"></script>
 </body>
 </html>
