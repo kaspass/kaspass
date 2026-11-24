@@ -1,6 +1,7 @@
 // The creator dashboard, signed in, in a real browser: stream mode hides every private detail on
 // every tab, and the update 92 fixes hold (date boxes line up, no "Mainnet" badge on test
-// networks' look, plan parts with their own fills, the holder discount in Prices & sales).
+// networks' look, plan parts with their own fills, the holder discount in Prices & sales), and
+// Give a membership's Plan choice and period names (95).
 // Run by dev/check.sh against the local simulated site, after dev/pages.js.
 //
 // Signing in: a stand-in for Kaspire signs the sign-in message with the simulator's creator test
@@ -125,6 +126,22 @@ function leaks() {
   const many = await p.evaluate(() => (data.levels || []).length);
   check('run a sale: names the plan when there are several', many > 1 ? /Run a sale on ./.test(saleTitle) && (await p.isVisible('#sAllBox')) : saleTitle === 'Run a sale', [saleTitle, many]);
   if (SHOTS) await p.locator('[data-pane="prices"]').screenshot({ path: SHOTS + '/prices.png' });
+  // Give a membership (95): the paid period is named from the plan, and the form has its own Plan choice.
+  await p.click('#tabs [data-tab="members"]'); await p.waitForTimeout(1000);
+  const names = await p.evaluate(() => typeof periodName === 'function' ? [365, 366, 30, 7, 1, 10].map((d) => periodName(d * 86400000)).concat(periodName(600000)) : null);
+  check('give a membership: periods are named from the plan (One year, One month, One week, One day, 10 days)', JSON.stringify(names) === JSON.stringify(['One year', 'One year', 'One month', 'One week', 'One day', '10 days', 'One month']), names);
+  const paid = await p.evaluate(() => { const o = [...document.querySelectorAll('#gKind option')].find((x) => x.value === 'monthly'); return o ? [o.text, periodName(card.settings.period_ms)] : null; });
+  check('give a membership: the paid choice starts with the plan\'s period', !paid || paid[0].startsWith(paid[1] + ' ('), paid);
+  const gp = await p.evaluate(() => { const s = document.getElementById('gPlan'); return s ? { shown: !document.getElementById('gPlanBox').classList.contains('hidden'), ids: [...s.options].map((o) => o.value), names: [...s.options].map((o) => o.text), value: s.value, levels: (data.levels || []).map((l) => l.covenant_id), want: (data.levels || []).map((l) => taxFill(l.name)), level: LEVEL || (data.levels[0] || {}).covenant_id } : null; });
+  check('give a membership: a Plan choice in the form, listing every plan when there are several', gp && (many > 1 ? gp.shown && JSON.stringify(gp.ids) === JSON.stringify(gp.levels) && JSON.stringify(gp.names) === JSON.stringify(gp.want) && gp.value === gp.level : !gp.shown), gp);
+  if (gp && many > 1) {
+    const first = gp.value, second = gp.ids.find((x) => x !== first);
+    await p.selectOption('#gPlan', second); await p.waitForTimeout(2500);
+    const after = await p.evaluate(() => ({ level: LEVEL, card: card.covenant_id, on: (document.querySelector('#levelBtns button.on') || {}).textContent, value: document.getElementById('gPlan').value, go: document.getElementById('gGo').disabled }));
+    check('give a membership: choosing a plan in the form switches the whole page to it, and Give it works again', after.level === second && after.card === second && after.value === second && !after.go && after.on === (await p.evaluate((id) => data.levels.find((l) => l.covenant_id === id).name, second)), after);
+    await p.click('#levelBtns button:not(.on)'); await p.waitForTimeout(2500);
+    check('give a membership: the picker at the top moves the form\'s Plan choice too', await p.evaluate(() => document.getElementById('gPlan').value === (LEVEL || data.levels[0].covenant_id)));
+  } else console.log('SKIP give a membership plan switch: one plan on this site');
   await p.click('#tabs [data-tab="overview"]'); await p.waitForTimeout(800);
   const fills = await p.$$eval('#byPlanBar i', (els) => els.map((e) => e.className));
   check('members by plan: each part has its own fill', fills.length < 2 || new Set(fills).size === fills.length, fills);

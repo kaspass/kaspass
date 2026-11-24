@@ -30,6 +30,7 @@ KasPass is not audited. These are the limits of the current design, stated plain
 - **Free passes (promotions and invite links).** The keeper wallet pays for each one with nobody approving it: about 1 KAS to the creator's vault, the pass's deposit (which becomes the member's) and the network fee. A claim's transaction id is written down before it's sent, and a claim is only freed when the chain shows its pass never arrived, so a cut connection or a restart can't reopen a code. Which invite codes are used is kept in two files on the server (`promo-claims.json` and `invites.json`), not on chain: back them up. Keep only what you plan to give away in the keeper.
 - **Anyone can add to a pass's prepaid balance.** That's by design (gifts), but it also lets anyone move a pass coin, which can make a pending action fail and need a retry.
 - **The private page link hides the page, not the data.** Plan names, prices and pictures stay readable through the public API.
+- **Two low-severity library alerts.** GitHub flags `atty` 0.2 (an unaligned read that only happens on Windows; KasPass servers run Linux) and `tracing-subscriber` 0.2 (control characters from user input in log lines; KasPass never sets up that logger). Neither has a fix that fits: both come in through the Kaspa and Silverscript libraries, not KasPass's own code, and go when those are upgraded.
 
 ## How KasPass is built to limit damage
 

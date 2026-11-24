@@ -1020,9 +1020,10 @@ body:has(#creatorArea.hidden) .main { padding-bottom: 64px; }
       </section>
       <section class="panel">
         <h2>Give a membership</h2>
-        <p class="muted small" id="gLead">For giveaways, staff, or someone who paid you another way. A free trial costs you only its deposit. A full month is paid from your wallet and comes straight back to your vault, less the KasPass fee, so you need the full price in your wallet to start.</p>
+        <p class="muted small" id="gLead">For giveaways, staff, or someone who paid you another way. A free trial costs you only its deposit. A paid membership (a month, a year, or whatever the plan's period is) is paid from your wallet and comes straight back to your vault, less the KasPass fee, so you need its full price in your wallet to start.</p>
         <div class="grid" style="margin-top:var(--s4)">
           <label class="wide">Who gets it? Paste their Kaspa address<input id="gTo" class="mono" placeholder="kaspatest:… address, or a name like alice.kas or alice.k" autocomplete="off"></label>
+          <label class="wide hidden" id="gPlanBox">Plan<select id="gPlan"></select></label>
           <label class="wide">Type<select id="gKind"></select></label>
         </div>
         <div class="row" style="margin-top:14px"><button id="gGo">Give it</button></div>

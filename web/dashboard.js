@@ -382,6 +382,16 @@ function renderLevelPick() {
   sel.innerHTML = lv.map((l) => `<option value="${escHtml(l.covenant_id)}">${escHtml(l.name)}</option>`).join("");
   sel.value = LEVEL || (lv[0] && lv[0].covenant_id) || "";
   sel.onchange = () => pickLevel(sel.value);
+  // Give a membership has its own Plan choice, so giving doesn't depend on the picker at the top.
+  // Plan names as members see them ({tax_year} filled in).
+  const gp = $("gPlan");
+  show("gPlanBox", lv.length > 1);
+  gp.innerHTML = lv.map((l) => `<option value="${escHtml(l.covenant_id)}">${escHtml(taxFill(l.name))}</option>`).join("");
+  gp.value = LEVEL || (lv[0] && lv[0].covenant_id) || "";
+  gp.onchange = async () => {
+    gp.disabled = $("gGo").disabled = true;
+    try { await pickLevel(gp.value); } finally { gp.disabled = $("gGo").disabled = false; gp.value = LEVEL || (lv[0] && lv[0].covenant_id) || ""; }
+  };
 }
 
 // Manage one level: every panel follows.
@@ -1168,6 +1178,18 @@ function timeLeft(ms) {
   return "under a minute";
 }
 
+// One paid period, named as members read it: "One month", "One year", "One week", "14 days".
+// Test plans with periods under a day are shown to members as a month.
+function periodName(ms) {
+  const d = ms / 86400000;
+  if (d >= 360 && d <= 366) return "One year";
+  if ((d >= 28 && d <= 31) || ms < 86400000) return "One month";
+  if (d === 7) return "One week";
+  if (d === 1) return "One day";
+  const w = dur(ms);
+  return w.charAt(0).toUpperCase() + w.slice(1);
+}
+
 // A length in words: "10 minutes", "1 hour", "30 days", "2 weeks".
 function dur(ms) {
   const m = Math.round(ms / 60000);
@@ -1250,7 +1272,7 @@ function render() {
   const today = levelPrices[card.covenant_id];
   const back = (x) => (s.fee && s.fee.bps ? Math.round(x * (10000 - s.fee.bps) / 10000) : x);
   const gp = (x, word) => (v5card && today ? `${word} (you pay about ${Math.round(today / KAS).toLocaleString()} KAS, about ${Math.round(back(today) / KAS).toLocaleString()} KAS comes back to your vault)` : v5card ? `${word} (paid by you at today's price; it comes back to your vault, less the KasPass fee)` : `${word} (you pay ${kas(x)}, ${kas(back(x))} comes back to you)`);
-  if (lane) kinds.push(["monthly", gp(lane.price, "One month")]);
+  if (lane) kinds.push(["monthly", gp(lane.price, periodName(s.period_ms))]);
   if (lane && lane.life > 0) kinds.push(["lifetime", v5card ? "Lifetime (paid by you; it comes back to your vault, less the KasPass fee)" : `Lifetime (you pay ${kas(lane.life)}, ${kas(back(lane.life))} comes back to you)`]);
   const sel = $("gKind"), keep = sel.value;
   sel.innerHTML = kinds.map(([v, l]) => `<option value="${v}">${l}</option>`).join("");
@@ -1782,7 +1804,8 @@ const TIPS = {
   tName: "The name members see on this plan's card, for example Core or VIP.",
   perks: "What this plan gives members, one per line. Bigger plans automatically include everything in the cheaper ones, so only list what's new here.",
   gTo: "Who gets the membership. Paste their Kaspa address, or type a .kas or .k name and you'll see where it points before anything is signed.",
-  gKind: "A free trial only costs you its refundable deposit. A month or lifetime is paid from your wallet as if they'd bought it, and the payment comes back to your vault, less the KasPass fee.",
+  gPlan: "Which plan to give. The same as picking the plan at the top of the page.",
+  gKind: "A free trial only costs you its refundable deposit. A paid period (a month or a year, as the plan says) or lifetime is paid from your wallet as if they'd bought it, and the payment comes back to your vault, less the KasPass fee.",
   sPct: "How much cheaper joining is during the sale: monthly, commitment and lifetime. Renewals stay at the regular price.",
   vpAmount: "What a member pays each billing period, in the currency you choose. They pay it in KAS at today's rate.",
   vpLife: "One payment for a membership that never expires, in the same currency.",

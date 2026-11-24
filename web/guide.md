@@ -218,6 +218,8 @@ Install Kaspire and restore your wallet with its recovery words. Your membership
 
 The dashboard is at `/dashboard` on the site. **Sign in with your wallet**: the one that created the plans (Kaspire on a computer, or the Kaspire app on a phone). If you see **This membership belongs to another wallet**, Kaspire is on a different wallet: switch to the creator's wallet in Kaspire and sign in again. Every action that changes something on the blockchain is approved in Kaspire; settings like names and the page's look save straight away. Every setting has a "?" tip.
 
+On a test network a **Testnet-10** badge sits beside the KasPass name; mainnet sites show no badge.
+
 The plain words the dashboard uses: the keeper is the **fees wallet**, the recovery wallet is the **backup wallet**, setting up the owner record is **Turn on payouts**, and closing a pass is **ending a membership**.
 
 ### First-time setup {#setup}
@@ -268,7 +270,7 @@ Also worth doing: **top up the fees wallet** (needed for auto-renewals and free 
 
 - **Members:** every live pass, with the member's .k or .kas name and wallet, time left, who paid, and **your note** (a private note per member, saved as you type, never shown to anyone else). A wallet shows "Wallet not seen yet" until the member signs in or buys on the site.
 - **Activity:** every sale, renewal, upgrade, trial and royalty, with your share and the fee.
-- **Give a membership:** a free trial (you fund only its refundable deposit), or a paid pass you pay for (the full price from your own wallet, and the 2% fee applies), for giveaways, staff, or someone who paid another way. Type an address or a .kas or .k name.
+- **Give a membership:** for giveaways, staff, or someone who paid another way. Type an address or a .kas or .k name, pick the **Plan** (shown when you have several; it's the same as the picker at the top), then what to give: a free trial (you fund only its refundable deposit), one paid period named from the plan (**One month**, **One year**), or lifetime when the plan has a lifetime price. A paid one comes from your own wallet at today's price and goes back to your vault, less the KasPass fee, so you need the full price in your wallet to start.
 
 ### Prices & sales {#tab-prices}
 
@@ -310,7 +312,7 @@ For sharing your screen on a live stream or a call, or recording a video.
 - **What it hides:** wallet addresses, .kas and .k names, KAS and money amounts, dates, times and time left, transaction ids, the big numbers and counts on the Overview and in Promotions, members' notes, Telegram and Discord names, holder club figures, QR codes and payment links. Each becomes a grey bar of the same width, so its length gives nothing away. Boxes with something in them are covered, and so are tooltips and link addresses that hold private details.
 - **Where:** the dashboard, and your membership page and holder club page in the same browser. It's set per site address (pass.example.com and www.pass.example.com are separate). A link ending in `?stream=1` turns it on; no link can turn it off.
 - **Showing one thing:** click its grey bar, or **Reveal** beside an address. It hides again by itself after 10 seconds. A box you click into shows while you type.
-- **Turning it off** takes two presses, at least a second apart (the badge's **Turn off**, then **Press again to show everything**), so a slip or a double-click can't show everything.
+- **Turning it off** takes two presses, a moment apart (the badge's **Turn off**, then **Press again to show everything**), so a slip or a double-click can't show everything.
 - **What it can't hide:** anything outside the page, like your wallet's own windows, browser tabs and bookmarks, the address bar, notifications, or other apps.
 - **On the day of a stream:**
   1. Sign in to Kaspire and the dashboard before you go live.
@@ -338,6 +340,7 @@ A free period for holders of an NFT or token, for example "Migrated NACHO to KCC
 - **The claim:** the fees wallet buys the member a normal pass on that plan. You approve nothing. The pass doesn't auto-renew; members renew at the regular price if they want to stay.
 - **Limits:** one claim per member (their wallet plus linked wallets) per promotion; not for anyone who already has that plan or a higher one; each NFT claims once; listed NFTs don't count. For token rules a claim limit is required, because tokens can be moved to new wallets. Migration history can't be moved, so the KAT Bridge rule is much harder to farm.
 - **Picture or emoji:** upload a picture (for example the token's logo) or pick an emoji to show beside the offer.
+- **Claims so far:** listed under the promotion with when, the wallet, what counted (for example "1 KAT Bridge migration") and the transaction.
 - **One holder promotion at a time.** "Start a new campaign" starts the next one fresh. "End it now" stops it; claims already made stay.
 
 ### Invite links {#invite-links}
