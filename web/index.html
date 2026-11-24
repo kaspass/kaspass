@@ -197,6 +197,14 @@
   .lvl ul li { margin: 2px 0; }
   /* The creator's own badge for a plan ("Most popular"), above its price. */
   .lvl .cs-badge { display: flex; width: fit-content; margin: 0 0 6px; padding: 3px 10px; border-radius: 999px; background: var(--teal); color: var(--accent-ink); font: 600 12px/1.3 var(--font-body); letter-spacing: .04em; text-transform: uppercase; overflow-wrap: anywhere; }
+  /* Its colours (update 98): solid, so each reads the same in the day and night looks. */
+  .lvl .cs-badge.t-gold { background: #f2c86b; color: #2a1d00; }
+  .lvl .cs-badge.t-green { background: #3ccf7e; color: #04220f; }
+  .lvl .cs-badge.t-red { background: #c9302c; color: #fff; }
+  .lvl .cs-badge.t-purple { background: #6d4cf0; color: #fff; }
+  .lvl .cs-badge.t-grey { background: #56615f; color: #fff; }
+  .lvl .cs-badges { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 6px; }
+  .lvl .cs-badges .cs-badge { margin: 0; }
   .lvl .yours { font: 600 11px var(--font-body); letter-spacing: .04em; text-transform: uppercase; color: var(--accent-ink); background: var(--teal); border-radius: 999px; padding: 2px 8px; }
   .lvl button { margin-top: 8px; }
   .switchbox { border: 1px solid var(--teal-dim); border-radius: 12px; padding: 14px; margin-top: 14px; }
@@ -732,6 +740,6 @@
 </div>
 
 <script src="/assets/qrcode.js?v=31"></script>
-<script src="/assets/index.js?v=77"></script>
+<script src="/assets/index.js?v=78"></script>
 </body>
 </html>

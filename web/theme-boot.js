@@ -24,6 +24,13 @@
     if (!r.dataset.theme && r.dataset.cards === "kaspa-vision") r.dataset.theme = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
   } catch (e) {}
 })();
+// Reduced motion: jumps instead of smooth scrolling (UI88 L9).
+try {
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    var sv = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function (o) { return sv.call(this, o && typeof o === "object" ? Object.assign({}, o, { behavior: "auto" }) : o); };
+  }
+} catch (e) {}
 // The day and night switch (#themeToggle), on every page that shows one: the visitor's choice is
 // remembered. Pages call it again after showing the switch late (the membership page's card style).
 window.kpThemeSwitch = function () {

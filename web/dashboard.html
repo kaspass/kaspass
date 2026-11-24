@@ -167,7 +167,7 @@ input[type="checkbox"], input[type="radio"] { width: 18px; height: 18px; min-hei
 .sidefoot .night { margin: 0; padding: 0 6px; font-size: 14px; color: var(--text); }
 .sidefoot .night span { flex: 1; }
 .sidefoot .night svg.i { width: 16px; height: 16px; color: var(--muted); }
-.sidefoot .tools { display: flex; gap: 8px; }
+.sidefoot .tools { display: flex; flex-wrap: wrap; gap: 8px; }
 .sidefoot .tools button { flex: 1; }
 .net { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; padding: 3px 9px; border: 1px solid color-mix(in srgb, var(--warn) 45%, transparent); color: var(--warn); border-radius: 999px; margin-left: auto; white-space: nowrap; }
 .net[hidden] { display: none; }
@@ -580,11 +580,40 @@ code { font: 13px var(--font-mono); background: var(--field); border: 1px solid 
 /* Signed in: the sign-in panel is only shown when there's something to say. */
 .signrow { display: flex; gap: 16px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
 .signtext { min-width: 0; flex: 1 1 260px; }
+/* Update 98: a plan's badges, up to 3: kind, words or plan, colour, order. */
+.badgeset { margin: var(--s3) 0; }
+.badgeset .bstitle { font-weight: 600; font-size: 14px; margin-bottom: 4px; }
+.badgeset .brow { display: grid; grid-template-columns: 150px minmax(0, 1fr) 130px auto; gap: 8px; align-items: center; margin: 0 0 8px; }
+.badgeset .brow select, .badgeset .brow input { min-height: 44px; margin: 0; }
+.badgeset .brow .bact { display: flex; gap: 4px; }
+.badgeset .brow .bact button { width: 44px; min-height: 44px; padding: 0; }
+.badgeset .bprev { display: inline-flex; width: fit-content; padding: 3px 10px; border-radius: 999px; font: 600 12px/1.3 var(--font-body); letter-spacing: .04em; text-transform: uppercase; }
+.badgeset .t-accent { background: var(--accent); color: var(--on-accent); }
+.badgeset .t-gold { background: #f2c86b; color: #2a1d00; }
+.badgeset .t-green { background: #3ccf7e; color: #04220f; }
+.badgeset .t-red { background: #c9302c; color: #fff; }
+.badgeset .t-purple { background: #6d4cf0; color: #fff; }
+.badgeset .t-grey { background: #56615f; color: #fff; }
+.badgeset .bprevs { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 10px; }
+@media (max-width: 640px) {
+  .badgeset .brow { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); padding: 10px; border: 1px solid var(--line); border-radius: var(--r-field); }
+  .badgeset .brow .bwhat { grid-column: 1 / -1; }
+  .badgeset .brow .bact { grid-column: 1 / -1; }
+}
+/* Update 98: the Plans tab on a phone: the plan picker wraps instead of running off the side, each
+   plan row puts its name on top, and "What it includes" grows to fit. */
+@media (max-width: 860px) {
+  .lvpick .seg { flex-wrap: wrap; overflow: visible; border-radius: var(--r-field); }
+  .lvpick .seg button { flex: 1 1 auto; white-space: nowrap; min-height: 40px; }
+  .pcards .pcard { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "info info" "sw act" "warn warn"; }
+}
+#perks { overflow-y: hidden; min-height: 112px; }
 /* Update 97: nothing runs off the side at 360 px (UI88 M16). */
 .signrow > .row { max-width: 100%; min-width: 0; }
 .signrow .row button { white-space: normal; max-width: 100%; text-align: center; }
 @media (max-width: 380px) { .phonebar .t { font-size: 15px; } }
-.signbar.in:not(:has(#wcOtherLine:not(.hidden))):not(:has(#walletErr:not(.hidden))) { display: none; }
+/* Signed in, the sign-in panel goes away; "Use another wallet" is with Sign out (update 98). */
+.signbar.in:not(:has(#walletErr:not(.hidden))) { display: none; }
 .signbar:not(.in) { max-width: 640px; margin-top: 8vh; padding: var(--s6); }
 .signbar:not(.in) h2 { font: 800 30px/1.1 var(--font-head); letter-spacing: -0.02em; margin-bottom: var(--s3); }
 .signbar:not(.in) .signrow { flex-direction: column; align-items: flex-start; }
@@ -758,6 +787,7 @@ body:has(#creatorArea.hidden) .main { padding-bottom: 64px; }
       <label class="sw night" title="Hides wallet addresses, amounts, dates and names while you share your screen. Also on your membership page in this browser."><svg class="i"><use href="#i-eyeoff"/></svg><span>Stream mode</span><input type="checkbox" id="streamSw" data-stream-toggle></label>
       <div class="tools">
         <button class="ghost sm" type="button" data-go="settings" data-sub="theme"><svg class="i"><use href="#i-theme"/></svg>Themes</button>
+        <button class="ghost sm hidden" id="wcOther2" type="button">Use another wallet</button>
         <button class="ghost sm hidden" id="logout" type="button">Sign out</button>
       </div>
     </div>
@@ -1010,7 +1040,12 @@ body:has(#creatorArea.hidden) .main { padding-bottom: 64px; }
         </div>
         <label>What it includes, one per line (shown on its card; up to 8)
           <textarea id="perks" rows="4" placeholder="Members-only Telegram group&#10;Weekly market notes&#10;Early access to streams"></textarea></label>
-        <label>Badge on its card (optional, up to 24 characters)<input id="lBadge" maxlength="24" placeholder="For example: Most popular"></label>
+        <div class="badgeset" id="badgeSet">
+          <div class="bstitle">Badges on its card <span class="muted">(up to 3, above the price)</span></div>
+          <p class="muted small" id="badgeNote"></p>
+          <div id="badgeRows"></div>
+          <div class="row"><button type="button" class="ghost sm" id="badgeAdd">Add a badge</button><button type="button" class="ghost sm hidden" id="badgeAuto">Back to automatic</button></div>
+        </div>
         <div class="edlabel" id="lvAboutL">About it (shown when someone picks it on your page)</div>
         <div id="lvAboutEd" style="margin-bottom:12px"></div>
         <label class="check hidden" id="lvSameBox" style="margin:0 0 12px"><input type="checkbox" id="lvSame"> <span id="lvSameText"></span></label>
@@ -1481,6 +1516,6 @@ body:has(#creatorArea.hidden) .main { padding-bottom: 64px; }
 
 <script src="/assets/kaspire-mobile.js?v=2"></script>
 <script src="/assets/dash-theme.js?v=1"></script>
-<script src="/assets/dashboard.js?v=79"></script>
+<script src="/assets/dashboard.js?v=80"></script>
 </body>
 </html>

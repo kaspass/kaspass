@@ -1,7 +1,7 @@
 // The creator dashboard, signed in, in a real browser: stream mode hides every private detail on
 // every tab, and the update 92 fixes hold (date boxes line up, no "Mainnet" badge on test
 // networks' look, plan parts with their own fills, the holder discount in Prices & sales), and
-// Give a membership's Plan choice and period names (95), and the update 97 dashboard fixes and plan badge.
+// Give a membership's Plan choice and period names (95), the update 97 dashboard fixes, and update 98's badges and Plans tab on a phone.
 // Run by dev/check.sh against the local simulated site, after dev/pages.js.
 //
 // Signing in: a stand-in for Kaspire signs the sign-in message with the simulator's creator test
@@ -156,20 +156,67 @@ function leaks() {
     check('run a sale: changing the form puts the button back', (await p.textContent('#sGo')) === 'Start sale');
     await p.fill('#sPct', '');
   } else console.log('SKIP start sale: a sale is already on');
-  // Update 97: a badge the creator writes for a plan ("Most popular"), in /v1/levels and on the card.
-  await p.click('#tabs [data-tab="levels"]'); await p.waitForTimeout(800);
-  await p.fill('#lBadge', '  Most   popular '); await p.click('#lvNameGo'); await p.waitForTimeout(2500);
-  const bd = await p.evaluate(async () => { const id = data.level.covenant_id; const l = (await (await fetch('/v1/levels')).json()).levels.find((x) => x.level === id); return { api: l && l.badge, box: document.getElementById('lBadge').value, id }; });
-  check('plan badge: saved cleaned up, in /v1/levels and back in the box (97)', bd.api === 'Most popular' && bd.box === 'Most popular', bd);
+  // Update 98: a plan's badges. Automatic until edited; the creator's own list (up to 3, in six
+  // colours) replaces them, in /v1/levels and on the card; "Back to automatic" undoes it.
+  await p.click('#tabs [data-tab="levels"]'); await p.waitForTimeout(1500);
+  const lvl = async () => p.evaluate(async () => { const id = data.level.covenant_id; return (await (await fetch('/v1/levels')).json()).levels.find((x) => x.level === id); });
+  const b0 = await lvl();
+  check('badges: automatic until edited (98)', b0.badges_custom === false && Array.isArray(b0.badges) && /Automatic for now|No badge on this plan/.test(await p.textContent('#badgeNote')), [b0.badges, b0.badges_custom]);
+  await p.click('#badgeAdd'); await p.waitForTimeout(300);
+  const rows0 = await p.$$eval('#badgeRows .brow', (r) => r.length);
+  await p.fill('#badgeRows .brow:last-child input', '  Most   popular ');
+  await p.selectOption('#badgeRows .brow:last-child select.btone', 'gold');
+  if (rows0 < 3) { await p.click('#badgeAdd'); await p.waitForTimeout(200); await p.selectOption('#badgeRows .brow:last-child select:first-child', 'early'); await p.waitForTimeout(200); await p.selectOption('#badgeRows .brow:last-child select.btone', 'red'); }
+  // The first badge row up: the text badge goes to the top.
+  const n0 = await p.$$eval('#badgeRows .brow', (r) => r.length);
+  check('badges: at most 3 rows, and "Add a badge" stops at 3', n0 <= 3 && (n0 < 3 || await p.$eval('#badgeAdd', (x) => x.disabled)), n0);
+  if (SHOTS) { await p.locator('#badgeSet').scrollIntoViewIfNeeded(); await p.screenshot({ path: SHOTS + '/badges-editor.png' }); }
+  await p.click('#lvNameGo'); await p.waitForTimeout(2500);
+  const b1 = await lvl();
+  const txt = (b1.badges || []).find((x) => x.kind === 'text');
+  check('badges: the creator\'s list saved, cleaned, in /v1/levels, in its colour (98)', b1.badges_custom === true && txt && txt.text === 'Most popular' && txt.tone === 'gold' && b1.badge === 'Most popular' && !(b1.badges || []).some((x) => x.kind === 'early' && !b1.founding), b1.badges);
   const mp = await ctx.newPage();
   for (const st of ['kaspass', 'kaspa-vision']) {
     await mp.goto(`${S}/?style=${st}`); await mp.waitForTimeout(3500);
-    const shown = await mp.evaluate(() => [...document.querySelectorAll('#levelCards .lvl .cs-badge')].map((e) => [e.textContent, e.getClientRects().length > 0]));
-    check(`plan badge: on its card in the ${st} style (97)`, shown.length === 1 && shown[0][0] === 'Most popular' && shown[0][1], shown);
+    const shown = await mp.evaluate((id) => { const c = [...document.querySelectorAll('#levelCards .lvl')].find((x) => x.querySelector('.cs-badges')); return c ? { chips: [...c.querySelectorAll('.cs-badges .cs-badge')].map((e) => [e.textContent, e.className, getComputedStyle(e).backgroundColor]), auto: !!c.querySelector('.cs-early, .cs-save') } : null; });
+    if (SHOTS) await mp.screenshot({ path: `${SHOTS}/badges-card-${st}.png` });
+    check(`badges: on the card in the ${st} style, gold, with no automatic badge beside them (98)`, !!shown && shown.chips[0][0] === 'Most popular' && /t-gold/.test(shown.chips[0][1]) && shown.chips[0][2] === 'rgb(242, 200, 107)' && !shown.auto, shown);
   }
+  // Hiding the automatic badges on a plan with an early price: an empty list.
+  const earlyPlan = await p.evaluate(async () => { const ls = (await (await fetch('/v1/levels')).json()).levels; const t = ls.find((x) => x.founding); return t ? t.level : null; });
+  if (earlyPlan) {
+    const post = (body) => p.evaluate(async (b) => (await fetch(L('/v1/creator/badges'), { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ session, covenant_id: b.id, ...b.x }) })).status, body);
+    const st = await post({ id: earlyPlan, x: { badges: [] } });
+    await mp.goto(`${S}/?style=kaspa-vision`); await mp.waitForTimeout(3500);
+    const tax = await mp.evaluate(async (id) => { const l = (await (await fetch('/v1/levels')).json()).levels.find((x) => x.level === id); const cards = [...document.querySelectorAll('#levelCards .lvl')]; return { custom: l.badges_custom, n: l.badges.length, early: cards.some((c) => c.querySelector('.cs-early')) }; }, earlyPlan);
+    check('badges: an empty list hides the automatic early-price badge (98)', st === 200 && tax.custom === true && tax.n === 0 && !tax.early, [st, tax]);
+    await post({ id: earlyPlan, x: { automatic: true } });
+    const back = await p.evaluate(async (id) => { const l = (await (await fetch('/v1/levels')).json()).levels.find((x) => x.level === id); return { custom: l.badges_custom, early: l.badges.some((b) => b.kind === 'early' && b.until_ms) }; }, earlyPlan);
+    check('badges: back to automatic brings the early-price badge back', back.custom === false && back.early, back);
+  } else console.log('SKIP badges on a plan with an early price: none in this simulator');
   await mp.close();
-  await p.fill('#lBadge', ''); await p.click('#lvNameGo'); await p.waitForTimeout(2500);
-  check('plan badge: an empty box removes it', await p.evaluate(async () => { const id = data.level.covenant_id; return (await (await fetch('/v1/levels')).json()).levels.find((x) => x.level === id).badge === ''; }));
+  await p.click('#badgeAuto'); await p.waitForTimeout(300); await p.click('#lvNameGo'); await p.waitForTimeout(2500);
+  const b2 = await lvl();
+  check('badges: "Back to automatic" in the dashboard undoes the list (98)', b2.badges_custom === false && b2.badge === '', b2);
+  // Update 98: the Plans tab on a phone-sized window.
+  await p.setViewportSize({ width: 390, height: 844 }); await p.waitForTimeout(500);
+  await p.evaluate(() => showTab('levels')); await p.waitForTimeout(800);
+  const ph = await p.evaluate(() => {
+    const seg = document.querySelector('#levelPick .seg');
+    const bs = seg ? [...seg.querySelectorAll('button')].map((b) => b.getBoundingClientRect()) : [];
+    const info = document.querySelector('#cardsT .pcard > div:nth-child(2)');
+    return { segFits: !seg || seg.scrollWidth <= seg.clientWidth + 1, btnsIn: bs.every((r) => r.right <= innerWidth + 1 && r.left >= -1), info: info ? Math.round(info.getBoundingClientRect().width) : 0, flat: document.documentElement.scrollWidth <= innerWidth + 1 };
+  });
+  check('Plans tab on a phone: the plan picker wraps instead of running off the side, and each plan\'s name gets the full width (98)', ph.segFits && ph.btnsIn && ph.info >= 280 && ph.flat, ph);
+  if (SHOTS) await p.screenshot({ path: SHOTS + '/plans-390.png' });
+  await p.fill('#perks', 'One\nTwo\nThree\nFour\nFive\nSix');
+  if (SHOTS) { await p.locator('#badgeSet').scrollIntoViewIfNeeded(); await p.click('#badgeAdd'); await p.waitForTimeout(300); await p.screenshot({ path: SHOTS + '/badges-editor-390.png' }); await p.click('#badgeAuto'); }
+  const grow = await p.$eval('#perks', (t) => ({ sh: t.scrollHeight, ch: t.clientHeight }));
+  check('"What it includes" grows to show every line (98)', grow.sh <= grow.ch + 2, grow);
+  await p.evaluate(() => { $("perks").value = (data.level.perks || []).join("\n"); });
+  const sp2 = await p.evaluate(() => { document.getElementById('wcOtherLine').classList.remove('hidden'); const d = getComputedStyle(document.getElementById('signPanel')).display; document.getElementById('wcOtherLine').classList.add('hidden'); return { d, other: !!document.getElementById('wcOther2') }; });
+  check('signed in: no leftover sign-in box ("Not you?" is with Sign out) (98)', sp2.d === 'none' && sp2.other, sp2);
+  await p.setViewportSize({ width: 1366, height: 900 }); await p.waitForTimeout(300);
   // Update 97 (UI88 M14): the side menu fits a 768 px high laptop, Themes and Sign out included.
   await p.setViewportSize({ width: 1366, height: 768 }); await p.waitForTimeout(500);
   const side = await p.evaluate(() => { const s = document.querySelector('.side'); const lo = document.getElementById('logout').getBoundingClientRect(); const th = document.querySelector('.sidefoot [data-go="settings"]').getBoundingClientRect(); return { fits: s.scrollHeight <= s.clientHeight + 1, logout: Math.round(lo.bottom), themes: Math.round(th.bottom), h: s.scrollHeight }; });

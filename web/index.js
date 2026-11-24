@@ -1977,6 +1977,8 @@ function renderLevels() {
     const lower = belowNames(l);
     const about = richHtml(page && page.about ? page.about[l.level] : "");
     const hasMore = !!(about || lower || (l.perks && l.perks.length));
+    // Two short lines or fewer stay open, with no "Hide details" toggle over them (UI88 L8).
+    const shortDet = !about && ((lower ? 1 : 0) + ((l.perks && l.perks.length) || 0)) <= 2;
     d.innerHTML = `<div class="ln">${escH(l.name)}${mine ? `<span class="yours">Your ${escH(lw())}</span>` : ""}</div>` +
       `<div class="lp">${price}</div>` +
       `<div class="det"${(CLOSED.has(l.level) && !OPEN) || !hasMore ? " hidden" : ""}>` +
@@ -1988,8 +1990,9 @@ function renderLevels() {
       v5Card(d, l);
       const save = OPEN && !d.classList.contains("owned") ? saveWords(l) : "";
       if (save) d.querySelector(".lp").insertAdjacentHTML("afterbegin", `<div class="cs-save">${escH(save)}</div>`);
-      if (l.badge && !d.classList.contains("owned")) d.querySelector(".lp").insertAdjacentHTML("afterbegin", `<div class="cs-badge">${escH(l.badge)}</div>`);
-      if (hasMore && !OPEN) foldCard(d, l);
+      if (l.badge && !d.classList.contains("owned") && !l.badges_custom) d.querySelector(".lp").insertAdjacentHTML("afterbegin", `<div class="cs-badge">${escH(l.badge)}</div>`);
+      customBadges(d, l);
+      if (hasMore && !OPEN && !shortDet) foldCard(d, l);
       const act = d.querySelector(":scope > .trialnote, :scope > button:not(.more-t), :scope > .noact");
       if (act) act.before(Object.assign(document.createElement("div"), { className: "grow" }));
       if (FOCUS && sel && !FOLDLIST) d.insertAdjacentHTML("afterbegin", `<p class="yourtag">Your ${escH(lw())}</p>`);
@@ -2004,8 +2007,9 @@ function renderLevels() {
       else if (PAY === l.level) box.append($("join"));
       continue;
     }
-    if (l.badge) d.querySelector(".lp").insertAdjacentHTML("afterbegin", `<div class="cs-badge">${escH(l.badge)}</div>`);
-    if (hasMore && !OPEN) foldCard(d, l);
+    if (l.badge && !l.badges_custom) d.querySelector(".lp").insertAdjacentHTML("afterbegin", `<div class="cs-badge">${escH(l.badge)}</div>`);
+    customBadges(d, l);
+    if (hasMore && !OPEN && !shortDet) foldCard(d, l);
     const b = document.createElement("button");
     b.textContent = sel ? `Viewing ${l.name}` : `Choose ${l.name}`;
     b.className = sel ? "ghost" : "";
@@ -2182,6 +2186,8 @@ function v5Card(d, l) {
     const kasNow = l.price.currency === "KAS" ? money("KAS", amt) : `about ${kasRound(Math.round(o.monthly_sompi * amt / Math.max(0.0001, l.price.amount)))}`;
     // Signed out, the button leads to signing in, so it says so plainly; the KAS is on the card.
     const b = btn(v5Site() ? `Choose this ${lw()}` : `Buy, ${kasNow}`, (promo && promo.claim) || trialOn ? "ghost" : "");
+    // Three "Choose this plan" buttons sound the same to a screen reader: each names its plan (UI88 L3).
+    if (v5Site()) b.setAttribute("aria-label", `Choose ${l.name}`);
     b.disabled = !!o.price_unavailable || o.available === false;
     return;
   }
@@ -2532,9 +2538,10 @@ function renderPay() {
     if (q.action === "renew") {
       const p = heldPasses.find((x) => x.level === PAY) ;
       if (!p) { say("buyErr", `Your ${pw()} isn't showing yet. Refresh the page, then try again.`); return; }
-      runPaid({ url: "/v1/pass/prepare", body: { address, txid: p.txid, index: p.index, action: "renew" }, statusId: "buyStatus", errId: "buyErr", buttons: [$("payGo")], doneScreen: true });
+      runPaid({ url: "/v1/pass/prepare", body: { address, txid: p.txid, index: p.index, action: "renew" }, statusId: "buyStatus", errId: "buyErr", buttons: [$("payGo"), $("qrGo")], doneScreen: true });
     } else {
-      buy(kind, [$("payGo")]);
+      // "Pay from another wallet" is off too while this payment waits for approval (UI88 L15).
+      buy(kind, [$("payGo"), $("qrGo")]);
     }
   };
 }
@@ -2749,6 +2756,20 @@ function applyCardStyle() {
   }
 }
 // "Save 17% vs monthly": a longer plan against the shortest one, at regular prices.
+// The creator's own badges (update 98) replace the automatic ones on that plan's card, in their
+// order and colours; the early price's date is written the visitor's way. Not on a plan they own.
+function customBadges(d, l) {
+  if (!l.badges_custom) return;
+  d.querySelectorAll(".cs-early, .cs-save, .cs-badge, .cs-badges").forEach((e) => e.remove());
+  const lp = d.querySelector(".lp");
+  if (!lp || d.classList.contains("owned")) return;
+  const tones = ["accent", "gold", "green", "red", "purple", "grey"];
+  const html = (l.badges || []).map((b) => {
+    const text = b.kind === "early" && b.until_ms ? `Early price until ${new Date(b.until_ms - 1).toLocaleDateString(undefined, { dateStyle: "medium" })}` : b.text;
+    return `<div class="cs-badge t-${tones.includes(b.tone) ? b.tone : "accent"}">${escH(text || "")}</div>`;
+  }).join("");
+  if (html) lp.insertAdjacentHTML("afterbegin", `<div class="cs-badges">${html}</div>`);
+}
 function saveWords(l) {
   if (!l.price || !l.period_ms) return "";
   const base = levels.filter((x) => x.price && x.price.currency === l.price.currency && x.period_ms).sort((a, b) => a.period_ms - b.period_ms)[0];

@@ -23,6 +23,7 @@ mod members;
 mod alerts;
 mod examples;
 mod guide;
+mod badges;
 
 use anyhow::Result;
 use std::sync::Mutex;
@@ -589,6 +590,7 @@ pub async fn serve(setups: Vec<LevelSetup>, chain: Chain, port: u16, members_htm
         .route("/v1/trial/prepare", post(trial::prepare))
         .route("/v1/creator/perks", post(creator_perks))
         .route("/v1/creator/badge", post(creator_badge))
+        .route("/v1/creator/badges", post(creator_badges))
         .route("/v1/creator/site-names", post(creator_site_names))
         .route("/v1/page", get(page_info))
         .route("/v1/creator/page", post(creator_page))
@@ -1671,7 +1673,7 @@ async fn offer_for(s: &AppState) -> Result<serde_json::Value, ApiError> {
         "count": s.levels.len(),
         "name": s.level_name(),
         "perks": level_perks(&s.home).get(&s.card.covenant_id).map(|v| v.iter().map(|x| fill_tax_year(x)).collect::<Vec<_>>()).unwrap_or_default(),
-        "badge": level_badges(&s.home).get(&s.card.covenant_id).cloned().unwrap_or_default(),
+        "badge": badges::first_text(badges::load(&s.home).get(&s.card.covenant_id)),
     });
     Ok(v)
 }
@@ -1799,14 +1801,6 @@ fn your_pass(s: &AppState) -> String {
 // ---------------------------------------------------------------------------
 // Levels: what's on sale, each level's perks, and the creator's list (levels.json).
 
-/// A short badge the creator writes for a plan's card ("Most popular"), by covenant id.
-fn level_badges(home: &std::path::Path) -> HashMap<String, String> {
-    if examples::current().is_some() {
-        return HashMap::new();
-    }
-    std::fs::read_to_string(home.join("level-badges.json")).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default()
-}
-
 fn level_perks(home: &std::path::Path) -> HashMap<String, Vec<String>> {
     if let Some(e) = examples::current() {
         return e.perks.clone();
@@ -1896,16 +1890,25 @@ async fn addresses(State(s): State<AppState>) -> Json<serde_json::Value> {
 
 async fn levels_info(State(s): State<AppState>) -> Json<serde_json::Value> {
     let perks = level_perks(&s.home);
-    let badges = level_badges(&s.home);
+    let saved_badges = badges::load(&s.home);
     let about = level_about(&s.home);
     let ar = access_ranks(&s.home, &s.levels);
     let mut out = Vec::new();
+    let mut plans: Vec<badges::Plan> = Vec::new();
     for (i, l) in s.levels.iter().enumerate() {
         if l.card.placeholder {
             continue;
         }
         let Ok(ls) = s.at(Some(&l.card.covenant_id)) else { continue };
         let offer = offer_for(&ls).await.ok();
+        let price = offer.as_ref().and_then(|o| o.get("price"));
+        plans.push(badges::Plan {
+            id: l.card.covenant_id.clone(),
+            period_ms: l.card.settings.period_ms.max(0) as u64,
+            currency: price.and_then(|p| p["currency"].as_str()).map(String::from),
+            amount: price.and_then(|p| p["amount"].as_f64()),
+            early_until_ms: offer.as_ref().and_then(|o| o.get("founding")).and_then(|f| f["until_ms"].as_u64()),
+        });
         out.push(serde_json::json!({
             "level": l.card.covenant_id,
             "id": short_id(&l.card.covenant_id),
@@ -1917,12 +1920,18 @@ async fn levels_info(State(s): State<AppState>) -> Json<serde_json::Value> {
             "named": tier_name(&s.home, &l.card.covenant_id).is_some(),
             "perks": perks.get(&l.card.covenant_id).map(|v| v.iter().map(|x| fill_tax_year(x)).collect::<Vec<_>>()).unwrap_or_default(),
             "about_html": about.get(&l.card.covenant_id).map(|h| fill_tax_year(h)).unwrap_or_default(),
-            "badge": badges.get(&l.card.covenant_id).cloned().unwrap_or_default(),
+            "badge": badges::first_text(saved_badges.get(&l.card.covenant_id)),
             "period_ms": l.card.settings.period_ms,
             "price": offer.as_ref().and_then(|o| o.get("price")).cloned(),
             "founding": offer.as_ref().and_then(|o| o.get("founding")).cloned(),
             "offer": offer,
         }));
+    }
+    // Each plan's badges, worked out against every plan's prices (update 98).
+    for (row, p) in out.iter_mut().zip(plans.iter()) {
+        let (list, custom) = badges::resolve(saved_badges.get(&p.id), p, &plans, |ms| iso_day(ms as i64));
+        row["badges"] = serde_json::json!(list);
+        row["badges_custom"] = serde_json::json!(custom);
     }
     let sn = site_names(&s.home);
     let no_fee = s.shop.as_ref().is_some_and(|sh| sh.no_fee);
@@ -1967,29 +1976,52 @@ struct BadgeRequest {
     covenant_id: Option<String>,
 }
 
-/// Longest badge a creator can write, in characters.
-const BADGE_MAX: usize = 24;
-
-/// The badge text as saved: no control characters, spaces squeezed, at most BADGE_MAX characters.
-fn clean_badge(t: &str) -> String {
-    let one: String = t.chars().map(|c| if c.is_control() { ' ' } else { c }).collect();
-    one.split_whitespace().collect::<Vec<_>>().join(" ").chars().take(BADGE_MAX).collect::<String>().trim().to_string()
-}
-
 /// The creator writes a short badge for a plan's card ("Most popular"); empty removes it.
 async fn creator_badge(State(s): State<AppState>, Query(lq): Query<LevelQ>, Json(req): Json<BadgeRequest>) -> Result<Json<serde_json::Value>, ApiError> {
     let s = s.lv(&lq)?;
     let me = creator_of(&s, &req.session)?;
     let cov = target_covenant(&s, &me, req.covenant_id.as_deref())?;
-    let badge = clean_badge(&req.badge);
-    let mut all = level_badges(&s.home);
+    let badge = badges::clean_text(&req.badge);
+    let mut all = badges::load(&s.home);
     if badge.is_empty() {
         all.remove(&cov);
     } else {
-        all.insert(cov, badge.clone());
+        all.insert(cov, badges::Saved::Text(badge.clone()));
     }
-    std::fs::write(s.home.join("level-badges.json"), serde_json::to_string_pretty(&all).unwrap_or_default()).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    badges::store(&s.home, &all).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     Ok(Json(serde_json::json!({ "badge": badge })))
+}
+
+#[derive(Deserialize)]
+struct BadgesRequest {
+    session: String,
+    #[serde(default)]
+    badges: Vec<badges::Spec>,
+    /// Back to the automatic badges (the list is ignored).
+    #[serde(default)]
+    automatic: bool,
+    #[serde(default)]
+    covenant_id: Option<String>,
+}
+
+/// The creator sets a plan's badges (update 98): their own list of up to three, in place of the
+/// automatic ones, or back to automatic.
+async fn creator_badges(State(s): State<AppState>, Query(lq): Query<LevelQ>, Json(req): Json<BadgesRequest>) -> Result<Json<serde_json::Value>, ApiError> {
+    let s = s.lv(&lq)?;
+    let me = creator_of(&s, &req.session)?;
+    let cov = target_covenant(&s, &me, req.covenant_id.as_deref())?;
+    let ids: Vec<String> = s.levels.iter().filter(|l| !l.card.placeholder).map(|l| l.card.covenant_id.clone()).collect();
+    let mut all = badges::load(&s.home);
+    let list = if req.automatic {
+        all.remove(&cov);
+        serde_json::Value::Null
+    } else {
+        let list = badges::clean(req.badges, &ids);
+        all.insert(cov, badges::Saved::Custom { list: list.clone() });
+        serde_json::json!(list)
+    };
+    badges::store(&s.home, &all).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    Ok(Json(serde_json::json!({ "badge_list": list })))
 }
 
 #[derive(Deserialize)]
@@ -4129,7 +4161,7 @@ async fn creator_overview(State(s): State<AppState>, Query(lq): Query<LevelQ>, Q
         "pass_word": pass_word(&s.home, &s.card.covenant_id),
         "club_name": site_names(&s.home).club_name,
         "level_word": level_word(&s.home),
-        "level": { "covenant_id": s.card.covenant_id, "rank": s.rank(), "name": s.level_name(), "perks": level_perks(&s.home).get(&s.card.covenant_id).cloned().unwrap_or_default(), "badge": level_badges(&s.home).get(&s.card.covenant_id).cloned().unwrap_or_default() },
+        "level": { "covenant_id": s.card.covenant_id, "rank": s.rank(), "name": s.level_name(), "perks": level_perks(&s.home).get(&s.card.covenant_id).cloned().unwrap_or_default(), "badge": badges::first_text(badges::load(&s.home).get(&s.card.covenant_id)), "badge_list": match badges::load(&s.home).get(&s.card.covenant_id) { Some(badges::Saved::Custom { list }) => serde_json::json!(list), _ => serde_json::Value::Null } },
         "levels": s.levels.iter().enumerate().map(|(i, l)| serde_json::json!({ "covenant_id": l.card.covenant_id, "id": short_id(&l.card.covenant_id), "rank": i, "name": level_name(&s.home, &s.levels, i) })).collect::<Vec<_>>(),
         "creator": address,
         "card": s.card,
@@ -4774,19 +4806,6 @@ mod clean_html_test {
         assert!(!clean_html("<a href=\"/dashboard\">x</a>").contains("href"));
         assert_eq!(clean_html("<p><br></p>"), "");
         assert_eq!(clean_html("<h1>Big</h1><div>plain</div>"), "Bigplain");
-    }
-}
-
-#[cfg(test)]
-mod badge_test {
-    use super::{clean_badge, BADGE_MAX};
-
-    #[test]
-    fn badges_are_short_and_plain() {
-        assert_eq!(clean_badge("  Most   popular \n"), "Most popular");
-        assert_eq!(clean_badge(""), "");
-        assert_eq!(clean_badge("Best\u{0007}value"), "Best value");
-        assert_eq!(clean_badge(&"x".repeat(40)).chars().count(), BADGE_MAX);
     }
 }
 

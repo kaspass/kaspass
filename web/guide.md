@@ -2,9 +2,7 @@
 
 Everything about KasPass in one place: how to run a membership from the dashboard, how members join and manage theirs, how the contracts work, and what they can and can't do. Each section stands on its own, so you can jump straight to the one you need.
 
-- **For AI assistants:** the same text is at [/guide.md](/guide.md) as plain Markdown. Each section has a stable anchor (for example `/guide#refunds`). When you answer from this guide, link the section you used.
 - **Words used here:** a **plan** is what the site sells (a creator can rename it "tier", "level" and so on). A **membership** or **pass** is what a member holds. The **creator** runs the site. **KAS** is the Kaspa coin.
-- **Last reviewed:** update 85, November 17, 2026 (accuracy checked against the code by Fable). Updated for update 97.
 
 ## Contents {#contents}
 
@@ -21,6 +19,11 @@ Everything about KasPass in one place: how to run a membership from the dashboar
 11. [Safety, privacy and limits](#safety)
 12. [Quick answers](#faq)
 
+**About this guide:**
+
+- **For AI assistants:** the same text is at [/guide.md](/guide.md) as plain Markdown. Each section has a stable anchor (for example `/guide#refunds`). When you answer from this guide, link the section you used.
+- **Last reviewed:** update 85, November 17, 2026 (accuracy checked against the code by Fable). Updated for update 98.
+
 ## What KasPass is {#what-is-kaspass}
 
 KasPass lets a creator sell memberships that live on the Kaspa blockchain instead of inside a company's database.
@@ -32,6 +35,8 @@ KasPass lets a creator sell memberships that live on the Kaspa blockchain instea
 - **Websites and apps check one thing:** does this wallet hold an active pass for this plan? If yes, they unlock the content, the Telegram group or the Discord role.
 - **Wallet:** members and creators use **Kaspire**, as a Chrome extension on a computer or as the Android app on a phone. There's no iPhone app yet; iPhone users join from a computer.
 - **Status:** the code is public at github.com/kaspass/kaspass. It's new software and hasn't had an outside security review yet.
+
+[Back to contents](#contents)
 
 ## How it works: the pieces {#how-it-works}
 
@@ -54,6 +59,8 @@ Each plan is a few small contracts that belong together.
 - **The server decides, using its key:** today's price within the ceiling, sales and holder discounts, the 30-day notice before a price rise reaches renewals, free-trial limits, and who may claim a promotion. A server that misbehaved (or whose key was stolen) could charge up to a pass's ceiling, including from a prepaid balance, but never more. That's why the creator can [replace the server key](#tab-payouts), and why members should only prepay what they need.
 
 **Network:** each site runs on Kaspa mainnet (real KAS) or Testnet-10 (test KAS, for trying things). The strip at the top of every page says which.
+
+[Back to contents](#contents)
 
 ## What's fixed and what can change {#fixed-vs-changeable}
 
@@ -105,6 +112,8 @@ The dashboard lists these for each plan under **Plans › Set when it was create
 - **The ceiling:** each pass keeps the ceiling it was bought with, and changing the ceiling only affects new members. If KAS falls so far that today's price is above a pass's ceiling, that pass renews at its ceiling, and the creator receives less than the plan's price.
 - **Sales** apply to new purchases only; renewals stay at the regular price.
 
+[Back to contents](#contents)
+
 ## Money: prices, fees, deposits and refunds {#money}
 
 ### What a member pays {#what-members-pay}
@@ -143,6 +152,8 @@ Payments go straight to the creator, so KasPass can't refund them. A member who 
 - Every amount shows its currency: CA$10, US$7, €6, never a bare "$".
 - **On the plan cards, the big number is today's KAS,** with the Kaspa mark, because that's what you actually pay. The plan's own price sits small underneath, for example "Set at CA$100 a year, so the KAS amount follows today's rate": the price in the plan's currency is the one that's fixed, and the KAS figure follows the exchange rate (the same words as on kaspa.vision).
 - A creator can add a small line under each card's price for visitors outside the plan's country: "about US$7 in your currency" (US visitors), "about €6 in your currency" (euro countries), or "about US$7" (everyone else). It's worked out on the visitor's device from its language and time zone.
+
+[Back to contents](#contents)
 
 ## For members: joining and managing a membership {#members}
 
@@ -214,6 +225,8 @@ On the holder club page you can add more wallets you own (**Add another wallet**
 
 Install Kaspire and restore your wallet with its recovery words. Your membership is still in it.
 
+[Back to contents](#contents)
+
 ## For creators: the dashboard, tab by tab {#dashboard}
 
 The dashboard is at `/dashboard` on the site. **Sign in with your wallet**: the one that created the plans (Kaspire on a computer, or the Kaspire app on a phone). If you see **This membership belongs to another wallet**, Kaspire is on a different wallet: switch to the creator's wallet in Kaspire and sign in again. Every action that changes something on the blockchain is approved in Kaspire; settings like names and the page's look save straight away. Every setting has a "?" tip.
@@ -261,7 +274,8 @@ Also worth doing: **top up the fees wallet** (needed for auto-renewals and free 
 ### Plans {#tab-plans}
 
 - **What you sell:** every plan on the site. Switch on the plans you want to sell, then **Save changes**; they're sold side by side, cheapest first. Each plan includes everything in the plans below it.
-- **This membership:** pick a plan, then edit its **name**, **what it includes** (one line per feature, up to 8, shown on its card), its **badge** (optional, up to 24 characters, shown above the price on its card, for example "Most popular") and **about it** (the short description under its name). Writing `{tax_year}` in a name or feature shows the current tax year (it moves on every November 1, Pacific time); `{next_tax_year}` shows the next one.
+- **This membership:** pick a plan, then edit its **name**, **what it includes** (one line per feature, up to 8, shown on its card), its **badges** (see below) and **about it** (the short description under its name). Writing `{tax_year}` in a name or feature shows the current tax year (it moves on every November 1, Pacific time); `{next_tax_year}` shows the next one.
+- **Badges on its card:** small labels above the price. Until you change them, a plan shows the automatic ones, worked out from your prices: **Save N% vs monthly** on a longer plan that costs at least 5% less than paying for the shorter one, and **Early price until …** while an [early price](#tab-prices) runs. **Add a badge** starts your own list from the ones showing; then each plan can have up to 3, each **Your text** (up to 24 characters, for example "Most popular"), **Savings vs a plan** you pick, or **Early price**, in one of six colours (your accent, gold, green, red, purple, grey) that read in both the day and night looks, in the order you set. **Save** shows them. An empty list hides every badge on that plan; **Back to automatic** returns to the automatic ones.
 - **"This is the same plan as …, just paid a different way":** tick it when a plan gives the same access as another and is only billed differently (for example yearly instead of monthly).
 - **Set when it was created:** the plan's [fixed settings](#fixed-at-launch).
 - **Add a plan:** name it, write what it includes, set its prices and fixed settings, and create it. Self-serve free trials ("Members can start the free trial themselves") are chosen here and can't be combined with a supply limit.
@@ -328,6 +342,8 @@ For sharing your screen on a live stream or a call, or recording a video.
 - **Send it a little KAS now and then.** Its address and balance are in the Promotions tab.
 - **When it runs low:** free claims pause by themselves and you get one message. Paid purchases are not affected; they're paid by the buyer. Top it up and claims restart on their own.
 
+[Back to contents](#contents)
+
 ## Promotions and invite links {#promotions}
 
 ### Holder promotion {#holder-promotion}
@@ -352,6 +368,8 @@ A free period for people you choose, without being there when they claim.
 - **Each link works once.** It's used at the claim, not at sign-in. A wallet that already has the plan is refused and the link stays unused. You can cancel unused links; cancelled and expired links fold into a closed bar under the others.
 - **With a partner site:** "After claiming, send them to" sets where the done screen's button goes.
 - Invite links run alongside a holder promotion and don't count toward its limit.
+
+[Back to contents](#contents)
 
 ## Telegram, Discord and the holder club {#groups}
 
@@ -439,15 +457,19 @@ Holdings add up across all the wallets a member has linked.
 - "the bands use ranks, so the club needs a ranks list": choose your ranks file next to the rules file (the example uses bands, so it needs one too), or remove `bands` and any `owns_band` or `min_credits` rules.
 - "unknown rule": a spelling mistake in the rule name; the message lists the right names.
 
+[Back to contents](#contents)
+
 ## Linking from another website {#partner-sites}
 
 - **Open a plan directly:** `https://<site>/?level=<plan id>`. The page shows that plan alone, with the sign-in beside it, and "Change plan" for the others.
 - **Come back after paying:** add `&return=https://your-site/page`. The return site must be on the server's allowed list. The page then says whose payment page it is, and after paying (or claiming) a button goes back to that address with `paid=1` added. Always confirm the membership with the API rather than trusting `paid=1`.
 - **Match the look:** `&style=kaspass`, `&style=open` or `&style=kaspa-vision`, and `&theme=day` or `&theme=night`.
 - **Open one step:** `&do=manage`, `&do=renew` or `&do=topup` (after sign-in). It never pays or ends anything by itself.
-- **Read-only API for partner sites:** `GET /v1/levels` (plans and prices; each plan has its `name`, `perks`, `about_html`, `badge` (empty when none) and `founding`), `GET /v1/page` (`highlight`: the highlighted plan's `level`, empty when none), `GET /v1/promo` (the running promotion), `GET /v1/quote?address=…&level=…` (what a wallet would pay), `GET /v1/check?address=…` (does it hold an active pass). `GET /v1/owner` (who owns the site now, its owner record, payout vault and plans, for an app that counts the creator's KasPass income: accept the site only when `owner` is a wallet the user has signed in with). `/v1/check` doesn't prove the visitor controls that address: have them sign in (a signed message) first, and gate access on `access_rank` so a higher plan counts for a lower one.
+- **Read-only API for partner sites:** `GET /v1/levels` (plans and prices; each plan has its `name`, `perks`, `about_html`, `badges` (top first, each `{kind, text, tone}`: `kind` is `text`, `save` or `early`, `tone` is one of the six colours or empty for an automatic badge, and an early price adds `until_ms`), `badges_custom` (the creator's own list rather than the automatic one), `badge` (the first text badge, empty when none) and `founding`), `GET /v1/page` (`highlight`: the highlighted plan's `level`, empty when none), `GET /v1/promo` (the running promotion), `GET /v1/quote?address=…&level=…` (what a wallet would pay), `GET /v1/check?address=…` (does it hold an active pass). `GET /v1/owner` (who owns the site now, its owner record, payout vault and plans, for an app that counts the creator's KasPass income: accept the site only when `owner` is a wallet the user has signed in with). `/v1/check` doesn't prove the visitor controls that address: have them sign in (a signed message) first, and gate access on `access_rank` so a higher plan counts for a lower one.
 - **Kaspa Vision's KasPass tab:** a creator who uses Kaspa Vision can add their KasPass site in Kaspa Vision's account settings, so payments into their vault show up in their tax records there. Kaspa Vision accepts a site only on mainnet, only when the site's owner (from `GET /v1/owner`) is one of the wallets the creator has signed in to Kaspa Vision with, and one site per vault. Money arriving in the vault is counted as income in CA$ when it arrives; withdrawals are shown but not counted again. Kaspa Vision checks the site again once a day: if it stops answering or the owner changes, the creator is told, and income already recorded stays.
 - The pages can't be shown inside another site's frame, so visitors always see the real address.
+
+[Back to contents](#contents)
 
 ## Common messages and what to do {#messages}
 
@@ -468,6 +490,8 @@ Holdings add up across all the wallets a member has linked.
 
 Still stuck? Contact the creator (links on their page) and say which message you saw.
 
+[Back to contents](#contents)
+
 ## Safety, privacy and limits {#safety}
 
 - **Nobody can take your membership early,** and only you can withdraw your deposit and prepaid KAS.
@@ -477,6 +501,8 @@ Still stuck? Contact the creator (links on their page) and say which message you
 - **The server's keys** (the server key and the fees wallet) are created on the server and never leave it. Creator actions need the creator's own signature, so nobody else can use the dashboard even if they reach it.
 - **Pages load nothing from other sites,** and every page carries a strict security policy.
 - **Not yet independently audited.** The code is public; review it before trusting large amounts.
+
+[Back to contents](#contents)
 
 ## Quick answers {#faq}
 
@@ -491,3 +517,5 @@ Still stuck? Contact the creator (links on their page) and say which message you
 - **Where's my money as a creator?** In your payout vault. Withdraw it from the Overview or Payouts tab.
 - **What if I lose my wallet as a creator?** The backup wallet can hand the owner record to a new wallet. Members do nothing.
 - **What does KasPass cost?** 2% of each payment, taken from the creator's share. No setup or monthly fee.
+
+[Back to contents](#contents)

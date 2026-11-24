@@ -107,7 +107,36 @@ const text = (u, h = {}) => new Promise((resolve, reject) => {
   }
   {
     const g = (await text('/guide.md')).body;
-    check('guide: the plan badge, the card fields partner sites read, and the matching day and night look (97)', g.includes('its **badge**') && g.includes('`badge` (empty when none)') && g.includes('`highlight`') && g.includes('sun and moon button'));
+    check('guide: the plan badge, the card fields partner sites read, and the matching day and night look (97)', g.includes('its **badges**') && g.includes('`badges_custom`') && g.includes('**Back to automatic**') && g.includes('`highlight`') && g.includes('sun and moon button'));
+  }
+  {
+    const g = (await text('/guide.md')).body;
+    const top = g.slice(0, g.indexOf('## Contents'));
+    check('guide: people read the guide first; the AI note and review date come after the contents, and each section ends with "Back to contents" (98, UI88 L6)', !top.includes('For AI assistants') && !top.includes('Last reviewed') && /About this guide[\s\S]*For AI assistants/.test(g) && (g.match(/\[Back to contents\]\(#contents\)/g) || []).length >= 10);
+  }
+  // Membership page: each "Choose this plan" button names its plan for screen readers (98, UI88 L3);
+  // a card with two lines or fewer has no "Hide details" toggle (98, UI88 L8).
+  {
+    const L = S.replace('127.0.0.1', 'localhost');
+    const q = await contexts.desk.newPage();
+    await q.goto(L + '/?style=kaspass'); await q.waitForTimeout(3500);
+    const v = await q.evaluate(async () => {
+      const ls = (await (await fetch('/v1/levels')).json()).levels;
+      const choose = [...document.querySelectorAll('#levelCards .lvl button')].filter((b) => /^Choose this /.test(b.textContent));
+      const labels = choose.map((b) => b.getAttribute('aria-label') || '');
+      const short = ls.filter((l) => !l.about_html && ((l.rank > 0 ? 1 : 0) + (l.perks || []).length) <= 2).map((l) => l.name);
+      const cards = [...document.querySelectorAll('#levelCards .lvl')];
+      const toggles = short.map((n) => { const c = cards.find((x) => ((x.querySelector('.ln') || {}).textContent || '').startsWith(n)); return c ? !!c.querySelector('.more-t') : null; });
+      return { labels, names: ls.map((l) => l.name), toggles };
+    });
+    check('membership page: "Choose this plan" buttons name their plan for screen readers (98, UI88 L3)', v.labels.length > 0 && v.labels.every((x) => v.names.some((n) => x === `Choose ${n}`)) && new Set(v.labels).size === v.labels.length, v.labels);
+    check('membership page: no "Hide details" toggle over two lines or fewer (98, UI88 L8)', v.toggles.length > 0 && v.toggles.every((t) => t === false), v);
+    await q.close();
+    const rc = await b.newContext({ viewport: { width: 1366, height: 900 }, reducedMotion: 'reduce' });
+    const r = await rc.newPage();
+    await r.goto(L + '/'); await r.waitForTimeout(1500);
+    check('reduced motion: no smooth scrolling (98, UI88 L9)', await r.evaluate(() => !/native code/.test(Element.prototype.scrollIntoView.toString())));
+    await rc.close();
   }
   // The guide on a phone: code blocks scroll inside themselves, not the page. (A plain 390 px window:
   // a phone emulation widens the window to fit the page, so it can't see this.)

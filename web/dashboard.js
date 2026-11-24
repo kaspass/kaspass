@@ -1,3 +1,8 @@
+// Reduced motion: jumps instead of smooth scrolling (UI88 L9).
+if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
+  const sv = Element.prototype.scrollIntoView;
+  Element.prototype.scrollIntoView = function (o) { return sv.call(this, o && typeof o === "object" ? { ...o, behavior: "auto" } : o); };
+}
 // Sessions travel in a header, never in a link: a "session=" in this site's own API URLs moves there.
 (() => {
   const plain = window.fetch.bind(window);
@@ -102,6 +107,7 @@ function setAddress(a) {
   if (!$("wcGo").textContent.startsWith("Reconnect")) $("wcGo").textContent = phone ? "Sign in with the Kaspire app" : "Use the Kaspire app on my phone instead";
   $("wcGo").classList.toggle("ghost", !phone);
   show("wcOtherLine", !!session && !!MOBILE);
+  show("wcOther2", !!session && !!MOBILE);
   show("logout", !!session);
   $("sideAddr").textContent = a ? (session ? `Signed in, wallet ending ${a.slice(-4)}` : `Wallet ending ${a.slice(-4)}, not signed in`) : "Not signed in";
   // Signed in: the sign-in panel shrinks to one line.
@@ -361,6 +367,7 @@ $("wcOther").onclick = async (e) => {
   await window.KaspireMobile.forget();
   wcSignIn(true);
 };
+$("wcOther2").onclick = (e) => $("wcOther").onclick(e);
 // No extensions on phones: the Kaspire app is the only button there.
 if (appOnly()) { $("wcGo").className = ""; $("wcGo").textContent = "Sign in with the Kaspire app"; show("signin", false); }
 // A wallet that appears after the page loads (the Kaspire app's browser) brings the ordinary button back.
@@ -777,7 +784,8 @@ async function refresh() {
   data = await r.json();
   renderLevelPick();
   if (document.activeElement !== $("perks")) $("perks").value = ((data.level && data.level.perks) || []).join("\n");
-  if (document.activeElement !== $("lBadge")) $("lBadge").value = (data.level && data.level.badge) || "";
+  if (!badgeDirty) { badgeDraft = data.level && data.level.badge_list ? data.level.badge_list.map((b) => ({ ...b })) : null; renderBadges(); }
+  growPerks();
   if (document.activeElement !== $("clubName")) $("clubName").value = data.club_name || "";
   if (document.activeElement !== $("lvWord")) $("lvWord").value = data.level_word && data.level_word.one !== "plan" ? data.level_word.one : "";
   applyLevelWord();
@@ -1345,7 +1353,10 @@ async function saveNames(msgId) {
   const word = fetch("/v1/creator/pass-word", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ session, one: $("pWord").value }) });
   const site = fetch("/v1/creator/site-names", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ session, club_name: $("clubName").value, level_word: $("lvWord").value }) });
   const perks = fetch(L("/v1/creator/perks"), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ session, perks: $("perks").value.split("\n") }) });
-  const badge = fetch(L("/v1/creator/badge"), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ session, badge: $("lBadge").value }) });
+  // Badges are only sent once changed, so a plan left alone keeps its automatic ones.
+  const badge = badgeDirty
+    ? fetch(L("/v1/creator/badges"), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ session, automatic: badgeDraft === null, badges: badgeDraft || [] }) })
+    : Promise.resolve(new Response(JSON.stringify({ badge_list: (data.level && data.level.badge_list) || null })));
   const [a, b, c, d, e, f] = await Promise.all([post("/v1/creator/display-name", $("cName").value), post(L("/v1/creator/name"), $("tName").value), word, perks, site, badge]);
   const bad = [a, b, c, d, e, f].find((r) => !r.ok);
   if (bad) { say(msgId, await bad.text()); return; }
@@ -1354,10 +1365,12 @@ async function saveNames(msgId) {
   $("lvWord").value = je.level_word.one === "plan" ? "" : je.level_word.one;
   applyLevelWord(); showLaunch(!$("launch").classList.contains("hidden"));
   const jf = await f.json();
-  $("lBadge").value = jf.badge;
+  badgeDirty = false;
   if (data.level) {
     data.level.perks = jd.perks;
-    data.level.badge = jf.badge;
+    data.level.badge_list = jf.badge_list;
+    badgeDraft = jf.badge_list ? jf.badge_list.map((b) => ({ ...b })) : null;
+    renderBadges();
     const mine = (data.levels || []).find((l) => l.covenant_id === data.level.covenant_id);
     if (mine && jb.name) { mine.name = jb.name; data.level.name = jb.name; }
   }
@@ -1441,7 +1454,9 @@ function renderOutputs(statusId, outputs) {
   for (const o of outputs) {
     const li = document.createElement("li");
     const n = document.createElement("span"); n.className = "n"; n.textContent = "Output " + o.index;
-    const w = document.createElement("span"); w.className = "what" + (o.label.startsWith("KasPass fee") ? " fee" : ""); w.textContent = `${o.kas} · ${o.label}`;
+    // In the creator's own dashboard, money to the creator is money to them (UI88 L11).
+    const label = o.label === "To the creator" ? "To your wallet" : o.label;
+    const w = document.createElement("span"); w.className = "what" + (o.label.startsWith("KasPass fee") ? " fee" : ""); w.textContent = `${o.kas} · ${label}`;
     const a = document.createElement("span"); a.className = "addr"; a.textContent = "to the address ending in " + String(o.address).slice(-4);
     li.append(n, w, a);
     ul.append(li);
@@ -2493,3 +2508,81 @@ $("copyPage").onclick = () => {
   const done = () => { label.textContent = "Copied"; setTimeout(() => (label.textContent = "Copy my page link"), 1400); };
   try { navigator.clipboard.writeText(url).then(done, () => { label.textContent = url; }); } catch { label.textContent = url; }
 };
+
+
+// A plan's badges (update 98). `badgeDraft` is null while the plan shows the automatic badges;
+// "Add a badge" starts the creator's own list from what's showing, so they can change those too.
+let badgeDraft = null, badgeDirty = false, badgeShown = [];
+const BADGE_TONES = [["accent", "Your accent"], ["gold", "Gold"], ["green", "Green"], ["red", "Red"], ["purple", "Purple"], ["grey", "Grey"]];
+async function badgesShowing() {
+  try {
+    const id = data.level && data.level.covenant_id;
+    const l = ((await (await fetch(L("/v1/levels"))).json()).levels || []).find((x) => x.level === id);
+    return (l && l.badges) || [];
+  } catch { return []; }
+}
+function growPerks() { const t = $("perks"); if (!t) return; t.style.height = "auto"; t.style.height = Math.max(112, t.scrollHeight + 2) + "px"; }
+$("perks").addEventListener("input", growPerks);
+function badgeChanged() { badgeDirty = true; renderBadges(); }
+async function renderBadges() {
+  const rows = $("badgeRows");
+  if (!rows) return;
+  rows.innerHTML = "";
+  show("badgeAuto", badgeDraft !== null);
+  $("badgeAdd").disabled = badgeDraft !== null && badgeDraft.length >= 3;
+  if (badgeDraft === null) {
+    badgeShown = await badgesShowing();
+    if (badgeDraft !== null) return;
+    $("badgeNote").innerHTML = badgeShown.length
+      ? `Automatic for now, worked out from your prices: ${badgeShown.map((b) => `<span class="bprev t-${b.tone || "accent"}">${escHtml(b.text)}</span>`).join(" ")}. Add a badge to change or remove them.`
+      : "No badge on this plan's card right now. The automatic ones appear when a longer plan saves money or an early price runs.";
+    return;
+  }
+  $("badgeNote").textContent = badgeDraft.length ? "Your own badges, top first. Save to show them." : "No badges on this plan's card. Save to hide the automatic ones, or go back to automatic.";
+  const plans = ((data && data.levels) || []).filter((l) => l.covenant_id !== (data.level && data.level.covenant_id));
+  badgeDraft.forEach((b, i) => {
+    const row = document.createElement("div");
+    row.className = "brow";
+    const kind = document.createElement("select");
+    kind.setAttribute("aria-label", `Badge ${i + 1}: kind`);
+    [["text", "Your text"], ["save", "Savings vs a plan"], ["early", "Early price"]].forEach(([v, t]) => kind.append(new Option(t, v, false, b.kind === v)));
+    kind.onchange = () => { b.kind = kind.value; badgeChanged(); };
+    let what;
+    if (b.kind === "text") {
+      what = Object.assign(document.createElement("input"), { maxLength: 24, value: b.text || "", placeholder: "For example: Most popular" });
+      what.setAttribute("aria-label", `Badge ${i + 1}: words`);
+      what.oninput = () => { b.text = what.value; badgeDirty = true; };
+    } else if (b.kind === "save") {
+      what = document.createElement("select");
+      what.setAttribute("aria-label", `Badge ${i + 1}: compared with`);
+      what.append(new Option("vs the shortest plan", "", false, !b.vs));
+      plans.forEach((l) => what.append(new Option(`vs ${l.name}`, l.covenant_id, false, b.vs === l.covenant_id)));
+      what.onchange = () => { b.vs = what.value; badgeDirty = true; };
+    } else {
+      what = Object.assign(document.createElement("span"), { className: "muted small", textContent: "Shows while an early price runs (Prices)." });
+    }
+    what.classList.add("bwhat");
+    const tone = document.createElement("select");
+    tone.setAttribute("aria-label", `Badge ${i + 1}: colour`);
+    BADGE_TONES.forEach(([v, t]) => tone.append(new Option(t, v, false, (b.tone || "accent") === v)));
+    tone.className = "btone";
+    tone.onchange = () => { b.tone = tone.value; badgeDirty = true; };
+    const act = document.createElement("div");
+    act.className = "bact";
+    const btn = (label, aria, fn, off) => { const x = Object.assign(document.createElement("button"), { type: "button", className: "ghost", textContent: label, disabled: !!off }); x.setAttribute("aria-label", aria); x.onclick = fn; act.append(x); };
+    btn("↑", `Move badge ${i + 1} up`, () => { badgeDraft.splice(i - 1, 0, badgeDraft.splice(i, 1)[0]); badgeChanged(); }, i === 0);
+    btn("↓", `Move badge ${i + 1} down`, () => { badgeDraft.splice(i + 1, 0, badgeDraft.splice(i, 1)[0]); badgeChanged(); }, i === badgeDraft.length - 1);
+    btn("✕", `Remove badge ${i + 1}`, () => { badgeDraft.splice(i, 1); badgeChanged(); });
+    row.append(kind, what, tone, act);
+    rows.append(row);
+  });
+}
+$("badgeAdd").onclick = async () => {
+  if (badgeDraft === null) {
+    const shown = badgeShown.length ? badgeShown : await badgesShowing();
+    badgeDraft = shown.map((b) => ({ kind: b.kind, text: b.kind === "text" ? b.text : "", vs: "", tone: b.tone || (b.kind === "early" ? "gold" : "accent") }));
+    if (badgeDraft.length < 3) badgeDraft.push({ kind: "text", text: "", vs: "", tone: "accent" });
+  } else if (badgeDraft.length < 3) badgeDraft.push({ kind: "text", text: "", vs: "", tone: "accent" });
+  badgeChanged();
+};
+$("badgeAuto").onclick = () => { badgeDraft = null; badgeChanged(); };
