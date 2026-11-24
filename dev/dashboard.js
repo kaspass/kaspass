@@ -104,6 +104,7 @@ function leaks() {
   check('/v1/owner: names the owner (the creator, on a site never handed over)', own.o.owner === own.creator, own.o);
   check('/v1/owner: the vault is the one /v1/levels shows for every plan', own.vaults.length === 1 && own.o.vault === own.vaults[0], [own.o.vault, own.vaults]);
   check('/v1/owner: lists the same plans, the record id and the network', JSON.stringify(own.o.levels) === JSON.stringify(own.ids) && /^[0-9a-f]{64}$/.test(own.o.record_id) && own.o.network === own.network, own.o);
+  check('guide: explains Kaspa Vision\'s KasPass tab and what it reads from /v1/owner (96)', await p.evaluate(async () => { const g = await (await fetch('/guide')).text(); return g.includes("Kaspa Vision's KasPass tab") && g.includes('one site per vault'); }));
   check('/v1/owner: no backup wallet in it', !('recovery' in own.o) && !JSON.stringify(own.o).includes('recovery'), Object.keys(own.o));
   await p.goto(S + '/dashboard');
   await p.click('#signin');
