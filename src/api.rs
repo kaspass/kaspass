@@ -727,6 +727,9 @@ struct LevelPriceRequest {
     founding_amount: Option<f64>,
     #[serde(default)]
     founding_until_ms: Option<i64>,
+    /// Update 99: the creator's time zone for the early price's end date (minutes east of UTC).
+    #[serde(default)]
+    founding_tz_min: Option<i32>,
     /// Lifetime and commitment-term prices (only where the plan was launched with them).
     #[serde(default)]
     lifetime_amount: Option<f64>,
@@ -787,7 +790,7 @@ async fn creator_level_price(State(s): State<AppState>, Query(lq): Query<LevelQ>
             if a >= req.amount {
                 return Err(bad("the founding price must be lower than the regular price"));
             }
-            Some(crate::prices::Founding { amount: a, until_ms: u })
+            Some(crate::prices::Founding { amount: a, until_ms: u, tz_min: req.founding_tz_min })
         }
         _ => None,
     };
@@ -1908,6 +1911,7 @@ async fn levels_info(State(s): State<AppState>) -> Json<serde_json::Value> {
             currency: price.and_then(|p| p["currency"].as_str()).map(String::from),
             amount: price.and_then(|p| p["amount"].as_f64()),
             early_until_ms: offer.as_ref().and_then(|o| o.get("founding")).and_then(|f| f["until_ms"].as_u64()),
+            early_tz_min: offer.as_ref().and_then(|o| o.get("founding")).and_then(|f| f["tz_min"].as_i64()).map(|m| m as i32),
         });
         out.push(serde_json::json!({
             "level": l.card.covenant_id,
@@ -1929,7 +1933,7 @@ async fn levels_info(State(s): State<AppState>) -> Json<serde_json::Value> {
     }
     // Each plan's badges, worked out against every plan's prices (update 98).
     for (row, p) in out.iter_mut().zip(plans.iter()) {
-        let (list, custom) = badges::resolve(saved_badges.get(&p.id), p, &plans, |ms| iso_day(ms as i64));
+        let (list, custom) = badges::resolve(saved_badges.get(&p.id), p, &plans, |ms| iso_day(ms));
         row["badges"] = serde_json::json!(list);
         row["badges_custom"] = serde_json::json!(custom);
     }
@@ -2914,7 +2918,9 @@ fn v5_price_json(s: &AppState, ceiling_sompi: u64) -> Option<(serde_json::Value,
     }
     let founding = match &p.founding {
         Some(f) if wall_ms() < f.until_ms => {
-            let mut j = serde_json::json!({ "amount": f.amount, "until_ms": f.until_ms });
+            // `tz_min`: the site's time zone (minutes east of UTC), so pages write the last day
+            // the way the creator picked it (update 99).
+            let mut j = serde_json::json!({ "amount": f.amount, "until_ms": f.until_ms, "tz_min": f.zone_min() });
             if let Some(k) = kas(f.amount) {
                 j["kas_today"] = serde_json::json!(k);
             }

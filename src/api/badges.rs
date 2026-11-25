@@ -88,6 +88,8 @@ pub(crate) struct Plan {
     pub amount: Option<f64>,
     /// The early price's end, while one runs.
     pub early_until_ms: Option<u64>,
+    /// The site's time zone for that date, in minutes east of UTC (update 99).
+    pub early_tz_min: Option<i32>,
 }
 
 /// "monthly", "yearly", "weekly" or "daily" for a period (the membership page's rule).
@@ -127,11 +129,18 @@ fn save_words(p: &Plan, base: &Plan, min_pct: i64) -> Option<String> {
     (pct >= min_pct).then(|| format!("Save {pct}% vs {unit}"))
 }
 
-/// A plan's badges, top first, for `/v1/levels`: `{kind, text, tone}`, plus `until_ms` on the early
-/// price so a page can write the date its own way. `tone` is empty on the automatic ones (each page
+/// A plan's badges, top first, for `/v1/levels`: `{kind, text, tone}`, plus `until_ms` and `tz_min`
+/// on the early price so a page can write the date its own way. `day` gets a time already moved into
+/// the site's time zone (update 99: the text used to be UTC's day). `tone` is empty on the automatic ones (each page
 /// draws those as it always has). Also says whether these are the creator's own list.
-pub(crate) fn resolve(saved: Option<&Saved>, p: &Plan, all: &[Plan], day: impl Fn(u64) -> String) -> (Vec<serde_json::Value>, bool) {
-    let early = |tone: &str| p.early_until_ms.map(|u| serde_json::json!({ "kind": "early", "text": format!("Early price until {}", day(u.saturating_sub(1))), "tone": tone, "until_ms": u }));
+pub(crate) fn resolve(saved: Option<&Saved>, p: &Plan, all: &[Plan], day: impl Fn(i64) -> String) -> (Vec<serde_json::Value>, bool) {
+    let early = |tone: &str| {
+        p.early_until_ms.map(|u| {
+            let tz = p.early_tz_min.unwrap_or_else(|| crate::prices::guess_zone_min(u as i64));
+            let last = u as i64 - 1 + i64::from(tz) * 60_000;
+            serde_json::json!({ "kind": "early", "text": format!("Early price until {}", day(last)), "tone": tone, "until_ms": u, "tz_min": tz })
+        })
+    };
     match saved {
         Some(Saved::Custom { list }) => {
             let out = list
@@ -178,9 +187,9 @@ mod tests {
     use super::*;
 
     fn plan(id: &str, days: u64, amount: f64, early: Option<u64>) -> Plan {
-        Plan { id: id.into(), period_ms: days * 86_400_000, currency: Some("CAD".into()), amount: Some(amount), early_until_ms: early }
+        Plan { id: id.into(), period_ms: days * 86_400_000, currency: Some("CAD".into()), amount: Some(amount), early_until_ms: early, early_tz_min: None }
     }
-    fn day(ms: u64) -> String {
+    fn day(ms: i64) -> String {
         format!("day {ms}")
     }
 
@@ -191,12 +200,28 @@ mod tests {
         assert!(!custom);
         assert_eq!(b, vec![serde_json::json!({ "kind": "save", "text": "Save 17% vs monthly", "tone": "" })]);
         let (b, _) = resolve(None, &all[2], &all, day);
-        assert_eq!(b, vec![serde_json::json!({ "kind": "early", "text": "Early price until day 4", "tone": "", "until_ms": 5 })]);
+        assert_eq!(b, vec![serde_json::json!({ "kind": "early", "text": "Early price until day 4", "tone": "", "until_ms": 5, "tz_min": 0 })]);
         // Update 97's single line stays on top of the automatic ones.
         let (b, custom) = resolve(Some(&Saved::Text("Most popular".into())), &all[1], &all, day);
         assert!(!custom);
         assert_eq!(b.len(), 2);
         assert_eq!(b[0]["text"], "Most popular");
+    }
+
+    #[test]
+    fn the_early_date_is_the_sites_day() {
+        // A Pacific creator picked Dec 31: the price ends at midnight after it, 08:00 UTC Jan 1.
+        // Before 99 the text said UTC's "Jan 1, 2027".
+        let u = 1_798_790_400_000u64;
+        let mut p = plan("t", 365, 200.0, Some(u));
+        let iso = |ms: i64| crate::holdings::day(ms);
+        for tz in [None, Some(-480)] {
+            p.early_tz_min = tz;
+            let (b, _) = resolve(None, &p, std::slice::from_ref(&p), iso);
+            assert_eq!(b[0]["text"], "Early price until Dec 31, 2026");
+            assert_eq!(b[0]["tz_min"], -480);
+            assert_eq!(b[0]["until_ms"], u);
+        }
     }
 
     #[test]

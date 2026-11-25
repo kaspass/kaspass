@@ -120,6 +120,7 @@ function setAddress(a) {
 // One job per screen. "#all" shows everything on one page.
 const TABS = ["overview", "page", "levels", "members", "prices", "promos", "groups", "payouts", "settings"];
 const TITLES = { overview: "Overview", page: "Your page", levels: "Plans", members: "Members", prices: "Prices & sales", promos: "Promotions", groups: "Groups", payouts: "Payouts", settings: "Settings", all: "Everything" };
+let TAB_WAS = null;
 function showTab(name, sub) {
   if (name !== "all" && !TABS.includes(name)) name = "overview";
   document.querySelectorAll(".pane").forEach((p) => p.classList.toggle("hidden", name !== "all" && p.dataset.pane !== name));
@@ -131,6 +132,11 @@ function showTab(name, sub) {
   pick.classList.toggle("offtab", !on && name !== "all");
   if (on) { const slot = document.querySelector(`[data-pane="${name}"] .pickslot`); if (slot && pick.parentElement !== slot) slot.append(pick); }
   else if (name === "all" && pick.parentElement !== $("creatorArea")) $("creatorArea").prepend(pick);
+  // The picker's "All plans" choice is only on Members, so it's redrawn on every tab change.
+  // Members opens on "All plans" each time (D78).
+  if (name === "members" && TAB_WAS !== "members") MEM_ALL = true;
+  if (data && data.levels && card) { renderLevelPick(); if (name === "members" || TAB_WAS === "members") render(); }
+  TAB_WAS = name;
   // "#all" shows every section of every tab.
   if (name === "all") { document.querySelectorAll(".subpane").forEach((s) => s.classList.remove("hidden")); showLaunch(true); }
   else if (sub) showSub(name, sub);
@@ -375,6 +381,9 @@ window.addEventListener("kaspire#initialized", () => { if (!session) setAddress(
 
 // Several levels: which one the dashboard is managing (covenant id; null = the only or lowest one).
 let LEVEL = null;
+// Members shows every plan at once until a plan is picked there (D78, update 99).
+let MEM_ALL = true;
+const memAllOn = () => MEM_ALL && document.documentElement.dataset.tab === "members" && !!(data && data.levels && data.levels.length > 1);
 const L = (u) => (LEVEL ? u + (u.includes("?") ? "&" : "?") + "level=" + encodeURIComponent(LEVEL) : u);
 
 function renderLevelPick() {
@@ -383,12 +392,20 @@ function renderLevelPick() {
   show("lvEditHint", lv.length > 1);
   const box = $("levelBtns");
   box.replaceChildren();
+  // D78 (update 99): on Members, "All plans" lists every plan's members together, as the count in
+  // the side menu does. It's the first choice there and the starting one.
+  const allOn = memAllOn();
+  if (lv.length > 1 && document.documentElement.dataset.tab === "members") {
+    const a = Object.assign(document.createElement("button"), { type: "button", className: "allbtn" + (allOn ? " on" : ""), textContent: "All plans" });
+    a.onclick = () => { MEM_ALL = true; renderLevelPick(); render(); };
+    box.append(a);
+  }
   for (const l of lv) {
     const b = document.createElement("button");
-    const sel = l.covenant_id === (LEVEL || lv[0].covenant_id);
+    const sel = !allOn && l.covenant_id === (LEVEL || lv[0].covenant_id);
     b.textContent = l.name;
     b.className = sel ? "on" : "";
-    b.onclick = () => pickLevel(l.covenant_id);
+    b.onclick = () => { const was = MEM_ALL && document.documentElement.dataset.tab === "members"; MEM_ALL = false; if (was && l.covenant_id === (LEVEL || lv[0].covenant_id)) { renderLevelPick(); render(); } else pickLevel(l.covenant_id); };
     box.append(b);
   }
   // The same choice as a dropdown at the top of the level editor.
@@ -403,6 +420,8 @@ function renderLevelPick() {
   gp.innerHTML = lv.map((l) => `<option value="${escHtml(l.covenant_id)}">${escHtml(taxFill(l.name))}</option>`).join("");
   gp.value = LEVEL || (lv[0] && lv[0].covenant_id) || "";
   gp.onchange = async () => {
+    // Giving for one plan moves the whole page to it, the Members list included.
+    MEM_ALL = false;
     gp.disabled = $("gGo").disabled = true;
     try { await pickLevel(gp.value); } finally { gp.disabled = $("gGo").disabled = false; gp.value = LEVEL || (lv[0] && lv[0].covenant_id) || ""; }
   };
@@ -431,7 +450,7 @@ function v5Launch() {
   const life = Number($("lV5Life").value) || 0, term = Number($("lV5Term").value) || 0;
   return {
     v4: true, currency: $("lCur").value, amount: Number($("lAmount").value), ceiling_times: ceil,
-    ...(found > 0 && end ? { founding_amount: found, founding_until_ms: end } : {}),
+    ...(found > 0 && end ? { founding_amount: found, founding_until_ms: end, founding_tz_min: -new Date(end - 1).getTimezoneOffset() } : {}),
     ...(life > 0 ? { lifetime_amount: life } : {}),
     ...(term > 0 ? { term_amount: term, term_periods: Number($("lV5TermN").value) || 0 } : { term_kas: 0 }),
     lifetime_kas: 0, max_discount_pct: 0,
@@ -511,7 +530,7 @@ $("vpGo").onclick = async () => {
   const end = until ? new Date(Number(until.slice(0, 4)), Number(until.slice(5, 7)) - 1, Number(until.slice(8, 10)) + 1).getTime() : null;
   const found = Number($("vpFound").value) || 0;
   const r = await fetch(L("/v1/creator/level-price"), { method: "POST", headers: { "content-type": "application/json" },
-    body: JSON.stringify({ session, currency: $("vpCur").value, amount: Number($("vpAmount").value), ...(found > 0 && end ? { founding_amount: found, founding_until_ms: end } : {}),
+    body: JSON.stringify({ session, currency: $("vpCur").value, amount: Number($("vpAmount").value), ...(found > 0 && end ? { founding_amount: found, founding_until_ms: end, founding_tz_min: -new Date(end - 1).getTimezoneOffset() } : {}),
       ...(!$("vpLifeBox").classList.contains("hidden") && Number($("vpLife").value) > 0 ? { lifetime_amount: Number($("vpLife").value) } : {}),
       ...(!$("vpTermBox").classList.contains("hidden") && Number($("vpTerm").value) > 0 ? { term_amount: Number($("vpTerm").value) } : {}) }) });
   if (!r.ok) { plainSay("vpErr", await r.text()); return; }
@@ -819,7 +838,7 @@ async function loadAllTotals() {
   if (lv.length < 2) { ALL = null; render(); return; }
   try {
     const each = await Promise.all(lv.map((l) => fetch("/v1/creator?level=" + encodeURIComponent(l.covenant_id) + "&session=" + encodeURIComponent(session)).then((r) => (r.ok ? r.json() : null)).catch(() => null)));
-    const t = { earned_sompi: 0, active: 0, renewals: 0, upgrades: 0, autorenewals: 0, sales: 0, trials: 0, auto_renewing: 0 }, ev = [];
+    const t = { earned_sompi: 0, active: 0, renewals: 0, upgrades: 0, autorenewals: 0, sales: 0, trials: 0, auto_renewing: 0 }, ev = [], passes = [];
     const per = [];
     for (const d of each) {
       if (!d) continue;
@@ -827,8 +846,9 @@ async function loadAllTotals() {
       for (const k of ["earned_sompi", "active", "renewals", "upgrades", "autorenewals", "sales", "trials"]) t[k] += Number(d.totals[k] || 0);
       t.auto_renewing += d.v4 ? Number(d.v4.auto_renewing || 0) : 0;
       for (const e of d.events || []) ev.push({ ...e, plan: taxFill(d.name) });
+      for (const p of d.passes || []) passes.push({ ...p, plan: taxFill(d.name), v4: !!d.v4 });
     }
-    ALL = { totals: t, per, events: ev.sort((a, b) => (a.time_ms || a.at_ms || 0) - (b.time_ms || b.at_ms || 0)) };
+    ALL = { totals: t, per, passes, events: ev.sort((a, b) => (a.time_ms || a.at_ms || 0) - (b.time_ms || b.at_ms || 0)) };
   } catch { ALL = null; }
   render();
 }
@@ -1294,21 +1314,25 @@ function render() {
   sel.innerHTML = kinds.map(([v, l]) => `<option value="${v}">${l}</option>`).join("");
   if (keep) sel.value = keep;
 
-  const rows = [...data.passes].sort((a, b) => Number(b.active) - Number(a.active) || b.expiry_ms - a.expiry_ms);
-  const bal = (p) => (s.v4 ? `<td data-l="Prepaid">${p.lifetime ? "" : p.balance_sompi > 0 ? `${kas(p.balance_sompi)}${p.balance_sompi >= p.rate_sompi ? ` <span class="pill ok">auto</span>` : ""}` : "none"}</td>` : "");
+  // "All plans" on Members (D78, update 99): every plan's members in one list, with a Plan column.
+  const memAll = memAllOn() && !!(ALL && ALL.passes);
+  const anyV4 = memAll ? ALL.passes.some((p) => p.v4) : !!s.v4;
+  const rows = [...(memAll ? ALL.passes : data.passes)].sort((a, b) => Number(b.active) - Number(a.active) || b.expiry_ms - a.expiry_ms);
+  const bal = (p) => (!anyV4 ? "" : memAll && !p.v4 ? `<td data-l="Prepaid"></td>` : s.v4 || memAll ? `<td data-l="Prepaid">${p.lifetime ? "" : p.balance_sompi > 0 ? `${kas(p.balance_sompi)}${p.balance_sompi >= p.rate_sompi ? ` <span class="pill ok">auto</span>` : ""}` : "none"}</td>` : "");
+  const planTd = (p) => (memAll ? `<td data-l="Plan">${escHtml(p.plan || "")}</td>` : "");
   const nameOf = (a) => { const n = a && memberNames[a]; return n ? [n.k, n.kas].filter(Boolean) : []; };
   const whoHtml = (a, fallback) => {
     if (!a) return fallback;
     const names = nameOf(a);
     return (names.length ? names.map((x) => `<span class="name">${escHtml(x)}</span>`).join(" ") + "<br>" : "") + `<span class="mono ${names.length ? "muted small" : ""}">${short(a)}</span>`;
   };
-  $("members").innerHTML = `<tr><th>Member</th><th>Your note</th><th>Kind</th><th>Status</th><th>Paid</th>${s.v4 ? "<th>Prepaid</th>" : ""}<th>Bought by</th></tr>` + (rows.length ? rows.map((p, i) => {
+  $("members").innerHTML = `<tr><th>Member</th>${memAll ? "<th>Plan</th>" : ""}<th>Your note</th><th>Kind</th><th>Status</th><th>Paid</th>${anyV4 ? "<th>Prepaid</th>" : ""}<th>Bought by</th></tr>` + (rows.length ? rows.map((p, i) => {
     const left = p.expiry_ms - chainNow();
     const status = p.lifetime ? "Never expires" : left > 0 ? `${timeLeft(left)} left` : "Expired";
     const who = whoHtml(p.owner_address, `<span class="muted small" title="This site hasn't seen this member's wallet yet. It fills in when they sign in here.">Wallet not seen yet</span><br><span class="mono muted small">${p.owner_hash.slice(0, 10)}…</span>`);
     const by = p.bought_by_keeper ? "Your fees wallet (free month)" : !p.bought_by ? `<span class="muted small">Not known</span>` : p.bought_by === p.owner_address ? "The member" : whoHtml(p.bought_by, "");
-    return `<tr><td>${who}</td><td data-l="Your note"><input class="mnote" data-owner="${escHtml(p.owner_hash)}" maxlength="120" placeholder="Add a note" value="${escHtml(p.note || "")}" aria-label="Your note on this member" style="min-width:140px"></td><td data-l="Kind">${escHtml(p.kind)}</td><td data-l="Status"><span class="pill ${p.active ? "ok" : "no"}">${p.lifetime ? status : `<span class="kp-priv">${status}</span>`}</span></td><td data-l="Paid">${kas(p.paid_sompi)}</td>${bal(p)}<td data-l="Bought by">${by}</td></tr>`;
-  }).join("") : `<tr><td colspan="7" class="muted">No members yet. Share your page to get your first one. <button class="ghost" id="copyPage" style="padding:4px 10px;font-size:13px">Copy my page link</button></td></tr>`);
+    return `<tr><td>${who}</td>${planTd(p)}<td data-l="Your note"><input class="mnote" data-owner="${escHtml(p.owner_hash)}" maxlength="120" placeholder="Add a note" value="${escHtml(p.note || "")}" aria-label="Your note on this member" style="min-width:140px"></td><td data-l="Kind">${escHtml(p.kind)}</td><td data-l="Status"><span class="pill ${p.active ? "ok" : "no"}">${p.lifetime ? status : `<span class="kp-priv">${status}</span>`}</span></td><td data-l="Paid">${kas(p.paid_sompi)}</td>${bal(p)}<td data-l="Bought by">${by}</td></tr>`;
+  }).join("") : `<tr><td colspan="8" class="muted">No members yet. Share your page to get your first one. <button class="ghost" id="copyPage" style="padding:4px 10px;font-size:13px">Copy my page link</button></td></tr>`);
   if ($("copyPage")) $("copyPage").onclick = () => navigator.clipboard.writeText(location.origin + "/").then(() => { $("copyPage").textContent = "Copied"; setTimeout(() => ($("copyPage").textContent = "Copy my page link"), 1500); }).catch(() => {});
   document.querySelectorAll("#members .mnote").forEach((inp) => {
     const save = async () => {
@@ -1317,7 +1341,7 @@ function render() {
         const r = await fetch("/v1/creator/member-note", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ session, owner_hash: inp.dataset.owner, note: inp.value }) });
         if (!r.ok) throw new Error(await r.text());
         inp.dataset.saved = inp.value;
-        for (const p of data.passes) if (p.owner_hash === inp.dataset.owner) p.note = inp.value;
+        for (const p of [...data.passes, ...((ALL && ALL.passes) || [])]) if (p.owner_hash === inp.dataset.owner) p.note = inp.value;
         inp.style.outline = "2px solid var(--ok, #3fb68b)"; setTimeout(() => (inp.style.outline = ""), 1200);
       } catch (e) { inp.style.outline = "2px solid var(--bad, #e5484d)"; inp.title = String(e.message || e); }
     };
@@ -1330,14 +1354,18 @@ function render() {
   // Free months paid by the fees wallet show as what they are, not as a 1 KAS sale.
   const free = { promotion: "Free month (promotion)", invite: "Free month (invite link)" };
   const what = (e) => free[(data.free_txids || {})[e.txid]] || label[e.kind] || escHtml(e.kind);
-  const row = (e, plan) => `<tr><td data-l="Date" class="nowrap">${escHtml(when(e))}</td><td>${what(e)}${plan ? ` <span class="muted small">${escHtml(plan)}</span>` : ""}</td><td data-l="Paid">${kas(e.amount_sompi)}</td><td data-l="To you">${kas(e.creator_sompi)}</td><td data-l="KasPass fee">${e.fee_sompi ? kas(e.fee_sompi) : "none"}</td></tr>`;
+  // On a phone each payment is two lines (UI88 L12, update 99): "Nov 17 · Sale, Supporter" over
+  // "120.77 KAS paid, 118.36 KAS to you". The classes carry that layout; the labels stay for computers.
+  const row = (e, plan) => `<tr><td data-l="Date" class="nowrap a-date">${escHtml(when(e))}</td><td class="a-what">${what(e)}${plan ? `<span class="a-plan muted small"> ${escHtml(plan)}</span>` : ""}</td><td data-l="Paid" class="a-paid">${kas(e.amount_sompi)}</td><td data-l="To you" class="a-you">${kas(e.creator_sompi)}</td><td data-l="KasPass fee" class="a-fee">${e.fee_sompi ? kas(e.fee_sompi) : "none"}</td></tr>`;
   const head = "<tr><th>Date</th><th>What</th><th>Paid</th><th>To you</th><th>KasPass fee</th></tr>";
   const ev = [...data.events].sort((a, b) => (a.time_ms || 0) - (b.time_ms || 0)).reverse().slice(0, 50);
-  $("activity").innerHTML = head + (ev.length ? ev.map((e) => row(e)).join("") : `<tr><td colspan="5" class="muted">No payments yet.</td></tr>`);
+  const evMem = memAll ? [...ALL.events].reverse().slice(0, 50) : ev;
+  $("activity").innerHTML = head + (evMem.length ? evMem.map((e) => row(e, memAll ? e.plan : "")).join("") : `<tr><td colspan="5" class="muted">No payments yet.</td></tr>`);
   // The overview shows the latest few, from every plan.
   const evAll = ALL ? [...ALL.events].reverse().slice(0, 5) : ev.slice(0, 5);
   $("recent").innerHTML = head + (evAll.length ? evAll.map((e) => row(e, ALL ? e.plan : "")).join("") : `<tr><td colspan="5" class="muted">No payments yet.</td></tr>`);
-  $("recent").classList.add("stack");
+  $("recent").classList.add("stack", "acts");
+  $("activity").classList.add("acts");
 
   renderFixed(lane);
   $("tierInfo").innerHTML = `
@@ -2514,12 +2542,36 @@ $("copyPage").onclick = () => {
 // "Add a badge" starts the creator's own list from what's showing, so they can change those too.
 let badgeDraft = null, badgeDirty = false, badgeShown = [];
 const BADGE_TONES = [["accent", "Your accent"], ["gold", "Gold"], ["green", "Green"], ["red", "Red"], ["purple", "Purple"], ["grey", "Grey"]];
+let badgeLevels = [];
 async function badgesShowing() {
   try {
+    badgeLevels = (await (await fetch(L("/v1/levels"))).json()).levels || [];
     const id = data.level && data.level.covenant_id;
-    const l = ((await (await fetch(L("/v1/levels"))).json()).levels || []).find((x) => x.level === id);
+    const l = badgeLevels.find((x) => x.level === id);
     return (l && l.badges) || [];
   } catch { return []; }
+}
+// What a badge row will show on the card (update 99), worked out the way the server does, so the
+// colour and words can be checked before saving. `off` when it won't show at all right now.
+function badgePreview(b) {
+  const id = data.level && data.level.covenant_id;
+  const me = badgeLevels.find((x) => x.level === id);
+  if (b.kind === "text") return { text: (b.text || "").trim() || "Your text", off: !(b.text || "").trim() };
+  if (b.kind === "early") {
+    const f = me && me.founding;
+    if (!f || !f.until_ms) return { text: "Early price (hidden until one runs)", off: true };
+    const tz = typeof f.tz_min === "number" ? f.tz_min : null;
+    const day = new Date(f.until_ms - 1 + (tz ?? 0) * 60000).toLocaleDateString(undefined, { dateStyle: "medium", ...(tz === null ? {} : { timeZone: "UTC" }) });
+    return { text: `Early price until ${day}`, off: false };
+  }
+  const p = me && me.price, priced = (x) => x.price && x.price.currency === (p && p.currency) && x.period_ms > 0 && x.price.amount > 0;
+  const base = b.vs ? badgeLevels.find((x) => x.level === b.vs) : badgeLevels.filter(priced).sort((x, y) => x.period_ms - y.period_ms)[0];
+  const none = { text: "Savings (hidden: no saving against that plan)", off: true };
+  if (!p || !me.period_ms || !base || !priced(base) || base.period_ms >= me.period_ms) return none;
+  const n = Math.round(me.period_ms / base.period_ms), d = base.period_ms / 86400000;
+  const unit = d >= 360 && d <= 366 ? "yearly" : d >= 28 && d <= 31 ? "monthly" : d === 7 ? "weekly" : d === 1 ? "daily" : null;
+  const pct = Math.round((1 - p.amount / (n * base.price.amount)) * 100);
+  return n >= 2 && unit && pct >= 1 ? { text: `Save ${pct}% vs ${unit}`, off: false } : none;
 }
 function growPerks() { const t = $("perks"); if (!t) return; t.style.height = "auto"; t.style.height = Math.max(112, t.scrollHeight + 2) + "px"; }
 $("perks").addEventListener("input", growPerks);
@@ -2540,9 +2592,16 @@ async function renderBadges() {
   }
   $("badgeNote").textContent = badgeDraft.length ? "Your own badges, top first. Save to show them." : "No badges on this plan's card. Save to hide the automatic ones, or go back to automatic.";
   const plans = ((data && data.levels) || []).filter((l) => l.covenant_id !== (data.level && data.level.covenant_id));
+  if (!badgeLevels.length) { await badgesShowing(); if (badgeDraft === null) return; rows.innerHTML = ""; }
   badgeDraft.forEach((b, i) => {
     const row = document.createElement("div");
     row.className = "brow";
+    // A live preview of this badge in its colour, as on the card (update 99).
+    const prev = document.createElement("div");
+    prev.className = "bprow";
+    const chip = document.createElement("span");
+    const paint = () => { const v = badgePreview(b); chip.className = `bprev t-${b.tone || "accent"}${v.off ? " off" : ""}`; chip.textContent = v.text; };
+    prev.append(Object.assign(document.createElement("span"), { className: "muted small", textContent: "Preview:" }), chip);
     const kind = document.createElement("select");
     kind.setAttribute("aria-label", `Badge ${i + 1}: kind`);
     [["text", "Your text"], ["save", "Savings vs a plan"], ["early", "Early price"]].forEach(([v, t]) => kind.append(new Option(t, v, false, b.kind === v)));
@@ -2551,13 +2610,13 @@ async function renderBadges() {
     if (b.kind === "text") {
       what = Object.assign(document.createElement("input"), { maxLength: 24, value: b.text || "", placeholder: "For example: Most popular" });
       what.setAttribute("aria-label", `Badge ${i + 1}: words`);
-      what.oninput = () => { b.text = what.value; badgeDirty = true; };
+      what.oninput = () => { b.text = what.value; badgeDirty = true; paint(); };
     } else if (b.kind === "save") {
       what = document.createElement("select");
       what.setAttribute("aria-label", `Badge ${i + 1}: compared with`);
       what.append(new Option("vs the shortest plan", "", false, !b.vs));
       plans.forEach((l) => what.append(new Option(`vs ${l.name}`, l.covenant_id, false, b.vs === l.covenant_id)));
-      what.onchange = () => { b.vs = what.value; badgeDirty = true; };
+      what.onchange = () => { b.vs = what.value; badgeDirty = true; paint(); };
     } else {
       what = Object.assign(document.createElement("span"), { className: "muted small", textContent: "Shows while an early price runs (Prices)." });
     }
@@ -2566,14 +2625,15 @@ async function renderBadges() {
     tone.setAttribute("aria-label", `Badge ${i + 1}: colour`);
     BADGE_TONES.forEach(([v, t]) => tone.append(new Option(t, v, false, (b.tone || "accent") === v)));
     tone.className = "btone";
-    tone.onchange = () => { b.tone = tone.value; badgeDirty = true; };
+    tone.onchange = () => { b.tone = tone.value; badgeDirty = true; paint(); };
     const act = document.createElement("div");
     act.className = "bact";
     const btn = (label, aria, fn, off) => { const x = Object.assign(document.createElement("button"), { type: "button", className: "ghost", textContent: label, disabled: !!off }); x.setAttribute("aria-label", aria); x.onclick = fn; act.append(x); };
     btn("↑", `Move badge ${i + 1} up`, () => { badgeDraft.splice(i - 1, 0, badgeDraft.splice(i, 1)[0]); badgeChanged(); }, i === 0);
     btn("↓", `Move badge ${i + 1} down`, () => { badgeDraft.splice(i + 1, 0, badgeDraft.splice(i, 1)[0]); badgeChanged(); }, i === badgeDraft.length - 1);
     btn("✕", `Remove badge ${i + 1}`, () => { badgeDraft.splice(i, 1); badgeChanged(); });
-    row.append(kind, what, tone, act);
+    paint();
+    row.append(kind, what, tone, act, prev);
     rows.append(row);
   });
 }

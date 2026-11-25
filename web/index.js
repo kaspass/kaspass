@@ -1805,7 +1805,7 @@ function v5PriceHtml(o, big) {
   const per = big === "card" ? ` <span class="per">a ${escH(unitOf(o.period_ms))}</span>` : "";
   if (f) {
     const fp = shown(p.currency, f.amount);
-    const until = new Date(f.until_ms - 1).toLocaleDateString(undefined, { dateStyle: "medium" });
+    const until = earlyDay(f.until_ms, f.tz_min);
     const u = unitOf(o.period_ms);
     // The open card styles follow kaspa.vision: the early-price badge, the price with the regular
     // one crossed out after it, today's KAS, then one plain line.
@@ -1995,7 +1995,8 @@ function renderLevels() {
       if (hasMore && !OPEN && !shortDet) foldCard(d, l);
       const act = d.querySelector(":scope > .trialnote, :scope > button:not(.more-t), :scope > .noact");
       if (act) act.before(Object.assign(document.createElement("div"), { className: "grow" }));
-      if (FOCUS && sel && !FOLDLIST) d.insertAdjacentHTML("afterbegin", `<p class="yourtag">Your ${escH(lw())}</p>`);
+      // UI88 L4 (update 99): "Your plan" only above a plan they hold; one only picked says "You chose".
+      if (FOCUS && sel && !FOLDLIST) d.insertAdjacentHTML("afterbegin", `<p class="yourtag">${d.classList.contains("owned") ? `Your ${escH(lw())}` : "You chose"}</p>`);
       if (focus) {
         const chg = Object.assign(document.createElement("button"), { type: "button", className: "chg", textContent: `Change ${lw()}` });
         chg.onclick = () => { SHOWALL = true; renderLevels(); $("levelsBox").scrollIntoView({ behavior: "smooth", block: "start" }); };
@@ -2265,7 +2266,7 @@ function promoBlock(d, l) {
   box.className = "promo";
   // Token names never split across lines ("KCC-" then "20").
   const nb = (t) => escH(t).replace(/([A-Za-z]{2,})-(\d+)/g, "$1\u2011$2");
-  box.innerHTML = `<div class="pl">${PROMO.picture ? `<img class="ppic" alt="" src="${escH(PROMO.picture)}">` : `<span aria-hidden="true" class="pemoji">${escH(PROMO.emoji || "🎁")}</span>`} <span class="ptx"><span class="ptag">Running now</span><span class="plab">${nb(PROMO.label)}</span></span></div><div class="pr">${nb(cap(PROMO.requirement))}. <span class="pe">Ends ${escH(fmtDate(PROMO.end_ms))}${PROMO.claims_left != null ? ` · ${PROMO.claims_left} left` : ""}.</span></div><div id="promoStatus" class="small" role="status"></div><div id="promoErr" class="err small" role="alert"></div>`;
+  box.innerHTML = `<div class="pl">${PROMO.picture ? `<img class="ppic" alt="" src="${escH(PROMO.picture)}">` : `<span aria-hidden="true" class="pemoji">${escH(PROMO.emoji || "🎁")}</span>`} <span class="ptx"><span class="ptag">Running now</span><span class="plab">${nb(PROMO.label)}</span></span></div><div class="pr">${nb(forWallets(PROMO.requirement))}. <span class="pe">Ends ${escH(fmtDate(PROMO.end_ms))}${PROMO.claims_left != null ? ` · ${PROMO.claims_left} left` : ""}.</span></div><div id="promoStatus" class="small" role="status"></div><div id="promoErr" class="err small" role="alert"></div>`;
   (d.querySelector(".also") || d.querySelector(".lp")).after(box);
   const me = PROMO_ME;
   const note = (t) => box.insertAdjacentHTML("beforeend", `<div class="pn">${escH(t)}</div>`);
@@ -2288,11 +2289,18 @@ function promoBlock(d, l) {
   else if (me.closed) note("This promotion isn't taking claims right now.");
   else {
     const have = (me.rows || []).map((r) => r.kind === "migrated" || r.kind === "burned" ? `${fmtNum(r.have)} ${r.tick} ${r.kind}` : `${fmtNum(r.have)} ${r.tick} ${r.kind === "nft" ? "NFT" : "token"}${r.have === 1 ? "" : "s"}${r.kind === "kcc20" ? " (KCC-20)" : ""} held`).join(", ");
-    note(`Not yet. So far, for your wallet${me.wallets_checked > 1 ? "s" : ""}: ${have}${PROMO.once_per_nft ? " (NFTs already used in this promotion don't count, nor ones listed for sale)" : ""}. Sign in with the wallet that holds them${clubInfo && clubInfo.enabled ? ", or link it in the holder club section below" : ""}.`);
+    note(`Not yet. So far, for your wallet${me.wallets_checked > 1 ? "s" : ""}: ${have}${PROMO.once_per_nft ? " (NFTs already used in this promotion don't count, nor ones listed for sale)" : ""}. Switch to the wallet that ${(me.rows || []).some((r) => r.kind === "migrated") ? "migrated them" : (me.rows || []).some((r) => r.kind === "burned") ? "burned them" : "holds them"}${clubInfo && clubInfo.enabled ? ", or link it in the holder club section below" : ""}.`);
   }
   return { claim: false };
 }
 const cap = (t) => (t ? t[0].toUpperCase() + t.slice(1) : t);
+// UI88 L7 (update 99): "For wallets that migrated at least 1,000,000 NACHO to KCC-20", "For wallets
+// that hold at least 1 NACHO NFT", in place of the bare requirement.
+function forWallets(req) {
+  if (!req) return "";
+  const t = /^(migrated|burned) /.test(req) ? req.replace(/(, (?:or|and) )at least/g, "$1hold at least") : /^at least /.test(req) ? "hold " + req : null;
+  return t ? "For wallets that " + t : cap(req);
+}
 const fmtNum = (x) => Number(x).toLocaleString(undefined, { maximumFractionDigits: 4 });
 
 // Claims the free period. From the pay box it can also prepay future periods: first the free
@@ -2487,7 +2495,7 @@ function renderPay() {
       const bits = [cur === "KAS" ? "" : escH(money(cur, fullAmt)), label].filter(Boolean).join(", ");
       rows.push(["Price today", `<b>${kasOf(fullKas)}</b>${bits ? ` (${bits})` : ""}` +
         (q.credit > 0 ? `<div class="sub">${escH(money(cur, q.founding ? q.amount + q.credit : q.regular))} minus ${escH(money(cur, q.credit))} for your unused ${escH(levelName(q.from_level))} time${q.from_until_ms ? ` (until ${escH(until(q.from_until_ms))})` : ""}</div>` : "")]);
-      if (free) rows.push(["Free " + escH(u), `<b>−${kasOf(fullKas)}</b> <span class="sub">(${escH(PROMO.label)})</span>`]);
+      if (free) rows.push(["Free " + escH(u), `<b>−${kasOf(fullKas)}</b> <span class="sub">(from this promotion)</span>`]);
       else if (hp > 0) rows.push(["Holder discount", `<b>−${kasOf(Math.max(0, fullKas - Number(q.kas_today)))}</b> <span class="sub">(${hp}% off, for holders)</span>`]);
       if (q.action !== "renew") rows.push(["Refundable deposit", free ? `${kas(bond)}, paid with your free ${escH(u)}. You get it back when you end your ${escH(pw())}.` : `${kas(bond)}. You get it back when you end your ${escH(pw())}.`]);
       if (ahead()) rows.push(["Paid ahead", `about ${kasAbout(ahead())} prepaid for future ${escH(u)}s (auto-renew). It stays yours until it's used, and each ${escH(u)} is charged at its own day's price.`]);
@@ -2755,9 +2763,17 @@ function applyCardStyle() {
     if (window.kpThemeSwitch) window.kpThemeSwitch();
   }
 }
+
+// The early price's last day in the site's time zone (update 99): the day the creator picked, the
+// same for every visitor. `tz_min` is minutes east of UTC; an older server without it falls back to
+// the visitor's own time zone, as before.
+function earlyDay(untilMs, tzMin) {
+  if (typeof tzMin !== "number") return new Date(untilMs - 1).toLocaleDateString(undefined, { dateStyle: "medium" });
+  return new Date(untilMs - 1 + tzMin * 60000).toLocaleDateString(undefined, { dateStyle: "medium", timeZone: "UTC" });
+}
 // "Save 17% vs monthly": a longer plan against the shortest one, at regular prices.
 // The creator's own badges (update 98) replace the automatic ones on that plan's card, in their
-// order and colours; the early price's date is written the visitor's way. Not on a plan they own.
+// order and colours; the early price's date is written the visitor's way (in the site's time zone). Not on a plan they own.
 function customBadges(d, l) {
   if (!l.badges_custom) return;
   d.querySelectorAll(".cs-early, .cs-save, .cs-badge, .cs-badges").forEach((e) => e.remove());
@@ -2765,7 +2781,7 @@ function customBadges(d, l) {
   if (!lp || d.classList.contains("owned")) return;
   const tones = ["accent", "gold", "green", "red", "purple", "grey"];
   const html = (l.badges || []).map((b) => {
-    const text = b.kind === "early" && b.until_ms ? `Early price until ${new Date(b.until_ms - 1).toLocaleDateString(undefined, { dateStyle: "medium" })}` : b.text;
+    const text = b.kind === "early" && b.until_ms ? `Early price until ${earlyDay(b.until_ms, b.tz_min)}` : b.text;
     return `<div class="cs-badge t-${tones.includes(b.tone) ? b.tone : "accent"}">${escH(text || "")}</div>`;
   }).join("");
   if (html) lp.insertAdjacentHTML("afterbegin", `<div class="cs-badges">${html}</div>`);

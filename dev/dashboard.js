@@ -1,7 +1,8 @@
 // The creator dashboard, signed in, in a real browser: stream mode hides every private detail on
 // every tab, and the update 92 fixes hold (date boxes line up, no "Mainnet" badge on test
 // networks' look, plan parts with their own fills, the holder discount in Prices & sales), and
-// Give a membership's Plan choice and period names (95), the update 97 dashboard fixes, and update 98's badges and Plans tab on a phone.
+// Give a membership's Plan choice and period names (95), the update 97 dashboard fixes, update 98's badges and Plans tab on a phone,
+// and update 99's badge previews, early-price date, "All plans" on Members, skip link and phone layouts.
 // Run by dev/check.sh against the local simulated site, after dev/pages.js.
 //
 // Signing in: a stand-in for Kaspire signs the sign-in message with the simulator's creator test
@@ -140,7 +141,7 @@ function leaks() {
     await p.selectOption('#gPlan', second); await p.waitForTimeout(2500);
     const after = await p.evaluate(() => ({ level: LEVEL, card: card.covenant_id, on: (document.querySelector('#levelBtns button.on') || {}).textContent, value: document.getElementById('gPlan').value, go: document.getElementById('gGo').disabled }));
     check('give a membership: choosing a plan in the form switches the whole page to it, and Give it works again', after.level === second && after.card === second && after.value === second && !after.go && after.on === (await p.evaluate((id) => data.levels.find((l) => l.covenant_id === id).name, second)), after);
-    await p.click('#levelBtns button:not(.on)'); await p.waitForTimeout(2500);
+    await p.click('#levelBtns button:not(.on):not(.allbtn)'); await p.waitForTimeout(2500);
     check('give a membership: the picker at the top moves the form\'s Plan choice too', await p.evaluate(() => document.getElementById('gPlan').value === (LEVEL || data.levels[0].covenant_id)));
   } else console.log('SKIP give a membership plan switch: one plan on this site');
   // Update 97 (UI88 M13): "Start sale" starts nothing on the first press, and the percent is only an example.
@@ -198,6 +199,51 @@ function leaks() {
   await p.click('#badgeAuto'); await p.waitForTimeout(300); await p.click('#lvNameGo'); await p.waitForTimeout(2500);
   const b2 = await lvl();
   check('badges: "Back to automatic" in the dashboard undoes the list (98)', b2.badges_custom === false && b2.badge === '', b2);
+  // Update 99: each badge row previews itself in its colour, and follows typing and the colour box.
+  await p.click('#badgeAdd'); await p.waitForTimeout(400);
+  await p.fill('#badgeRows .brow:last-child input', 'Best pick');
+  await p.selectOption('#badgeRows .brow:last-child select.btone', 'green'); await p.waitForTimeout(150);
+  const pv = await p.evaluate(() => [...document.querySelectorAll('#badgeRows .brow')].map((r) => { const c = r.querySelector('.bprow .bprev'); return c ? [c.textContent, c.className, getComputedStyle(c).backgroundColor, Math.round(c.getBoundingClientRect().height)] : null; }));
+  check('badges: a colour preview in every editor row, following the words and colour, chip-sized (99)', pv.length > 0 && pv.every((x) => x && x[3] <= 30) && pv.every(Boolean) && pv[pv.length - 1][0] === 'Best pick' && /t-green/.test(pv[pv.length - 1][1]) && pv[pv.length - 1][2] === 'rgb(60, 207, 126)', pv);
+  if (SHOTS) { await p.locator('#badgeSet').scrollIntoViewIfNeeded(); await p.screenshot({ path: SHOTS + '/badges-preview.png' }); }
+  await p.click('#badgeAuto'); await p.waitForTimeout(300); await p.evaluate(() => { badgeDirty = false; });
+  // Update 99: the early price's date in the site's time zone. The simulator's ends at midnight UTC
+  // (so the site's zone is UTC): a visitor in Tokyo sees the creator's Dec 31, not their own Jan 1.
+  const ep = await p.evaluate(async () => (await (await fetch('/v1/levels')).json()).levels.find((x) => x.founding));
+  if (ep) {
+    check('early price: /v1/levels gives the site\'s time zone, and the badge text is that day (99)', ep.founding.tz_min === 0 && ep.badges.some((b) => b.kind === 'early' && b.tz_min === 0 && /Dec 31, 2099$/.test(b.text)), [ep.founding, ep.badges]);
+    const tk = await b.newContext({ viewport: { width: 1280, height: 900 }, timezoneId: 'Asia/Tokyo', locale: 'en-US' });
+    const tp = await tk.newPage();
+    await tp.goto(`${S}/?style=kaspa-vision`); await tp.waitForTimeout(3500);
+    const days = await tp.evaluate(() => [...document.querySelectorAll('.cs-early, .cs-badge')].map((e) => e.textContent).filter((t) => /Early price until/.test(t)));
+    check('early price: a visitor in Tokyo sees the site\'s day on the card (Dec 31, 2099), not their own (99)', days.length > 0 && days.every((t) => /Dec 31, 2099/.test(t)), days);
+    await tk.close();
+    // The dashboard sends the creator's time zone with the date (caught before it reaches the server).
+    let sent = null;
+    await p.route(/\/v1\/creator\/level-price/, (r) => { sent = JSON.parse(r.request().postData() || '{}'); r.fulfill({ status: 400, body: 'test' }); });
+    await p.evaluate(() => showTab('prices')); await p.waitForTimeout(600);
+    if (await p.isVisible('#vpFound')) {
+      await p.evaluate(() => { const a = Number(document.getElementById('vpAmount').value) || 10; document.getElementById('vpFound').value = String(Math.max(0.5, a / 2)); document.getElementById('vpFoundUntil').value = '2099-12-31'; });
+      await p.click('#vpGo'); await p.waitForTimeout(800);
+      check('early price: the dashboard sends the creator\'s time zone with the end date (99)', !!sent && typeof sent.founding_tz_min === 'number' && sent.founding_tz_min === await p.evaluate((u) => -new Date(u - 1).getTimezoneOffset(), sent.founding_until_ms), sent);
+    } else console.log('SKIP early price form: not shown');
+    await p.unroute(/\/v1\/creator\/level-price/);
+  } else console.log('SKIP early price date: no plan with one in this simulator');
+  // Update 99 (D78): "All plans" on Members, the first choice there; not on the other tabs.
+  await p.evaluate(() => showTab('overview')); await p.evaluate(() => showTab('members')); await p.waitForTimeout(1200);
+  if (many > 1) {
+    const ma = await p.evaluate(() => ({ btn: !!document.querySelector('#levelBtns .allbtn.on'), plan: [...document.querySelectorAll('#members th')].some((t) => t.textContent === 'Plan'), rows: document.querySelectorAll('#members tr:has(td .mnote)').length, all: ALL && ALL.passes ? ALL.passes.length : -1, one: data.passes.length }));
+    check('members: "All plans" is picked on Members, lists every plan\'s members with a Plan column (99, D78)', ma.btn && ma.plan && ma.rows === ma.all && ma.all >= ma.one, ma);
+    await p.click('#levelBtns button:not(.allbtn)'); await p.waitForTimeout(1500);
+    const m1 = await p.evaluate(() => ({ btn: !!document.querySelector('#levelBtns .allbtn.on'), plan: [...document.querySelectorAll('#members th')].some((t) => t.textContent === 'Plan'), rows: document.querySelectorAll('#members tr:has(td .mnote)').length, one: data.passes.length }));
+    check('members: picking a plan shows only that plan', !m1.btn && !m1.plan && m1.rows === m1.one, m1);
+    await p.click('#levelBtns .allbtn'); await p.waitForTimeout(500);
+    await p.evaluate(() => showTab('prices')); await p.waitForTimeout(500);
+    check('members: no "All plans" choice on the other tabs', await p.evaluate(() => !document.querySelector('#levelBtns .allbtn') && !!document.querySelector('#levelBtns button.on')));
+  } else console.log('SKIP all plans on Members: one plan');
+  // Update 99 (UI88 L10): the side menu comes before the content, and a skip link comes first.
+  const kb = await p.evaluate(() => { const f = document.querySelector('a[href], button, input, select, textarea'); return { first: f && f.className, href: f && f.getAttribute('href'), target: !!document.getElementById('mainContent'), order: !!(document.getElementById('tabs').compareDocumentPosition(document.getElementById('mainContent')) & Node.DOCUMENT_POSITION_FOLLOWING) }; });
+  check('keyboard: a "Skip to the content" link first, then the side menu, then the content (99, UI88 L10)', kb.first === 'skip' && kb.href === '#mainContent' && kb.target && kb.order, kb);
   // Update 98: the Plans tab on a phone-sized window.
   await p.setViewportSize({ width: 390, height: 844 }); await p.waitForTimeout(500);
   await p.evaluate(() => showTab('levels')); await p.waitForTimeout(800);
@@ -216,6 +262,23 @@ function leaks() {
   await p.evaluate(() => { $("perks").value = (data.level.perks || []).join("\n"); });
   const sp2 = await p.evaluate(() => { document.getElementById('wcOtherLine').classList.remove('hidden'); const d = getComputedStyle(document.getElementById('signPanel')).display; document.getElementById('wcOtherLine').classList.add('hidden'); return { d, other: !!document.getElementById('wcOther2') }; });
   check('signed in: no leftover sign-in box ("Not you?" is with Sign out) (98)', sp2.d === 'none' && sp2.other, sp2);
+  // Update 99 (UI88 L12): on a phone each payment is two lines, date and what over the amounts.
+  await p.evaluate(() => showTab('overview')); await p.waitForTimeout(600);
+  // Two sample payments for the layout (the simulator has none yet); put back right after.
+  await p.evaluate(() => { window.__sv = { e: data.events, a: ALL }; const now = Date.now(); data.events = [{ txid: 'aa11'.repeat(16), kind: 'monthly', owner_hash: 'bb22'.repeat(16), amount_sompi: 12077000000, fee_sompi: 241000000, creator_sompi: 11836000000, time_ms: now - 86400000 }, { txid: 'cc33'.repeat(16), kind: 'renew', owner_hash: 'bb22'.repeat(16), amount_sompi: 12077000000, fee_sompi: 241000000, creator_sompi: 11836000000, time_ms: now - 3600000 }]; ALL = null; render(); });
+  const act = await p.evaluate(() => { const r = document.querySelector('#recent tr:has(td.a-date)'); if (!r) return null; const t = (c) => r.querySelector(c).getBoundingClientRect(); return { dateTop: Math.round(t('.a-date').top), whatTop: Math.round(t('.a-what').top), paidTop: Math.round(t('.a-paid').top), youTop: Math.round(t('.a-you').top), fee: getComputedStyle(r.querySelector('.a-fee')).display, h: Math.round(r.getBoundingClientRect().height) }; });
+  if (act) check('activity on a phone: two lines per payment (99, UI88 L12)', Math.abs(act.dateTop - act.whatTop) < 4 && Math.abs(act.paidTop - act.youTop) < 4 && act.paidTop > act.dateTop + 8 && act.fee === 'none' && act.h < 90, act);
+  else console.log('SKIP activity on a phone: no payments yet');
+  if (SHOTS) { await p.locator('#recent').scrollIntoViewIfNeeded(); await p.screenshot({ path: SHOTS + '/activity-390.png' }); }
+  await p.evaluate(() => { data.events = window.__sv.e; ALL = window.__sv.a; render(); });
+  // Update 99 (UI88 L13): the promotion's "who qualifies" rows on a phone: every label above its field.
+  await p.evaluate(() => showTab('promos')); await p.waitForTimeout(800);
+  if (await p.isVisible('#promoPanel')) {
+    if (!(await p.$('#prNeeds .prneed'))) { await p.click('#prAddNeed'); await p.waitForTimeout(200); }
+    const st = await p.evaluate(() => { const row = document.querySelector('#prNeeds .prneed'); const w = row.clientWidth; const ls = [...row.querySelectorAll(':scope > label:not(.check)')].filter((l) => l.offsetParent); return { w, labels: ls.map((l) => Math.round(l.getBoundingClientRect().width)), inputs: ls.map((l) => { const f = l.querySelector('input, select'); return Math.round(f.getBoundingClientRect().width); }), tops: ls.map((l) => Math.round(l.getBoundingClientRect().top)), flat: document.documentElement.scrollWidth <= innerWidth + 1 }; });
+    check('promotion form on a phone: each label on its own row with a full-width field (99, UI88 L13)', st.labels.length >= 3 && st.labels.every((x) => x >= st.w - 30) && st.inputs.every((x) => x >= st.w - 40) && new Set(st.tops).size === st.tops.length && st.flat, st);
+    if (SHOTS) { await p.locator('#prNeeds').scrollIntoViewIfNeeded(); await p.screenshot({ path: SHOTS + '/promo-form-390.png' }); }
+  } else console.log('SKIP promotion form on a phone: no promotion panel');
   await p.setViewportSize({ width: 1366, height: 900 }); await p.waitForTimeout(300);
   // Update 97 (UI88 M14): the side menu fits a 768 px high laptop, Themes and Sign out included.
   await p.setViewportSize({ width: 1366, height: 768 }); await p.waitForTimeout(500);

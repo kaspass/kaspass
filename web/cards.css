@@ -41,7 +41,14 @@
 .cards-open .wrap { max-width: 1198px; padding-left: max(24px, env(safe-area-inset-left, 0px)); padding-right: max(24px, env(safe-area-inset-right, 0px)); }
 .cards-open .returnbar, .cards-open .titlerow, .cards-open p.tag, .cards-open #levelsLead, .cards-open #levelsKas, .cards-open #trialAbout { max-width: 760px; }
 .cards-open .kpstrip .in { max-width: 1150px; }
-.cards-open .wrap > section.panel:not(#levelsBox), .cards-open .wrap > footer { max-width: 760px; margin-left: auto; margin-right: auto; box-sizing: border-box; }
+/* UI88 L1 (update 99): one left edge. The boxes under the plans stay 760 px but line up with the
+   plans and the heading instead of sitting centred; under 940 px everything is one centred
+   520 px column, the heading included. */
+.cards-open .wrap > section.panel:not(#levelsBox), .cards-open .wrap > footer { max-width: 760px; margin-left: 0; margin-right: auto; box-sizing: border-box; }
+@media (max-width: 940px) {
+  .cards-open .returnbar, .cards-open .titlerow, .cards-open p.tag, .cards-open #levelsLead, .cards-open #levelsKas, .cards-open #trialAbout,
+  .cards-open #levelsBox > .lvhead, .cards-open .wrap > section.panel:not(#levelsBox), .cards-open .wrap > footer { max-width: 520px; margin-left: auto; margin-right: auto; }
+}
 .cards-open #levelsBox { background: transparent; border: 0; padding: 8px 0; }
 .cards-open #levelsBox h2 { font-size: 26px; }
 .cards-open .levels { grid-template-columns: repeat(var(--cols, 3), minmax(0, 1fr)); gap: 24px; align-items: stretch; margin-top: 24px; }
@@ -56,7 +63,7 @@
 .cards-open .lvl .ln { font: 700 26px/1.2 var(--font-head); }
 .cards-open .lvl .lp { font: 700 44px/1.1 var(--font-head); font-variant-numeric: tabular-nums; }
 .cards-open .lvl .lp .cs-reg { white-space: nowrap; }
-.cards-open .lvl .lp .per { font: 400 16px/1.4 var(--font-body); color: var(--muted); margin-left: 2px; white-space: nowrap; }
+.cards-open .lvl .lp .per { font: 400 16px/1.4 var(--font-body); color: var(--muted); margin-left: 2px; white-space: nowrap; display: inline-block; }
 /* A whole sentence under "You have this plan" wraps inside the card. */
 .cards-open .lvl .lp .per.endline { display: block; margin: 4px 0 0; white-space: normal; }
 .cards-open .lvl .lp s { font: 400 18px var(--font-body); color: var(--muted); }

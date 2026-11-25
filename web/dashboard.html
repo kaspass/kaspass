@@ -83,6 +83,11 @@ body { margin: 0; background: var(--bg); color: var(--text); font: 400 15px/1.5 
 /* Colours ease for a moment when the theme changes, and only then. */
 html.theming, html.theming * { transition: background-color .22s ease, border-color .22s ease, color .22s ease !important; }
 .hidden, .offtab { display: none !important; }
+/* UI88 L10 (update 99): the side menu comes first for the keyboard; a skip link, shown when it
+   gets focus, jumps straight to the tab's content. */
+.skip { position: absolute; left: 12px; top: -60px; z-index: 100; padding: 10px 14px; border-radius: var(--r-field, 10px); background: var(--accent); color: var(--on-accent); font-weight: 600; text-decoration: none; }
+.skip:focus { top: 12px; }
+main.main:focus { outline: none; }
 svg.i { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 a { color: var(--link); text-underline-offset: 3px; text-decoration-thickness: 1px; }
 a:hover { text-decoration-thickness: 2px; }
@@ -485,6 +490,19 @@ details.fold > .foldbody { padding: 0 var(--s5) var(--s5); display: grid; gap: v
   table.stack td.full { grid-column: 1 / -1; }
   table.stack td.nw { white-space: normal; }
   table.stack td[data-l]::before { content: attr(data-l); display: block; color: var(--muted); font-size: 12px; }
+  /* UI88 L12 (update 99): payments as two lines, date and what on top, amounts under. */
+  table.stack.acts tr { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 6px; padding: 8px 12px; }
+  table.stack.acts tr::after { content: ""; flex-basis: 100%; order: 2; }
+  table.stack.acts td { width: auto; }
+  table.stack.acts td[data-l]::before { content: none; }
+  table.stack.acts td.a-date, table.stack.acts td.a-what { order: 1; font-weight: 600; }
+  table.stack.acts td.a-date::after { content: " ·"; color: var(--muted); font-weight: 400; }
+  table.stack.acts td.a-plan, table.stack.acts .a-plan { font-weight: 400; }
+  table.stack.acts td.a-what .a-plan::before { content: ","; }
+  table.stack.acts td.a-paid, table.stack.acts td.a-you { order: 3; color: var(--muted); }
+  table.stack.acts td.a-paid::after { content: " paid,"; }
+  table.stack.acts td.a-you::after { content: " to you"; }
+  table.stack.acts td.a-fee { display: none; }
   .mnote { background: var(--card); border-color: var(--line); width: 100%; }
   .approve { grid-template-columns: 1fr; gap: 0; }
   .approve li { border-top: 0; border-left: 3px solid var(--line); padding: 6px 0 10px 12px; }
@@ -587,7 +605,7 @@ code { font: 13px var(--font-mono); background: var(--field); border: 1px solid 
 .badgeset .brow select, .badgeset .brow input { min-height: 44px; margin: 0; }
 .badgeset .brow .bact { display: flex; gap: 4px; }
 .badgeset .brow .bact button { width: 44px; min-height: 44px; padding: 0; }
-.badgeset .bprev { display: inline-flex; width: fit-content; padding: 3px 10px; border-radius: 999px; font: 600 12px/1.3 var(--font-body); letter-spacing: .04em; text-transform: uppercase; }
+.badgeset .bprev { display: inline-flex; width: fit-content; height: auto; border: 0; padding: 3px 10px; border-radius: 999px; font: 600 12px/1.3 var(--font-body); letter-spacing: .04em; text-transform: uppercase; }
 .badgeset .t-accent { background: var(--accent); color: var(--on-accent); }
 .badgeset .t-gold { background: #f2c86b; color: #2a1d00; }
 .badgeset .t-green { background: #3ccf7e; color: #04220f; }
@@ -595,6 +613,20 @@ code { font: 13px var(--font-mono); background: var(--field); border: 1px solid 
 .badgeset .t-purple { background: #6d4cf0; color: #fff; }
 .badgeset .t-grey { background: #56615f; color: #fff; }
 .badgeset .bprevs { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 10px; }
+/* Update 99: each badge row previews itself in its colour; a badge that won't show right now is dimmed. */
+.badgeset .brow .bprow { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: -2px; }
+.badgeset .bprev.off { opacity: .55; text-transform: none; letter-spacing: 0; font-weight: 500; }
+/* UI88 L13 (update 99): on a phone every label in the promotion's "who qualifies" rows sits above
+   its field, full width, one thing per row. */
+@media (max-width: 640px) {
+  #promoPanel div:has(> #prMatch) { flex-direction: column; align-items: stretch !important; }
+  #promoPanel #prMatch { width: 100% !important; }
+  #promoPanel .prneed { flex-direction: column; align-items: stretch !important; padding: 10px; border: 1px solid var(--line); border-radius: var(--r-field); }
+  #promoPanel .prneed > label:not(.check) { width: 100%; flex: 0 0 auto !important; }
+  #promoPanel .prneed input:not([type="checkbox"]), #promoPanel .prneed select { width: 100% !important; }
+  #promoPanel .prneed > label.check { align-self: flex-start !important; min-height: 44px; display: flex; align-items: center; }
+  #promoPanel .prneed .prDel { align-self: flex-start; min-height: 44px; }
+}
 @media (max-width: 640px) {
   .badgeset .brow { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); padding: 10px; border: 1px solid var(--line); border-radius: var(--r-field); }
   .badgeset .brow .bwhat { grid-column: 1 / -1; }
@@ -749,6 +781,7 @@ body:has(#creatorArea.hidden) .main { padding-bottom: 64px; }
   <symbol id="i-k" viewBox="0 0 100 100"><path fill="currentColor" stroke="none" d="M33.36 63.61 33.36 77.36 45.52 77.36 45.52 73.81ZM33.36 36.39 45.52 26.19 45.52 22.64 33.36 22.64ZM44.33 50 76.93 22.64 58.02 22.64 25.42 50 58.02 77.36 76.93 77.36Z"/></symbol>
 </svg>
 
+<a class="skip" href="#mainContent">Skip to the content</a>
 <header class="phonebar">
   <svg class="k" viewBox="0 0 100 100" aria-hidden="true"><rect width="100" height="100" rx="22" fill="#0B1615"/><use href="#i-k" style="color:#49D9C8"/></svg>
   <span class="t" id="phTitle">Creator dashboard</span>
@@ -794,7 +827,7 @@ body:has(#creatorArea.hidden) .main { padding-bottom: 64px; }
   </aside>
   <div class="scrim" id="scrim"></div>
 
-  <main class="main"><div class="inner">
+  <main class="main" id="mainContent" tabindex="-1"><div class="inner">
 
   <section class="panel signbar" id="signPanel">
     <div class="signrow">
@@ -1516,6 +1549,6 @@ body:has(#creatorArea.hidden) .main { padding-bottom: 64px; }
 
 <script src="/assets/kaspire-mobile.js?v=2"></script>
 <script src="/assets/dash-theme.js?v=1"></script>
-<script src="/assets/dashboard.js?v=80"></script>
+<script src="/assets/dashboard.js?v=81"></script>
 </body>
 </html>

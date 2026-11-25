@@ -2841,7 +2841,7 @@ async fn simulate() -> Result<()> {
                     std::fs::write(site.join(&file), serde_json::to_string_pretty(&ix.card)?)?;
                     files.push(file);
                     names.insert(ix.card.covenant_id.clone(), serde_json::json!(name));
-                    prices.insert(ix.card.covenant_id.clone(), prices::LevelPrice { currency: cur.into(), amount: cad, founding: founding.map(|a| prices::Founding { amount: a, until_ms: founding_until }), lifetime: life_amt, term: term_amt, notice: None });
+                    prices.insert(ix.card.covenant_id.clone(), prices::LevelPrice { currency: cur.into(), amount: cad, founding: founding.map(|a| prices::Founding { amount: a, until_ms: founding_until, tz_min: None }), lifetime: life_amt, term: term_amt, notice: None });
                     let mut shop = shop::Shop::open(&site, &ix.card);
                     shop.no_fee = true;
                     shop.voucher = Some(voucher.clone());

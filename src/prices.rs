@@ -378,6 +378,33 @@ impl LevelPrice {
 pub struct Founding {
     pub amount: f64,
     pub until_ms: i64,
+    /// Update 99: the creator's time zone when they picked the end date, in minutes east of UTC.
+    /// Missing on prices saved before 99; `zone_min` then reads it from `until_ms`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tz_min: Option<i32>,
+}
+
+impl Founding {
+    /// The site's time zone for this early price (minutes east of UTC), so its end date is written
+    /// the way the creator picked it ("Dec 31" for a Pacific creator, not UTC's "Jan 1").
+    pub fn zone_min(&self) -> i32 {
+        self.tz_min.filter(|m| (-720..=840).contains(m)).unwrap_or_else(|| guess_zone_min(self.until_ms))
+    }
+
+    /// The early price's last day, "Dec 31, 2026", in the site's time zone (the tests' yardstick).
+    #[cfg(test)]
+    pub fn last_day(&self) -> String {
+        crate::holdings::day(self.until_ms - 1 + i64::from(self.zone_min()) * 60_000)
+    }
+}
+
+/// The dashboard ends an early price at midnight after the picked day in the creator's own time
+/// zone, so the end time itself says the zone: 08:00 UTC is midnight in UTC-8, 15:00 UTC is midnight
+/// in UTC+9. (Zones at UTC+13 and +14 read as UTC-11 and -10; prices saved from 99 on store the
+/// zone, so this only covers older ones.)
+pub fn guess_zone_min(until_ms: i64) -> i32 {
+    let r = (until_ms.rem_euclid(86_400_000) / 60_000) as i32;
+    if r <= 720 { -r } else { 1440 - r }
 }
 
 pub const PRICES_FILE: &str = "level-prices.json";
@@ -563,5 +590,40 @@ mod guard_tests {
         assert_eq!(judge(0.9, None, Some(0.1), &mut p, HOLD_MS), Verdict::Hold);
         // Small moves pass straight through.
         assert_eq!(judge(0.11, None, Some(0.1), &mut None, 0), Verdict::Use);
+    }
+}
+
+#[cfg(test)]
+mod founding_day_tests {
+    use super::*;
+
+    fn f(until_ms: i64, tz_min: Option<i32>) -> Founding {
+        Founding { amount: 1.0, until_ms, tz_min }
+    }
+
+    #[test]
+    fn last_day_in_the_sites_time_zone() {
+        // Each creator picked Dec 31, 2026 in their own zone (update 99; before, all read as UTC).
+        assert_eq!(f(1_798_790_400_000, None).last_day(), "Dec 31, 2026"); // Pacific, saved before 99
+        assert_eq!(f(1_798_790_400_000, Some(-480)).last_day(), "Dec 31, 2026");
+        assert_eq!(f(1_798_729_200_000, None).zone_min(), 540); // Tokyo
+        assert_eq!(f(1_798_729_200_000, None).last_day(), "Dec 31, 2026");
+        assert_eq!(f(1_798_761_600_000, None).last_day(), "Dec 31, 2026"); // UTC
+        assert_eq!(f(1_798_774_200_000, None).zone_min(), -210); // Newfoundland
+        // A stored zone wins over the guess (New Zealand in summer is UTC+13, which reads as -11).
+        let nz = 1_798_761_600_000 - 13 * 3_600_000;
+        assert_eq!(f(nz, None).zone_min(), -660);
+        assert_eq!(f(nz, Some(780)).last_day(), "Dec 31, 2026");
+        // A nonsense stored zone is ignored.
+        assert_eq!(f(1_798_790_400_000, Some(5000)).zone_min(), -480);
+    }
+
+    #[test]
+    fn old_files_still_read_and_new_ones_round_trip() {
+        let old: Founding = serde_json::from_str(r#"{"amount":2.5,"until_ms":1798790400000}"#).unwrap();
+        assert_eq!(old.tz_min, None);
+        assert!(!serde_json::to_string(&old).unwrap().contains("tz_min"));
+        let new = f(1, Some(-480));
+        assert_eq!(serde_json::from_str::<Founding>(&serde_json::to_string(&new).unwrap()).unwrap(), new);
     }
 }

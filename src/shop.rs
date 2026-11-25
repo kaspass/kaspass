@@ -81,6 +81,9 @@ pub struct LaunchForm {
     pub founding_amount: Option<f64>,
     #[serde(default)]
     pub founding_until_ms: Option<i64>,
+    /// Update 99: the creator's time zone for that date (minutes east of UTC).
+    #[serde(default)]
+    pub founding_tz_min: Option<i32>,
     /// v5: the KAS ceiling as a multiple of today's KAS amount (default 3, from 1.5 to 10).
     #[serde(default)]
     pub ceiling_times: Option<f64>,
@@ -1469,7 +1472,7 @@ impl Shop {
                         if a >= amount {
                             bail!("the founding price must be lower than the regular price");
                         }
-                        Some(crate::prices::Founding { amount: a, until_ms: u })
+                        Some(crate::prices::Founding { amount: a, until_ms: u, tz_min: f.founding_tz_min })
                     }
                     _ => None,
                 };

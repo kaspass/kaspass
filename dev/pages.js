@@ -180,6 +180,25 @@ const text = (u, h = {}) => new Promise((resolve, reject) => {
       await ctx.close();
     }
   }
+  // Update 99 (UI88 L1): one left edge on a computer (heading, plans, the boxes under them and the
+  // footer), and one centred column under 940 px. (UI88 L14): "a year" never splits from the price
+  // with a stray indent.
+  for (const w of [1366, 768]) {
+    const q = await b.newPage({ viewport: { width: w, height: 900 } });
+    await q.goto(S.replace('127.0.0.1', 'localhost') + '/?style=kaspa-vision'); await q.waitForTimeout(3500);
+    const e = await q.evaluate(() => {
+      const box = (x) => { const r = x.getBoundingClientRect(); return [Math.round(r.left), Math.round(r.right)]; };
+      const items = [document.querySelector('#levelsBox .lvhead'), document.getElementById('levelCards'), ...document.querySelectorAll('.wrap > section.panel:not(#levelsBox)'), document.querySelector('.wrap > footer')].filter((x) => x && x.offsetParent);
+      const per = document.querySelector('.lvl .lp .per'); const cs = per && getComputedStyle(per);
+      const fw = typeof forWallets === 'function' ? [forWallets('migrated at least 1,000,000 NACHO to KCC-20'), forWallets('at least 1 NACHO NFT, or at least 100 NACHO tokens'), forWallets('migrated at least 5 NACHO to KCC-20, or at least 1 NACHO NFT')] : null;
+      return { fw, lefts: items.map((x) => box(x)[0]), mids: items.map((x) => { const [l, r] = box(x); return Math.round((l + r) / 2); }), per: cs ? cs.display + ' ' + cs.whiteSpace : null, flat: document.documentElement.scrollWidth <= innerWidth + 1 };
+    });
+    if (w > 940) check('membership page at 1366: heading, plans, boxes and footer share one left edge (99, UI88 L1)', e.lefts.length >= 3 && new Set(e.lefts).size === 1 && e.flat, e);
+    else check('membership page at 768: heading, plans, boxes and footer in one centred column (99, UI88 L1)', e.mids.length >= 3 && Math.max(...e.mids) - Math.min(...e.mids) <= 2 && e.flat, e);
+    check(`membership page at ${w}: "a year" stays whole after the price (99, UI88 L14)`, e.per === 'inline-block nowrap', e.per);
+    if (w > 940) check('free month: the requirement reads "For wallets that…" (99, UI88 L7)', JSON.stringify(e.fw) === JSON.stringify(['For wallets that migrated at least 1,000,000 NACHO to KCC-20', 'For wallets that hold at least 1 NACHO NFT, or at least 100 NACHO tokens', 'For wallets that migrated at least 5 NACHO to KCC-20, or hold at least 1 NACHO NFT']), e.fw);
+    await q.close();
+  }
   // A plan chosen by link (?level=, as a partner site's plan button does): that plan alone, outlined,
   // with sign-in beside it as the one main button; "Change plan" shows the rest.
   {
@@ -190,6 +209,7 @@ const text = (u, h = {}) => new Promise((resolve, reject) => {
     const f = await q.evaluate(() => ({ cards: document.querySelectorAll('#levelCards .lvl').length, tag: !!document.querySelector('#levelCards .lvl .yourtag'), wallet: document.getElementById('wallet').parentElement.id, buttons: [...document.querySelectorAll('#levelCards .lvl > button:not(.chg)')].filter((b) => b.offsetParent).length, step: document.getElementById('walletTitle').textContent }));
     check('chosen plan: shown alone, labelled, with the sign-in beside it as step 1', f.cards === 1 && f.tag && f.wallet === 'levelCards' && /^1\. Sign in/.test(f.step), f);
     check('chosen plan: no pay buttons until signed in', f.buttons === 0, f);
+    check('chosen plan: labelled "You chose", not "Your plan", before buying (UI88 L4, 99)', await q.evaluate(() => document.querySelector('#levelCards .lvl .yourtag').textContent === 'You chose'));
     await q.click('#levelCards .chg'); await q.waitForTimeout(600);
     check('chosen plan: "Change plan" shows every plan, the pick still labelled', await q.evaluate(() => document.querySelectorAll('#levelCards .lvl').length > 1 && !!document.querySelector('#levelCards .lvl .yourtag')));
     check('chosen plan: no script errors', errs.length === 0, errs);
