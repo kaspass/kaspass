@@ -9,6 +9,9 @@ SITE="$(node -e 'console.log(require("os").tmpdir())')/kaspass-sim-telegram"
 echo "== unit tests"
 cargo test --release --quiet
 
+echo "== SDK reference functions"
+node sdk/test.mjs
+
 echo "== contracts on a simulated chain"
 cargo build --release --quiet
 ./target/release/membership-cli simulate > /tmp/kaspass-simulate.log 2>&1 || { tail -40 /tmp/kaspass-simulate.log; exit 1; }

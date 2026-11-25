@@ -1,0 +1,95 @@
+{
+  "about": "Test values for ownerHash(), recordAddress() and vaultAddress() in kaspass.js, worked out by membership-cli (src/sdk_tests.rs). Owners and recovery wallets are the simulator's test keys 0x11, 0x22, 0x33, 0x55 and 0x66 repeated; record ids are made up.",
+  "owner_hash_other_kinds": [
+    {
+      "address": "kaspa:qyprcu4dmd8a7zd0jncvjntlay4rs6n7wr8c58v9j93cdwe9xhrmrvgxgx3u9x0",
+      "owner_hash": "28a06b985137bb895ee5d0f321002743fb14b2f76ef25925ee4e03989fbb2869"
+    },
+    {
+      "address": "kaspatest:pq0fmzsjtnw4thk5y4pkq5vq0xcwsyr6cs3d84r8an82k0amtc0msr44rsqjj",
+      "owner_hash": "ab5d3015ca7668b42079a317701d1e15ee0b4299aad0adac6d7649c640cadadf"
+    }
+  ],
+  "records": [
+    {
+      "network": "testnet-10",
+      "owner": "kaspatest:qp8n2k7uklxq4aegau7vawtptkgxsja4kt99lpv6krctwpq8tpc655cyvcmd3",
+      "owner_hash": "2b9e44f824fc9205efc73461bcd4c0d184808f80f10963a34341ecc7c569413b",
+      "record_address": "kaspatest:pzw4lyvkzmke976nkh0r89emvz6uxefl5vzunpjs636kljrv9get70gk7p7st",
+      "record_id": "e743afceaf9995225e7e86f2627351ee33a3ee093a4c8ffc0a1af3d32dba43a8",
+      "recovery": "kaspatest:qprx6l72u437tjcf5rgcwza4sq6ysprp0pu6zj2feu3zshcm4cljwrzqrunpu",
+      "recovery_hash": "3dcdaf4559b031a7af61a7f5de52abc95c472fb037a63a060898d7dc1b8e1f08",
+      "vault_address": "kaspatest:prcn4tlxfjy7jpqfjye64yfgyffdfym8e2erjthr8h777qtwvxz6x44kntq3z"
+    },
+    {
+      "network": "testnet-10",
+      "owner": "kaspatest:qprx6l72u437tjcf5rgcwza4sq6ysprp0pu6zj2feu3zshcm4cljwrzqrunpu",
+      "owner_hash": "3dcdaf4559b031a7af61a7f5de52abc95c472fb037a63a060898d7dc1b8e1f08",
+      "record_address": "kaspatest:pq7lmtjr2j3gehxa6hw3ur0wnuj3mm4unng3d6v5kl3h8p0f7tlc2fwzxhql6",
+      "record_id": "9b60283156a34faab523fb9a136a42d8a9dacb068d8b803f9f25ba42e58ff9f3",
+      "recovery": "kaspatest:qq789twmfl0sntu57ry56llf9gux5lnse79pmpv3vwrtkff4c7cmzy2gvg8je",
+      "recovery_hash": "77bbdf7c2c6cfd21d1b5fdc7ad2b2b7ce035302ae548c70335eb6118ed5243e1",
+      "vault_address": "kaspatest:ppy3xxmpv4sztzz0k066na3h8p5r2vyxlre4xtfwnnmgd3f9f9fcgs2kl8gff"
+    },
+    {
+      "network": "testnet-10",
+      "owner": "kaspatest:qzdvyqe4avu8drfq22lpmw7rermp0pq8gk89re454530rkghtzy4kz298lu48",
+      "owner_hash": "aaa5a84ccb8623b56234dd5dff973b5dc4c932d7385a856822fb006050521469",
+      "record_address": "kaspatest:prkh0h76v7mqxqcynsxrznd3f0ncjj9zal0mxz3rlyvf5hf9ynntwv4gd97yx",
+      "record_id": "c5286d5d689d07febcf0d431fb1b462910f84c91bd6d892b0dd4a86d5c8a877e",
+      "recovery": "kaspatest:qpdtg6y7gq9y59sv7qwdg3ess3d9ga5dlp28mn0sw0vkfugf7xxrqpuexv6mu",
+      "recovery_hash": "e1b4b7158b0856a4a382c235507353b92479db8e40a393e97b5898b2c55981c6",
+      "vault_address": "kaspatest:pzg5es5awjgqdlzfmtswg9jcaq5evgrnt8hr7yqfcdc4rawrn8ky6wqae0lms"
+    },
+    {
+      "network": "testnet-10",
+      "owner": "kaspatest:qpdtg6y7gq9y59sv7qwdg3ess3d9ga5dlp28mn0sw0vkfugf7xxrqpuexv6mu",
+      "owner_hash": "e1b4b7158b0856a4a382c235507353b92479db8e40a393e97b5898b2c55981c6",
+      "record_address": "kaspatest:ppqlne7j4c6qku9xg25lr628suc3urf52f7lmxdx7klfgy5m9skf7qc5rq8tj",
+      "record_id": "394a0614e22038af39a85c8a98476bdfa86316202aae9306c35c4a3fc6992b7a",
+      "recovery": "kaspatest:qp8n2k7uklxq4aegau7vawtptkgxsja4kt99lpv6krctwpq8tpc655cyvcmd3",
+      "recovery_hash": "2b9e44f824fc9205efc73461bcd4c0d184808f80f10963a34341ecc7c569413b",
+      "vault_address": "kaspatest:pqzvpwrww4qp9kc05h4tlwkgu5ry2fmfmy57x90k59zkpzs8kse8qqcv04dy7"
+    },
+    {
+      "network": "mainnet",
+      "owner": "kaspa:qp8n2k7uklxq4aegau7vawtptkgxsja4kt99lpv6krctwpq8tpc6547zhh9u4",
+      "owner_hash": "2b9e44f824fc9205efc73461bcd4c0d184808f80f10963a34341ecc7c569413b",
+      "record_address": "kaspa:pzw4lyvkzmke976nkh0r89emvz6uxefl5vzunpjs636kljrv9get7wws9wqp0",
+      "record_id": "e743afceaf9995225e7e86f2627351ee33a3ee093a4c8ffc0a1af3d32dba43a8",
+      "recovery": "kaspa:qprx6l72u437tjcf5rgcwza4sq6ysprp0pu6zj2feu3zshcm4cljwzyxcndsc",
+      "recovery_hash": "3dcdaf4559b031a7af61a7f5de52abc95c472fb037a63a060898d7dc1b8e1f08",
+      "vault_address": "kaspa:prcn4tlxfjy7jpqfjye64yfgyffdfym8e2erjthr8h777qtwvxz6x5nsgy7qx"
+    },
+    {
+      "network": "mainnet",
+      "owner": "kaspa:qprx6l72u437tjcf5rgcwza4sq6ysprp0pu6zj2feu3zshcm4cljwzyxcndsc",
+      "owner_hash": "3dcdaf4559b031a7af61a7f5de52abc95c472fb037a63a060898d7dc1b8e1f08",
+      "record_address": "kaspa:pq7lmtjr2j3gehxa6hw3ur0wnuj3mm4unng3d6v5kl3h8p0f7tlc2ggyac7w7",
+      "record_id": "9b60283156a34faab523fb9a136a42d8a9dacb068d8b803f9f25ba42e58ff9f3",
+      "recovery": "kaspa:qq789twmfl0sntu57ry56llf9gux5lnse79pmpv3vwrtkff4c7cmz9vwh8era",
+      "recovery_hash": "77bbdf7c2c6cfd21d1b5fdc7ad2b2b7ce035302ae548c70335eb6118ed5243e1",
+      "vault_address": "kaspa:ppy3xxmpv4sztzz0k066na3h8p5r2vyxlre4xtfwnnmgd3f9f9fcg3vsygkcd"
+    },
+    {
+      "network": "mainnet",
+      "owner": "kaspa:qzdvyqe4avu8drfq22lpmw7rermp0pq8gk89re454530rkghtzy4krvruszyr",
+      "owner_hash": "aaa5a84ccb8623b56234dd5dff973b5dc4c932d7385a856822fb006050521469",
+      "record_address": "kaspa:prkh0h76v7mqxqcynsxrznd3f0ncjj9zal0mxz3rlyvf5hf9ynntwdnwk2q4z",
+      "record_id": "c5286d5d689d07febcf0d431fb1b462910f84c91bd6d892b0dd4a86d5c8a877e",
+      "recovery": "kaspa:qpdtg6y7gq9y59sv7qwdg3ess3d9ga5dlp28mn0sw0vkfugf7xxrqq6lary2c",
+      "recovery_hash": "e1b4b7158b0856a4a382c235507353b92479db8e40a393e97b5898b2c55981c6",
+      "vault_address": "kaspa:pzg5es5awjgqdlzfmtswg9jcaq5evgrnt8hr7yqfcdc4rawrn8ky60xmzqp25"
+    },
+    {
+      "network": "mainnet",
+      "owner": "kaspa:qpdtg6y7gq9y59sv7qwdg3ess3d9ga5dlp28mn0sw0vkfugf7xxrqq6lary2c",
+      "owner_hash": "e1b4b7158b0856a4a382c235507353b92479db8e40a393e97b5898b2c55981c6",
+      "record_address": "kaspa:ppqlne7j4c6qku9xg25lr628suc3urf52f7lmxdx7klfgy5m9skf7p7jc0e6k",
+      "record_id": "394a0614e22038af39a85c8a98476bdfa86316202aae9306c35c4a3fc6992b7a",
+      "recovery": "kaspa:qp8n2k7uklxq4aegau7vawtptkgxsja4kt99lpv6krctwpq8tpc6547zhh9u4",
+      "recovery_hash": "2b9e44f824fc9205efc73461bcd4c0d184808f80f10963a34341ecc7c569413b",
+      "vault_address": "kaspa:pqzvpwrww4qp9kc05h4tlwkgu5ry2fmfmy57x90k59zkpzs8kse8qp7256n46"
+    }
+  ]
+}

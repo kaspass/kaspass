@@ -2107,6 +2107,18 @@ impl RecordInfo {
         };
         Ok((spk_hash(&a(&self.owner)?), spk_hash(&a(&self.recovery)?)))
     }
+    /// The record's on-chain state, for anyone checking ownership from the chain: the two
+    /// hashes, and the address the record coin sits at with that state (see sdk/kaspass.js).
+    pub fn state(&self) -> Result<serde_json::Value> {
+        let (o, r) = self.hashes()?;
+        let hex = |h: Hash| h.as_bytes().iter().map(|x| format!("{x:02x}")).collect::<String>();
+        let spk = owner_record(o, r)?.spk();
+        Ok(serde_json::json!({
+            "owner_hash": hex(o),
+            "recovery_hash": hex(r),
+            "record_address": kaspa_txscript::extract_script_pub_key_address(&spk, net_prefix())?.to_string(),
+        }))
+    }
     pub fn vault_address(&self) -> Result<String> {
         let spk = vault(self.id()?)?.spk();
         Ok(kaspa_txscript::extract_script_pub_key_address(&spk, net_prefix())?.to_string())
@@ -3246,3 +3258,6 @@ mod chain_tests;
 
 #[cfg(test)]
 mod review89_tests;
+
+#[cfg(test)]
+mod sdk_tests;

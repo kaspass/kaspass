@@ -106,7 +106,15 @@ function leaks() {
   check('/v1/owner: the vault is the one /v1/levels shows for every plan', own.vaults.length === 1 && own.o.vault === own.vaults[0], [own.o.vault, own.vaults]);
   check('/v1/owner: lists the same plans, the record id and the network', JSON.stringify(own.o.levels) === JSON.stringify(own.ids) && /^[0-9a-f]{64}$/.test(own.o.record_id) && own.o.network === own.network, own.o);
   check('guide: explains Kaspa Vision\'s KasPass tab and what it reads from /v1/owner (96)', await p.evaluate(async () => { const g = await (await fetch('/guide')).text(); return g.includes("Kaspa Vision's KasPass tab") && g.includes('one site per vault'); }));
-  check('/v1/owner: no backup wallet in it', !('recovery' in own.o) && !JSON.stringify(own.o).includes('recovery'), Object.keys(own.o));
+  // Update 100: record_state, and the SDK's reference functions rebuild it all from the chain's rules.
+  const addrs = JSON.stringify(own.o).match(/kaspa(?:test)?:[a-z0-9]{20,}/g) || [];
+  const st = own.o.record_state || {};
+  check('/v1/owner: no backup wallet in it (its hash only; every address is the owner, the vault or the record)', !('recovery' in own.o) && addrs.every((a) => [own.o.owner, own.o.vault, st.record_address].includes(a)), addrs);
+  const sdk = await import(require('url').pathToFileURL(require('path').resolve(__dirname, '../sdk/kaspass.js')).href);
+  check('/v1/owner: record_state has both hashes, different, as 64 hex (100)', /^[0-9a-f]{64}$/.test(st.owner_hash || '') && /^[0-9a-f]{64}$/.test(st.recovery_hash || '') && st.owner_hash !== st.recovery_hash, st);
+  check('SDK ownerHash(owner) is record_state.owner_hash (100)', sdk.ownerHash(own.o.owner) === st.owner_hash, [sdk.ownerHash(own.o.owner), st.owner_hash]);
+  check('SDK recordAddress(hashes) is record_state.record_address (100)', sdk.recordAddress(st.owner_hash, st.recovery_hash, own.o.network) === st.record_address, st);
+  check('SDK vaultAddress(record_id) is the vault every plan pays (100)', sdk.vaultAddress(own.o.record_id, own.o.network) === own.o.vault, [sdk.vaultAddress(own.o.record_id, own.o.network), own.o.vault]);
   await p.goto(S + '/dashboard');
   await p.click('#signin');
   await p.waitForSelector('#creatorArea:not(.hidden)', { timeout: 30000 });

@@ -1869,6 +1869,7 @@ async fn owner_info(State(s): State<AppState>) -> Result<Json<serde_json::Value>
         "owner": r.owner,
         "record_id": r.record_id,
         "vault": r.vault_address().ok(),
+        "record_state": r.state().ok(),
         "levels": levels,
         "updated_ms": now,
     })))
