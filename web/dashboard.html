@@ -141,7 +141,7 @@ input[type="checkbox"], input[type="radio"] { width: 18px; height: 18px; min-hei
    shares three rows with its neighbours (words, box, hint), so every box sits on the same line. */
 .grid.align > label:not(.check):not(.wide) { display: grid; grid-row: span 3; grid-template-rows: subgrid; row-gap: 6px; align-content: start; }
 .grid.align > label > .hint { margin-top: 0; }
-.perm { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 600; color: var(--muted); margin-left: 6px; }
+.perm { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; font-weight: 600; color: var(--text); margin-left: 6px; }
 .perm svg.i { width: 12px; height: 12px; }
 .tip { box-shadow: none !important; width: 18px; height: 18px; min-height: 0; padding: 0; margin-left: 5px; border-radius: 50%; background: transparent; border: 1px solid var(--line); color: var(--muted); font: 700 11px/1 var(--font-body); vertical-align: 1px; cursor: help; }
 
@@ -231,7 +231,7 @@ footer.foot { color: var(--muted); font-size: 13px; margin-top: var(--s6); }
 .vault dd { margin: 2px 0 0; font: 600 18px/1.2 var(--font-head); font-variant-numeric: tabular-nums; }
 .vault.is-empty .amt { color: var(--muted); }
 
-/* Still to set up. */
+/* Setup rows (the Get started card has its own styles below). */
 .setupcard { flex: 1 1 280px; display: flex; flex-direction: column; }
 .setup { display: flex; gap: 12px; align-items: center; padding: 12px 0; border-top: 1px solid var(--line-soft); }
 .setup:first-child { border-top: 0; }
@@ -655,10 +655,7 @@ code { font: 13px var(--font-mono); background: var(--field); border: 1px solid 
 /* Launching, and the first-time steps. */
 .lneed { border: 1px solid var(--line); border-radius: var(--r-field); padding: 12px 14px; margin: 10px 0; background: var(--field); }
 .lneed p { margin: 0 0 10px; }
-.steps3 .s3 { margin: var(--s3) 0 0; padding-left: 22px; display: grid; gap: 8px; }
-.steps3 .s3 li.done { color: var(--muted); text-decoration: line-through; }
-.steps3 .s3 li.now { font-weight: 700; color: var(--text); }
-#launchHome > section, #launchHome > .panel, #recoveryArea, #notCreator, #steps3 { margin-bottom: var(--s4); }
+#launchHome > section, #launchHome > .panel, #recoveryArea, #notCreator, #walkCard { margin-bottom: var(--s4); }
 #launchSlot > section { margin-top: var(--s4); }
 
 /* Levels: changes waiting to be saved, and older memberships. */
@@ -754,6 +751,48 @@ body:has(#creatorArea.hidden) .main { padding-bottom: 64px; }
   .invgone { margin-top: 10px; border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; }
   .invgone summary { cursor: pointer; font-size: 13.5px; font-weight: 600; color: var(--muted); }
   .invgone[open] summary { margin-bottom: 8px; }
+
+/* "Get started" (101, WK100): a card with every step, and a slim bar that follows the creator
+   across tabs while the guide is open. Nothing blocks the page; the step's box gets a dashed ring. */
+.vh { position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.walkbtn { min-height: 44px; min-width: 44px; padding: 0 16px; }
+.walkcard { flex: 1 1 280px; }
+.walkcard h2 { margin-bottom: 6px; }
+.walklist { list-style: none; margin: 4px 0 12px; padding: 0; }
+.walklist li { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 8px 0; border-top: 1px solid var(--line-soft); }
+.walklist .wt { flex: 1 1 160px; }
+.walklist .ws { font-size: 13px; font-weight: 600; color: var(--muted); }
+.walklist li.done .wt { color: var(--muted); }
+.walklist li.done .ws { color: var(--good); }
+.walklist li.now .wt { font-weight: 700; }
+.walklist .wg { display: block; margin-top: 10px; font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); border: 0; }
+.walkbar { position: sticky; top: 0; z-index: 15; margin: 0 0 var(--s4); padding: 10px 14px; border: 1px solid var(--accent-dim); border-radius: var(--r-field); background: color-mix(in srgb, var(--accent) 7%, var(--card)); box-shadow: 0 4px 14px rgba(0,0,0,.12); }
+.walkbar .wbtop { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.walkbar .wbn { font-size: 14px; font-weight: 700; color: var(--accent); white-space: nowrap; }
+.walkbar .wbt { all: unset; flex: 1 1 200px; font-size: 17px; font-weight: 700; color: var(--text); cursor: default; min-height: 44px; display: flex; align-items: center; }
+.walkbar .wbt:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+.walkbar .wbacts { display: flex; gap: 8px; flex-wrap: wrap; }
+.walkbar .wbdo { margin: 4px 0 0; font-size: 15px; }
+.walk-here { outline: 3px dashed var(--accent) !important; outline-offset: 4px; border-radius: 6px; }
+body.walking [id] { scroll-margin-top: 140px; }
+.walk-streamonly { display: none; }
+html.stream .walk-streamonly { display: block; border-left: 3px solid var(--accent); padding-left: 10px; }
+.lockbox { margin-top: var(--s4); padding: 12px 14px; border: 1.5px solid var(--accent-dim); border-radius: var(--r-field); background: var(--field); }
+.lockbox h3 { margin: 0 0 6px; font-size: 16px; }
+.lockbox dl { margin: 8px 0 0; display: grid; gap: 2px; }
+.lockbox dl > div { display: grid; grid-template-columns: minmax(0, 210px) minmax(0, 1fr); gap: 10px; padding: 5px 0; border-top: 1px solid var(--line-soft); font-size: 14px; }
+.lockbox dt { color: var(--muted); }
+.lockbox dd { margin: 0; font-weight: 600; }
+.lockwarn { margin: 8px 0 0; font-weight: 600; }
+@media (max-width: 860px) {
+  .walkbar { top: 54px; padding: 8px 10px; }
+  .walkbar .wbt { flex: 1 1 0; min-width: 0; font-size: 16px; cursor: pointer; }
+  .walkbar #walkSkip { display: none; }
+  .walkbar.more #walkSkip:not(.hidden) { display: inline-flex; }
+  .walkbar:not(.more) .wbdo { display: none; }
+  .lockbox dl > div { grid-template-columns: 1fr; gap: 0; }
+  body.walking [id] { scroll-margin-top: 190px; }
+}
 </style>
 </head>
 <body>
@@ -819,6 +858,7 @@ body:has(#creatorArea.hidden) .main { padding-bottom: 64px; }
       <label class="sw night"><svg class="i"><use href="#i-moon"/></svg><span>Night mode</span><input type="checkbox" id="nightSw"></label>
       <label class="sw night" title="Hides wallet addresses, amounts, dates and names while you share your screen. Also on your membership page in this browser."><svg class="i"><use href="#i-eyeoff"/></svg><span>Stream mode</span><input type="checkbox" id="streamSw" data-stream-toggle></label>
       <div class="tools">
+        <button class="ghost sm hidden" type="button" id="walkOpen"><svg class="i"><use href="#i-check"/></svg>Get started <span class="count" id="walkOpenN"></span></button>
         <button class="ghost sm" type="button" data-go="settings" data-sub="theme"><svg class="i"><use href="#i-theme"/></svg>Themes</button>
         <button class="ghost sm hidden" id="wcOther2" type="button">Use another wallet</button>
         <button class="ghost sm hidden" id="logout" type="button">Sign out</button>
@@ -828,6 +868,20 @@ body:has(#creatorArea.hidden) .main { padding-bottom: 64px; }
   <div class="scrim" id="scrim"></div>
 
   <main class="main" id="mainContent" tabindex="-1"><div class="inner">
+
+  <aside class="walkbar hidden" id="walkBar" role="region" aria-label="Get started" data-public>
+    <div class="wbtop">
+      <span class="wbn" id="walkN">Step 1 of 8</span>
+      <button class="wbt" type="button" id="walkTitle" aria-expanded="false" aria-controls="walkDo">Turn on payouts</button>
+      <div class="wbacts">
+        <button class="walkbtn" type="button" id="walkShow">Show me</button>
+        <button class="ghost walkbtn" type="button" id="walkSkip">Skip this step</button>
+        <button class="ghost walkbtn" type="button" id="walkClose" aria-label="Close the Get started guide">Close</button>
+      </div>
+    </div>
+    <p class="wbdo small" id="walkDo"></p>
+  </aside>
+  <p class="vh" id="walkLive" aria-live="polite"></p>
 
   <section class="panel signbar" id="signPanel">
     <div class="signrow">
@@ -856,9 +910,14 @@ body:has(#creatorArea.hidden) .main { padding-bottom: 64px; }
     <div class="muted small" id="hoStatus"></div>
     <div class="err hidden" id="hoErr"></div>
   </section>
-  <section class="panel hidden steps3" id="steps3">
-    <h2>Get set up (about 10 minutes)</h2>
-    <ol class="s3" id="s3List"><li data-s="1">Turn on payouts</li><li data-s="2">Create your first plan</li><li data-s="3">Connect your group and share your link</li></ol>
+  <section class="panel hidden walkcard" id="walkCard" data-public aria-labelledby="walkH">
+    <h2 id="walkH">Get started</h2>
+    <p class="small" id="walkLead"></p>
+    <p class="small" id="walkNet"></p>
+    <div class="meter" id="walkMeter" role="progressbar" aria-valuemin="0" aria-valuemax="8" aria-valuenow="0" aria-valuetext="0 of 8 done"><i></i></div>
+    <ol class="walklist" id="walkList"></ol>
+    <div class="row walkacts" id="walkActs"><button class="walkbtn" type="button" id="walkStart">Start</button><button class="ghost walkbtn" type="button" id="walkLater">Not now</button></div>
+    <p class="small muted hidden" id="walkLaterMsg">No problem. It's under Get started in the menu whenever you want it.</p>
   </section>
   <section class="panel hidden" id="notCreator">
     <h2>This membership belongs to another wallet</h2>
@@ -893,10 +952,7 @@ body:has(#creatorArea.hidden) .main { padding-bottom: 64px; }
             <div><dt>KasPass fee</dt><dd id="ovFee">2%, already taken</dd></div>
           </dl></div>
         </section>
-        <section class="panel setupcard hidden" id="setupPanel">
-          <h2>Still to set up</h2>
-          <div id="setupList"></div>
-        </section>
+        <div class="walkslot" id="walkSlotOv"></div>
       </div>
       <section class="stats" id="stats" aria-label="Key figures"></section>
       <section class="panel hidden" id="statsNoneBox"><p class="muted small hidden" id="statsNone" style="margin:0">No payments yet. Once someone joins, your earnings and members show here.</p></section>
@@ -1300,6 +1356,8 @@ body:has(#creatorArea.hidden) .main { padding-bottom: 64px; }
             <li>Write down its recovery words and keep them somewhere separate from this wallet's.</li>
             <li>Copy its address and paste it here.</li>
           </ol>
+          <p class="small" id="recPerm"><b>Choose it with care: the backup wallet can't be swapped later from this dashboard.</b> Whoever holds it can rescue your plans and vault, so keep its recovery words on paper, somewhere safe.</p>
+          <p class="small walk-streamonly">Stream mode is on. Don't create a wallet or show recovery words on screen. Have the backup address ready, paste it, then press Tab so it hides again.</p>
           <label style="margin:10px 0">Backup wallet address<input id="recRecovery" class="mono" placeholder="kaspa:…" autocomplete="off"></label>
           <div class="row"><button id="recGo">Turn on payouts</button> <span class="muted small">Costs 1 KAS once, plus a tiny network fee. Kaspire will ask you to approve.</span></div>
         </div>
@@ -1479,7 +1537,7 @@ body:has(#creatorArea.hidden) .main { padding-bottom: 64px; }
   <div id="launchHome">
   <section class="panel hidden" id="launch">
     <h2 id="launchTitle">Launch a new membership</h2>
-    <p class="muted small" id="lIntro">Creating a <span class="lw1">plan</span> costs 1 KAS, which stays locked in it, plus a tiny network fee. Payments go to your payout vault. Settings marked <span class="perm">Permanent</span> can never be changed, so check them before you create it.</p>
+    <p class="muted small" id="lIntro">Creating a <span class="lw1">plan</span> costs 1 KAS, which stays locked in it, plus a tiny network fee. Payments go to your payout vault. Some settings are locked in for good when you create it: they're marked <span class="perm">Permanent</span> and listed together above the create button, so you can check them in one place.</p>
     <p class="muted small" id="lFeeNote">KasPass takes 2% of each payment, from your share (none on payments under 25 KAS).</p>
     <div class="lneed hidden" id="lNeedRecord"><p class="small"><b>Turn on payouts first.</b> New <span class="lwN">plans</span> pay into your payout vault, so that comes first.</p><button id="lNeedGo">Turn on payouts first</button></div>
     <div class="lbody" id="lBody">
@@ -1505,19 +1563,20 @@ body:has(#creatorArea.hidden) .main { padding-bottom: 64px; }
       <label>Founding price (optional)<input id="lFound" type="number" min="0" step="any" placeholder="none"></label>
       <label>Founding price ends (end of day)<input id="lFoundUntil" type="date"></label>
       </div>
-      <p class="muted small">These can all be changed later in Prices &amp; sales. A founding price is a lower first payment for people who join before a date.</p>
+      <p class="muted small" id="lPricesNote">You can change these amounts later in Prices &amp; sales. Whether a lifetime or commitment price exists at all is locked in when you create the plan, and so is how many periods a commitment covers. A founding price is a lower first payment for people who join before a date.</p>
       </div>
       </details>
     </div>
     <div class="grid" style="margin-top:var(--s4)">
-      <label>Members pay every <span class="perm">Permanent</span><span class="dur"><input id="lPeriod" type="number" min="1" step="any" value="10"><select id="lPeriodU" aria-label="Members pay every (unit)"><option value="1">minutes</option><option value="60">hours</option><option value="1440">days</option><option value="10080">weeks</option><option value="43200" title="30 days">months</option></select></span></label>
-      <label>Free trial length <span class="perm">Permanent</span><span class="dur"><input id="lTrial" type="number" min="0" step="any" value="5"><select id="lTrialU" aria-label="Free trial length (unit)"><option value="0">no free trial</option><option value="1">minutes</option><option value="60">hours</option><option value="1440">days</option><option value="10080">weeks</option><option value="43200" title="30 days">months</option></select></span></label>
+      <label>Members pay every <span class="perm">Permanent</span><span class="dur"><input id="lPeriod" type="number" min="1" step="any" value="1"><select id="lPeriodU" aria-label="Members pay every (unit)"><option value="1">minutes</option><option value="60">hours</option><option value="1440">days</option><option value="10080">weeks</option><option value="43200" title="30 days" selected>months</option></select></span></label>
+      <label>Free trial length <span class="perm">Permanent</span><span class="dur"><input id="lTrial" type="number" min="0" step="any" value="7"><select id="lTrialU" aria-label="Free trial length (unit)"><option value="0" selected>no free trial</option><option value="1">minutes</option><option value="60">hours</option><option value="1440">days</option><option value="10080">weeks</option><option value="43200" title="30 days">months</option></select></span></label>
+      <p class="small wide hidden" id="lQuickBox"><button class="ghost sm" type="button" id="lQuick">Quick test: 10-minute periods</button> <span class="muted">Test network only: members would pay every 10 minutes, so you can watch a renewal happen. That length is locked in for this plan.</span></p>
       <label class="check wide" id="lSelfTrialBox"><input type="checkbox" id="lSelfTrial"><span>Members can start the free trial themselves, with a "Start my free trial" button on your page <span class="perm">Permanent</span><span class="hint" style="display:block">They set aside their first month in their own membership. It's only taken if they stay after the trial, and "Cancel my trial" gives it all back. One free trial per wallet, and at most 20 new trials a day. Plans with this can't limit how many can join.</span></span></label>
     </div>
     <details class="adv" id="lAdv"><summary><svg class="i"><use href="#i-chev"/></svg>Advanced settings (most creators leave these as they are)</summary>
     <div>
     <div class="grid">
-      <label>How early members can renew <span class="perm">Permanent</span><span class="dur"><input id="lAhead" type="number" min="0" step="any" value="20"><select id="lAheadU" aria-label="How early members can renew (unit)"><option value="1">minutes</option><option value="60">hours</option><option value="1440">days</option><option value="10080">weeks</option><option value="43200" title="30 days">months</option></select></span></label>
+      <label>How early members can renew <span class="perm">Permanent</span><span class="dur"><input id="lAhead" type="number" min="0" step="any" value="7"><select id="lAheadU" aria-label="How early members can renew (unit)"><option value="1">minutes</option><option value="60">hours</option><option value="1440" selected>days</option><option value="10080">weeks</option><option value="43200" title="30 days">months</option></select></span></label>
       <label>Refundable deposit per member (KAS) <span class="perm">Permanent</span><input id="lBond" type="number" min="0.5" step="any" value="1"></label>
       <label>Limit how many can join <span class="perm">Permanent</span><input id="lSupply" type="number" min="0" step="1" value="" placeholder="No limit"></label>
       <label class="check" style="align-self:end;padding-bottom:12px"><input id="lResell" type="checkbox" checked><span>Members can sell or give away their membership <span class="perm">Permanent</span></span></label>
@@ -1527,6 +1586,13 @@ body:has(#creatorArea.hidden) .main { padding-bottom: 64px; }
     </div>
     </div>
     </details>
+    <section class="lockbox" id="lockBox" data-public aria-labelledby="lockH">
+      <h3 id="lockH">Locked in when you create it</h3>
+      <p class="small">Members can trust these because nobody can change them later, not even you. To offer something different later, you add a new plan, and members you already have keep what they bought.</p>
+      <dl id="lockList"></dl>
+      <p class="small lockwarn hidden" id="lockWarn" role="note"></p>
+      <p class="small muted" style="margin:8px 0 0">You can change any time: the name, the price, sales, and what the plan includes.</p>
+    </section>
     <div class="row" style="margin-top:16px"><button id="lGo">Launch membership</button>
     <span class="small muted" id="lGoNote"></span></div>
     </div>
@@ -1549,6 +1615,7 @@ body:has(#creatorArea.hidden) .main { padding-bottom: 64px; }
 
 <script src="/assets/kaspire-mobile.js?v=2"></script>
 <script src="/assets/dash-theme.js?v=1"></script>
-<script src="/assets/dashboard.js?v=81"></script>
+<script src="/assets/dashboard.js?v=82"></script>
+<script src="/assets/walk.js?v=1"></script>
 </body>
 </html>

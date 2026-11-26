@@ -2,7 +2,8 @@
 // every tab, and the update 92 fixes hold (date boxes line up, no "Mainnet" badge on test
 // networks' look, plan parts with their own fills, the holder discount in Prices & sales), and
 // Give a membership's Plan choice and period names (95), the update 97 dashboard fixes, update 98's badges and Plans tab on a phone,
-// and update 99's badge previews, early-price date, "All plans" on Members, skip link and phone layouts.
+// update 99's badge previews, early-price date, "All plans" on Members, skip link and phone layouts,
+// and update 101's Get started guide, locked-in list and second press before creating a plan.
 // Run by dev/check.sh against the local simulated site, after dev/pages.js.
 //
 // Signing in: a stand-in for Kaspire signs the sign-in message with the simulator's creator test
@@ -25,57 +26,8 @@ const sign = (message) => {
   return Buffer.from(schnorr.sign(h, KEY)).toString('hex');
 };
 
-// In the page: every piece of text a viewer could read, that looks private.
-function leaks() {
-  const RX = [
-    /kaspa(?:test)?:[a-z0-9]{6,}/,
-    /\b\d[\d,]*(?:\.\d+)?\s?(?:test\s)?KAS\b/,
-    /(?:CA|US)\$\s?\d/,
-    /\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.? \d{1,2}\b/,
-    /\b\d{4}-\d{2}-\d{2}\b/,
-    /\b[0-9a-f]{12,}/,
-    /…[a-z0-9]{4}\b/,
-    /\b\d+ (?:minutes?|hours?|days?|weeks?|months?) (?:left|ago)\b/,
-    /\b(?:Expires in|Expired) \d+[dhms]/,
-    /\b\d+\.(?:kas|k)\b/,
-    /\bending (?:in )?[a-z0-9]{4}\b/,
-  ];
-  const out = [];
-  const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
-  for (let t = w.nextNode(); t; t = w.nextNode()) {
-    const el = t.parentElement;
-    if (!el || !t.nodeValue.trim() || el.closest('#kpStream, script, style, option, select')) continue;
-    const r = el.getClientRects();
-    if (!r.length || !el.offsetParent && getComputedStyle(el).position !== 'fixed') continue;
-    const cs = getComputedStyle(el);
-    if (cs.visibility === 'hidden' || cs.color === 'rgba(0, 0, 0, 0)' || cs.webkitTextFillColor === 'rgba(0, 0, 0, 0)') continue;
-    if (RX.some((x) => x.test(t.nodeValue))) out.push(t.nodeValue.trim().slice(0, 80));
-    // A bare number whose unit sits in the next element ("362" then "KAS").
-    else if (/^\s*\d[\d,.\s]*$/.test(t.nodeValue)) {
-      const next = t.nextSibling || el.nextSibling;
-      if (next && /^\s*(?:test\s)?(?:KAS|CAD|USD|EUR)\b/.test(next.textContent || '')) out.push('number: ' + t.nodeValue.trim() + ' ' + next.textContent.trim().slice(0, 20));
-    }
-  }
-  // Dropdowns showing a private choice are blurred.
-  for (const s of document.querySelectorAll('select')) {
-    if (!s.getClientRects().length || !s.offsetParent || document.activeElement === s) continue;
-    const shown = s.options[s.selectedIndex] ? s.options[s.selectedIndex].text : '';
-    if (RX.some((x) => x.test(shown)) && getComputedStyle(s).color !== 'rgba(0, 0, 0, 0)') out.push('dropdown: ' + shown.slice(0, 60));
-  }
-  // Boxes with something in them are blurred.
-  for (const i of document.querySelectorAll('input, textarea')) {
-    if (!i.getClientRects().length || !i.offsetParent || ['checkbox', 'radio', 'file', 'button', 'submit', 'range', 'color', 'hidden'].includes(i.type)) continue;
-    if (!i.value || document.activeElement === i || i.readOnly && !RX.some((x) => x.test(i.value))) continue;
-    const ic = getComputedStyle(i);
-    if (ic.color !== 'rgba(0, 0, 0, 0)' && ic.webkitTextFillColor !== 'rgba(0, 0, 0, 0)') out.push('box: ' + i.value.slice(0, 60));
-  }
-  // Hover tooltips and link addresses (the browser's status bar) with private details.
-  for (const el of document.querySelectorAll('[title], a[href]')) {
-    const t = (el.getAttribute('title') || '') + ' ' + (el.tagName === 'A' ? el.getAttribute('href') || '' : '');
-    if (RX.some((x) => x.test(t)) || /[?&](?:k|invite)=/.test(t)) out.push('tooltip or link: ' + t.trim().slice(0, 60));
-  }
-  return out;
-}
+// In the page: every piece of text a viewer could read, that looks private (dev/leaks.js).
+const leaks = require('./leaks.js');
 
 (async () => {
   const b = await chromium.launch(process.env.KASPASS_CHROME ? { executablePath: process.env.KASPASS_CHROME } : {});
@@ -86,6 +38,7 @@ function leaks() {
     window.kaspire = {
       isKaspire: true,
       request: async ({ method, params }) => {
+        (window.kpCalls = window.kpCalls || []).push(method);
         if (method === 'getAccounts' || method === 'requestAccounts') return [await me()];
         if (method === 'signMessage') return { signature: await window.kpSign(params.message) };
         throw new Error('not in this test: ' + method);
@@ -298,6 +251,146 @@ function leaks() {
   const fills = await p.$$eval('#byPlanBar i', (els) => els.map((e) => e.className));
   check('members by plan: each part has its own fill', fills.length < 2 || new Set(fills).size === fills.length, fills);
   check('the tax line on payments', (await p.content()).includes("It isn't tax or legal advice"));
+
+  // ---- Update 101: the "Get started" guide (WK100 W28) ----
+  await p.evaluate(() => { try { localStorage.removeItem('kaspass.walk'); } catch {} });
+  await p.reload(); await p.waitForSelector('#creatorArea:not(.hidden)', { timeout: 30000 }); await p.waitForTimeout(4000);
+  const wk = await p.evaluate(() => {
+    const vis = WALK.filter((s) => !(s.hide && s.hide()));
+    const val = (v) => (typeof v === 'function' ? v() : v);
+    return {
+      ids: WALK.map((s) => s.id),
+      targets: WALK.map((s) => ({ id: s.id, tab: s.tab, paneOk: !s.tab || !!document.querySelector(`[data-pane="${s.tab}"]`), target: !!document.getElementById(val(s.target)), focus: !s.focus || !val(s.focus) || !!document.getElementById(val(s.focus)) })),
+      rows: [...document.querySelectorAll('#walkList li[data-walk]')].map((li) => li.querySelector('.ws').textContent),
+      n: vis.length,
+      now: Number(document.getElementById('walkMeter').getAttribute('aria-valuenow')),
+      text: document.getElementById('walkMeter').getAttribute('aria-valuetext'),
+      openBtn: !document.getElementById('walkOpen').classList.contains('hidden'),
+      inOverview: !!document.querySelector('[data-pane="overview"] #walkCard'),
+      bar: !document.getElementById('walkBar').classList.contains('hidden'),
+    };
+  });
+  check('get started: eight steps in the table (101)', wk.ids.length === 8, wk.ids);
+  check('get started: every step\'s tab and target exist', wk.targets.every((t) => t.paneOk && t.target && t.focus), wk.targets.filter((t) => !(t.paneOk && t.target && t.focus)));
+  check('get started: one row per step, each Done, To do or Skipped in words, and the meter counts them', wk.rows.length === wk.n && wk.rows.every((r) => ['Done', 'To do', 'Skipped'].includes(r)) && wk.now === wk.rows.filter((r) => r !== 'To do').length && wk.text === `${wk.now} of ${wk.n} done`, wk);
+  check('get started: the side menu button shows; on a selling site the bar stays shut until asked', wk.openBtn && !wk.bar, wk);
+  check('get started: on a selling site the card sits on the Overview', wk.inOverview, wk);
+  check('get started: the old "Still to set up" and "Get set up" lists are gone', await p.evaluate(() => !document.getElementById('setupPanel') && !document.getElementById('steps3')));
+  // Show me, for every step: the right tab, the target on screen, focus in it, and the dashed ring.
+  await p.click('#walkOpen'); await p.waitForTimeout(600);
+  check('get started: the side menu button opens the bar', await p.isVisible('#walkBar'));
+  for (const id of wk.ids) {
+    if (['plan', 'sale', 'payouts'].includes(id)) continue; // their boxes only show on a new site (the empty-site run)
+    const r = await p.evaluate(async (id) => {
+      walkShow(id); await new Promise((f) => setTimeout(f, 400));
+      const s = WALK.find((x) => x.id === id), val = (v) => (typeof v === 'function' ? v() : v);
+      const t = document.getElementById(val(s.target)), ring = document.querySelector('.walk-here'), bar = document.getElementById('walkBar').getBoundingClientRect();
+      const tr = (ring || t).getBoundingClientRect();
+      const a = document.activeElement;
+      return { tab: document.documentElement.dataset.tab, want: s.tab, ring: !!ring && (ring === t || ring.contains(t)), focus: !!a && (a === t || t.contains(a) || (!!ring && ring.contains(a))), onScreen: tr.top < innerHeight && tr.bottom > 0, belowBar: tr.top >= bar.bottom - 2 };
+    }, id);
+    check(`get started: Show me on "${id}" opens its tab, rings the box, puts it below the bar and focuses it`, r.tab === r.want && r.ring && r.focus && r.onScreen && r.belowBar, r);
+    if (SHOTS) await p.screenshot({ path: `${SHOTS}/walk-${id}-1366.png` });
+  }
+  // Open, reload: back on. Close, reload: stays shut, the menu button stays.
+  await p.reload(); await p.waitForSelector('#creatorArea:not(.hidden)', { timeout: 30000 }); await p.waitForTimeout(3500);
+  check('get started: open, reload: the bar is back', await p.isVisible('#walkBar'));
+  await p.click('#walkClose'); await p.waitForTimeout(300);
+  check('get started: Close puts it away and focus goes to the menu button', !(await p.isVisible('#walkBar')) && await p.evaluate(() => document.activeElement && document.activeElement.id === 'walkOpen'));
+  await p.reload(); await p.waitForSelector('#creatorArea:not(.hidden)', { timeout: 30000 }); await p.waitForTimeout(3500);
+  check('get started: closed, reload: stays closed and the menu button shows', !(await p.isVisible('#walkBar')) && await p.isVisible('#walkOpen'));
+  // Escape: from inside the bar it closes; from a form box it doesn't.
+  await p.click('#walkOpen'); await p.waitForTimeout(400);
+  await p.evaluate(() => { showTab('levels'); document.getElementById('perks').focus(); });
+  await p.keyboard.press('Escape'); await p.waitForTimeout(200);
+  check('get started: Escape while typing in a form box leaves it open', await p.isVisible('#walkBar'));
+  await p.focus('#walkClose'); await p.keyboard.press('Escape'); await p.waitForTimeout(200);
+  check('get started: Escape from inside the bar closes it, focus on the menu button', !(await p.isVisible('#walkBar')) && await p.evaluate(() => document.activeElement && document.activeElement.id === 'walkOpen'));
+  // "I don't have one" on the group step: Skipped, also after a reload.
+  await p.evaluate(() => showTab('overview')); await p.click('#walkOpen'); await p.waitForTimeout(400);
+  if (await p.$('[data-walk-skip="group"]')) {
+    await p.click('[data-walk-skip="group"]'); await p.waitForTimeout(200);
+    await p.reload(); await p.waitForSelector('#creatorArea:not(.hidden)', { timeout: 30000 }); await p.waitForTimeout(3500);
+    check('get started: "I don\'t have one" marks the group step Skipped, after a reload too', (await p.textContent('#walkList li[data-walk="group"] .ws')) === 'Skipped');
+  } else console.log('SKIP get started: the group step is already done or switched off on this site');
+  // 44 px controls, at 1366 and 390.
+  for (const [w, h] of [[1366, 900], [390, 844]]) {
+    await p.setViewportSize({ width: w, height: h }); await p.waitForTimeout(400);
+    await p.evaluate(() => { showTab('overview'); });
+    const small = await p.$$eval('#walkBar button, #walkCard button', (bs) => bs.filter((b) => b.getClientRects().length && b.offsetParent).map((b) => { const r = b.getBoundingClientRect(); return { id: b.id || b.textContent.trim().slice(0, 20), w: Math.round(r.width), h: Math.round(r.height) }; }).filter((r) => r.w < 44 || r.h < 44));
+    check(`get started: every guide button is at least 44 x 44 px at ${w} wide`, small.length === 0, small);
+  }
+  // Phone: no sideways scrolling, the bar under the phone header, above the target, clear of the bottom bar.
+  await p.evaluate(() => { walkShow('perks'); });
+  await p.waitForTimeout(400);
+  const wph = await p.evaluate(() => {
+    const bar = document.getElementById('walkBar').getBoundingClientRect(), dock = document.querySelector('.dock').getBoundingClientRect(), t = document.querySelector('.walk-here').getBoundingClientRect();
+    return { flat: document.documentElement.scrollWidth <= innerWidth + 1, barTop: Math.round(bar.top), barBottom: Math.round(bar.bottom), targetTop: Math.round(t.top), dockTop: Math.round(dock.top) };
+  });
+  check('get started at 390 x 844: no sideways scrolling, the bar under the header, above the target and the bottom bar', wph.flat && wph.barTop >= 50 && wph.barBottom <= wph.targetTop + 2 && wph.barBottom < wph.dockTop, wph);
+  if (SHOTS) await p.screenshot({ path: SHOTS + '/walk-perks-390.png' });
+  await p.setViewportSize({ width: 1366, height: 900 }); await p.waitForTimeout(300);
+  // No auto-open, and no card, once the site has a member.
+  const mem = await p.evaluate(() => {
+    try { localStorage.removeItem('kaspass.walk'); } catch {}
+    const was = data.totals.active; data.totals.active = 1; walkUpdate();
+    const r = { card: !document.getElementById('walkCard').classList.contains('hidden'), bar: !document.getElementById('walkBar').classList.contains('hidden') };
+    data.totals.active = was; walkUpdate(); return r;
+  });
+  check('get started: never opens by itself, and no card, when the site has a member', !mem.card && !mem.bar, mem);
+
+  // The locked-in list (W10) and the launch form's words (W9, W11, W20).
+  await p.evaluate(() => showTab('levels')); await p.click('#lvAdd'); await p.waitForTimeout(600);
+  const form = await p.evaluate(() => ({
+    period: [document.getElementById('lPeriod').value, document.getElementById('lPeriodU').value], trial: document.getElementById('lTrialU').value,
+    quick: !document.getElementById('lQuickBox').classList.contains('hidden'),
+    old: document.body.innerHTML.includes('These can all be changed later'),
+    backup: document.getElementById('recSetup').textContent.includes("can't be swapped later"),
+    ph: document.getElementById('recRecovery').placeholder,
+    rows: document.getElementById('lockList').textContent,
+  }));
+  check('launch form: starts at 1 month and no free trial on the test network too (W20)', form.period[0] === '1' && form.period[1] === '43200' && form.trial === '0', form);
+  check('launch form: the test network has the quick-test button', form.quick, form);
+  check('launch form: "These can all be changed later" is gone (W9)', !form.old);
+  check('payouts: the backup wallet says it can\'t be swapped later, with a kaspatest: placeholder here (W11)', form.backup && form.ph.startsWith('kaspatest:'), form);
+  check('locked-in list: drawn with the period, currency and fee', /Members pay every\s*1 month/.test(form.rows) && /Priced in/.test(form.rows) && /KasPass fee/.test(form.rows), form.rows);
+  await p.click('#lAdv summary'); await p.click('#lMorePrices summary');
+  await p.click('#lQuick'); await p.uncheck('#lResell'); await p.fill('#lSupply', '100'); await p.fill('#lV5Life', '500'); await p.waitForTimeout(200);
+  const lk = await p.evaluate(() => ({ rows: document.getElementById('lockList').textContent, warn: document.getElementById('lockWarn').textContent, warnOn: !document.getElementById('lockWarn').classList.contains('hidden') }));
+  check('locked-in list: follows the form (period, resale, limit, lifetime) and warns about a test length', /10 minutes/.test(lk.rows) && /Selling or giving away\s*not allowed/.test(lk.rows) && /at most, and it can never be raised/.test(lk.rows) && /Lifetime price\s*offered/.test(lk.rows) && lk.warnOn && /test length/.test(lk.warn), lk);
+  if (SHOTS) { await p.locator('#lockBox').scrollIntoViewIfNeeded(); await p.screenshot({ path: SHOTS + '/lockbox.png' }); }
+  let prepares = 0; const onReq = (r) => { if (r.url().includes('/v1/launch/prepare')) prepares++; }; p.on('request', onReq);
+  await p.evaluate(() => { window.kpCalls = []; });
+  await p.click('#lGo'); await p.waitForTimeout(700);
+  const first = await p.evaluate(() => ({ text: document.getElementById('lGo').textContent, calls: (window.kpCalls || []).filter((m) => m !== 'getAccounts') }));
+  check('create: the first press sends nothing and asks for a second (W10)', prepares === 0 && first.calls.length === 0 && first.text === "Press again: these can't be changed later", { prepares, ...first });
+  await p.fill('#lSupply', '50'); await p.waitForTimeout(100);
+  check('create: changing the form takes the second press back', (await p.textContent('#lGo')) !== "Press again: these can't be changed later");
+  p.off('request', onReq);
+  // Stream mode: amounts in the list are hidden, the rest of the list and the guide stay readable.
+  await p.click('label:has(#streamSw)'); await p.waitForTimeout(500);
+  const sl = await p.evaluate(() => ({
+    hidden: [...document.querySelectorAll('#lockBox .kp-priv')].every((e) => getComputedStyle(e).color === 'rgba(0, 0, 0, 0)'),
+    n: document.querySelectorAll('#lockBox .kp-priv').length,
+    barred: document.querySelectorAll('#lockBox .sx, #walkBar .sx, #walkCard .sx').length,
+  }));
+  check('stream mode: the locked-in list hides its amounts and bars none of its words', sl.hidden && sl.n >= 2 && sl.barred === 0, sl);
+  await p.evaluate(() => document.getElementById('walkOpen').click());
+  for (const id of wk.ids) {
+    if (['plan', 'sale', 'payouts'].includes(id)) continue;
+    await p.evaluate((id) => walkShow(id), id); await p.waitForTimeout(500);
+    await p.evaluate(() => document.activeElement && document.activeElement.blur());
+    const l = await p.evaluate(leaks);
+    check(`stream mode: nothing private readable with the guide on "${id}"`, l.length === 0, l);
+  }
+  check('stream mode: the guide\'s own words stay readable ("Step N of 8")', /Step \d of \d|All done/.test(await p.textContent('#walkBar')) && await p.evaluate(() => !document.querySelector('#walkBar .sx')));
+  if (SHOTS) await p.screenshot({ path: SHOTS + '/walk-stream-1366.png' });
+  await p.click('#walkClose');
+  // Stream mode back off the way a person would (two presses), and the form tidied.
+  await p.click('#kpStream button'); await p.waitForTimeout(1000); await p.click('#kpStream button'); await p.waitForTimeout(300);
+  await p.reload(); await p.waitForSelector('#creatorArea:not(.hidden)', { timeout: 30000 }); await p.waitForTimeout(3500);
+  await p.evaluate(() => showTab('overview'));
+
 
   // ---- Stream mode ----
   await p.click('label:has(#streamSw)');

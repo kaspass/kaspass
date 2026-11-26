@@ -190,6 +190,7 @@ function applyLevelWord() {
 // The launch form: for a creator it's "Add a level" in the Levels tab; for anyone else it's on its own.
 let LAUNCH_OPEN = true;
 function showLaunch(open) {
+  disarmLaunch();
   const creator = !!(card && address === card.creator_address && session);
   // Once opened it stays open (switching levels refreshes the page's data, not the form or its result).
   const wasOpen = creator && $("launch").parentElement === $("launchSlot") && !$("launch").classList.contains("hidden");
@@ -229,6 +230,8 @@ function syncTrial() {
   $("lSupply").placeholder = self ? "No limit (needed for free trials)" : "No limit";
 }
 $("lSelfTrial").addEventListener("change", syncTrial);
+// Test network only: 10-minute periods and a 20-minute renew window, so a renewal can be watched.
+$("lQuick").onclick = () => { setDur("lPeriod", 10 * 60000); setDur("lAhead", 20 * 60000); renderLock(); $("lPeriod").focus(); };
 $("lTrialU").addEventListener("change", () => { if ($("lTrialU").value !== "0" && !(Number($("lTrial").value) > 0)) $("lTrial").value = 7; syncTrial(); });
 function setDur(id, ms) {
   const min = Math.round((ms || 0) / 60000);
@@ -263,36 +266,14 @@ $("lCopy").onchange = async () => {
       if (l.price.term && o.v4 && o.v4.term_ms) $("lV5TermN").value = Math.round(o.v4.term_ms / Math.max(1, st.period_ms || 1));
     }
     say("lStatus", `Filled in from ${l.name}. Check the name and anything you want different, then create it.`);
+    renderLock();
   } catch (e) { say("lErr", "Couldn't copy that plan. Please try again."); }
 };
 
-// What's left to set up, each with a button to the tab that does it.
-async function renderSetup() {
-  const items = [];
-  if (!data.creator_name) items.push(["Choose the name members see for you", "page"]);
-  if (!(data.level && data.level.perks && data.level.perks.length)) items.push([`Say what ${data.level && data.level.name ? data.level.name : "your plan"} includes`, "levels"]);
-  try {
-    const t = await (await fetch("/v1/creator/telegram?session=" + encodeURIComponent(session))).json();
-    if (t.enabled && (t.groups || []).some((g) => g.pending)) items.push(["A Telegram group is waiting for approval: check it's yours", "groups"]);
-    else if (t.enabled && !(t.groups || []).some((g) => g.assigned) && !noTelegram()) items.push(["Connect your Telegram group", "groups", "tg"]);
-  } catch {}
-  if (pageCfg && !pageCfg.intro_html) items.push(["Write an intro for your page", "page"]);
-  if (data.v4 && data.v4.keeper && data.v4.keeper.balance_sompi < KAS) items.push([`Turn on auto-renew: send 2 ${card && card.network === "mainnet" ? "KAS" : "test KAS"} to your fees wallet. It pays the tiny network fee each time a member's plan renews itself (2 KAS covers about 60 renewals).`, "promos"]);
-  if (!(data.totals && data.totals.active > 0)) items.push(["Share your page link to get your first member", "page"]);
-  // Progress: six things to set up in all.
-  const all = 6, done = Math.max(0, all - items.length);
-  $("setupList").innerHTML = `<p class="muted small" style="margin:0">${done} of ${all} done</p><div class="meter" role="progressbar" aria-valuemin="0" aria-valuemax="${all}" aria-valuenow="${done}"><i style="width:${Math.round((done / all) * 100)}%"></i></div>` +
-    items.map(([t, tab, skip]) => `<div class="setup"><i class="ring" aria-hidden="true"></i><span class="t">${escHtml(t)}</span>${skip ? `<button class="ghost sm" data-skip="${skip}" title="Take this off the list. Connecting a group later still works.">I don't have one</button>` : ""}<button class="ghost sm" data-go="${tab}">Open</button></div>`).join("");
-  show("setupPanel", items.length > 0);
-}
-// "I don't have a Telegram group": remembered in this browser, for this site.
-const noTelegram = () => { try { return localStorage.getItem("kaspass.noTelegram") === "1"; } catch { return false; } };
-$("setupList").addEventListener("click", (e) => {
-  const b = e.target.closest("[data-skip]");
-  if (!b) return;
-  try { localStorage.setItem("kaspass.noTelegram", "1"); } catch {}
-  renderSetup();
-});
+// What's left to set up now lives in the "Get started" card (web/walk.js, 101, WK100 W3).
+function renderSetup() { walkTick(); }
+// Defined by web/walk.js; a no-op if that file didn't load.
+function walkTick() { if (typeof window.walkUpdate === "function") window.walkUpdate(); }
 
 $("signin").onclick = async () => {
   setError("");
@@ -472,14 +453,10 @@ $("lNeedGo").onclick = () => {
 let HAS_RECORD = false;
 function renderSteps3() {
   const isNew = !!(card && card.placeholder && session && address === card.creator_address);
-  show("steps3", isNew);
   if (!isNew) { show("payTitle", false); return; }
-  const done = [HAS_RECORD || SITE_V5, false, false];
-  const now = done.indexOf(false);
-  document.querySelectorAll("#s3List li").forEach((li, i) => { li.classList.toggle("done", done[i]); li.classList.toggle("now", i === now); });
   $("payTitle").textContent = HAS_RECORD || SITE_V5 ? "Step 1 done: payouts are on" : "Step 1. Turn on payouts";
   show("payTitle", true);
-  $("launchTitle").textContent = "Step 2. Create your first plan";
+  if (!PENDING) $("launchTitle").textContent = "Step 2. Create your first plan";
 }
 let FX = null, PLAN_CUR = null, PV_PLAN = null;
 fetch("/v1/levels").then((r) => r.json()).then((j) => {
@@ -496,7 +473,7 @@ fetch("/v1/levels").then((r) => r.json()).then((j) => {
   }
   if (VAULT != null) drawVault();
   applyV5(!!j.v5);
-  if (j.launch_no_fee) { $("lFeeNote").textContent = "No KasPass fee: every payment goes to you in full."; $("ovFee").textContent = $("payFee").textContent = "None"; }
+  if (j.launch_no_fee) { LAUNCH_NO_FEE = true; renderLock(); $("lFeeNote").textContent = "No KasPass fee: every payment goes to you in full."; $("ovFee").textContent = $("payFee").textContent = "None"; }
   if (j.launch_open === false) { $("signHint").textContent = "Sign in with the wallet that created this membership to manage it."; LAUNCH_OPEN = false; if (card && !card.placeholder) showLaunch(false); }
 }).catch(() => {});
 
@@ -593,6 +570,7 @@ async function loadRecord() {
     show("recSetup", !j.record);
     show("recInfo", !!j.record);
     HAS_RECORD = !!j.record;
+    walkTick();
     VAULT = j.record ? Number(j.vault_balance_sompi || 0) : null;
     renderSteps3();
     if (data && card) render();
@@ -781,13 +759,17 @@ async function refresh() {
     $("launchTitle").textContent = "Step 2. Create your first plan";
     $("lGo").textContent = "Create my first plan";
     $("lGoNote").textContent = "Kaspire will ask you to approve.";
-    show("lNameBox", false); show("lPerksBox", false); show("lAboutBox", false);
+    // The first plan gets its name here (101, WK100 W12): without one the page calls it
+    // "This membership". What it includes and its about text come later, in Plans.
+    show("lNameBox", true); show("lPerksBox", false); show("lAboutBox", false);
     // Payouts first: with an owner record, plans are priced in CAD, USD or EUR and pay into a vault.
     if (isCreator) {
       const pay = $("payPanel");
       if (pay && pay.parentElement !== $("launchHome")) $("launchHome").prepend(pay);
+      await loadPending();
     }
     renderSteps3();
+    walkTick();
     return;
   }
   show("notCreator", !isCreator);
@@ -881,6 +863,7 @@ async function renderCards() {
     if (!cardOrder) cardOrder = cards.slice().sort((a, b) => (a.rank ?? 99) - (b.rank ?? 99)).map((c) => c.file);
     cardList = cards;
     drawCards();
+    walkTick();
   } catch (e) { $("cardsT").innerHTML = `<tr><td class="muted">${escHtml(e.message || e)}</td></tr>`; }
 }
 
@@ -1116,10 +1099,13 @@ $("clubCheckBtn").onclick = async () => {
   } catch (e) { out.textContent = e.message || String(e); }
 };
 
+// The last Telegram and Discord states, for the Get started guide (no extra requests).
+let TG = null, DC = null;
 async function renderDiscord() {
   const el = $("dcStatus");
   try {
     const t = await (await fetch("/v1/creator/discord?session=" + encodeURIComponent(session))).json();
+    DC = t; walkTick();
     if (!t.enabled) {
       el.textContent = "Discord isn't switched on for your site yet. Message KasPass and we'll turn it on.";
       $("dcLinks").innerHTML = "";
@@ -1148,6 +1134,7 @@ async function renderTelegram() {
   try {
     const r = await fetch("/v1/creator/telegram?session=" + encodeURIComponent(session));
     const t = await r.json();
+    TG = t; walkTick();
     if (!t.enabled) {
       el.textContent = "Telegram isn't switched on for your site yet. Message KasPass and we'll turn it on.";
       $("tgLinks").innerHTML = "";
@@ -1332,8 +1319,9 @@ function render() {
     const who = whoHtml(p.owner_address, `<span class="muted small" title="This site hasn't seen this member's wallet yet. It fills in when they sign in here.">Wallet not seen yet</span><br><span class="mono muted small">${p.owner_hash.slice(0, 10)}…</span>`);
     const by = p.bought_by_keeper ? "Your fees wallet (free month)" : !p.bought_by ? `<span class="muted small">Not known</span>` : p.bought_by === p.owner_address ? "The member" : whoHtml(p.bought_by, "");
     return `<tr><td>${who}</td>${planTd(p)}<td data-l="Your note"><input class="mnote" data-owner="${escHtml(p.owner_hash)}" maxlength="120" placeholder="Add a note" value="${escHtml(p.note || "")}" aria-label="Your note on this member" style="min-width:140px"></td><td data-l="Kind">${escHtml(p.kind)}</td><td data-l="Status"><span class="pill ${p.active ? "ok" : "no"}">${p.lifetime ? status : `<span class="kp-priv">${status}</span>`}</span></td><td data-l="Paid">${kas(p.paid_sompi)}</td>${bal(p)}<td data-l="Bought by">${by}</td></tr>`;
-  }).join("") : `<tr><td colspan="8" class="muted">No members yet. Share your page to get your first one. <button class="ghost" id="copyPage" style="padding:4px 10px;font-size:13px">Copy my page link</button></td></tr>`);
-  if ($("copyPage")) $("copyPage").onclick = () => navigator.clipboard.writeText(location.origin + "/").then(() => { $("copyPage").textContent = "Copied"; setTimeout(() => ($("copyPage").textContent = "Copy my page link"), 1500); }).catch(() => {});
+  }).join("") : `<tr><td colspan="8" class="muted">No members yet. Share your page to get your first one. <button class="ghost" id="copyPage2" style="padding:4px 10px;font-size:13px">Copy my page link</button></td></tr>`);
+  // Its own id: the Overview's button is #copyPage (101, WK100 S12).
+  if ($("copyPage2")) $("copyPage2").onclick = () => navigator.clipboard.writeText(location.origin + "/").then(() => { $("copyPage2").textContent = "Copied"; setTimeout(() => { if ($("copyPage2")) $("copyPage2").textContent = "Copy my page link"; }, 1500); }).catch(() => {});
   document.querySelectorAll("#members .mnote").forEach((inp) => {
     const save = async () => {
       if (inp.value === (inp.dataset.saved ?? inp.defaultValue)) return;
@@ -1652,7 +1640,67 @@ $("gGo").onclick = () => {
   });
 };
 
-$("lGo").onclick = () => runPaid({
+// ---- "Locked in when you create it" (101, WK100 W10) ----------------------------------------
+// Every permanent choice on the form in one list above the create button, in plain words, following
+// the form as it changes (the Advanced fold included). Amounts the creator typed sit in their own
+// kp-priv spans so stream mode hides them; periods, lengths and yes or no answers stay readable,
+// since they're on the public page and are what an audience needs to follow.
+const DUR_WORDS = [[43200, "month"], [10080, "week"], [1440, "day"], [60, "hour"], [1, "minute"]];
+function durWords(min) {
+  if (!(min > 0)) return "";
+  if (min === 30 * 1440) return "1 month (30 days)";
+  const [u, w] = DUR_WORDS.find(([u]) => min % u === 0) || [1, "minute"];
+  const n = min / u;
+  return `${n.toLocaleString()} ${w}${n === 1 ? "" : "s"}`;
+}
+const priv = (v) => `<span class="kp-priv">${escHtml(String(v))}</span>`;
+let LAUNCH_NO_FEE = false;
+function renderLock() {
+  const w = levelWord();
+  const kasWord = card && card.network !== "mainnet" ? "test KAS" : "KAS";
+  const period = minutesOf("lPeriod"), trial = $("lTrialU").value === "0" ? 0 : minutesOf("lTrial"), ahead = minutesOf("lAhead");
+  const cur = $("lCur").value;
+  const life = Number($("lV5Life").value) || 0, term = Number($("lV5Term").value) || 0, termN = Number($("lV5TermN").value) || 0;
+  const resell = $("lResell").checked, royalty = Number($("lRoyalty").value) || 0;
+  const bond = Number($("lBond").value) || 0, supply = Number($("lSupply").value) || 0;
+  const rows = [
+    ["Members pay every", durWords(period) || "not set yet"],
+    ["Priced in", cur === "KAS" ? "KAS" : `a currency (${escHtml(cur)})`],
+    ["Free trial", !trial ? "none" : `${durWords(trial)}, ${$("lSelfTrial").checked ? "started by members" : "which you give from Members"}`],
+    ["Lifetime price", life > 0 ? "offered (you can change its amount later)" : "not offered, and it can't be added later"],
+    ["Commitment price", term > 0 ? `offered, covering ${termN.toLocaleString()} periods (you can change its amount later)` : "not offered, and it can't be added later"],
+    ["Selling or giving away", resell ? (royalty > 0 ? `allowed, and you get ${priv(royalty)} ${kasWord} each time` : "allowed") : "not allowed"],
+    ["Deposit each member leaves", `${priv(bond)} ${kasWord}, returned when they leave`],
+    ["How many can join", supply > 0 ? `${priv(supply)} at most, and it can never be raised` : "no limit"],
+    ["Renewing early", ahead > 0 ? `up to ${durWords(ahead)} before the end` : "not before the end"],
+    ["KasPass fee", LAUNCH_NO_FEE ? "none" : "2% of each payment, from your share (none on payments under 25 KAS)"],
+  ];
+  $("lockList").innerHTML = rows.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join("");
+  const short = period > 0 && period < 1440;
+  $("lockWarn").textContent = short ? `${durWords(period)} is a test length. This ${w.one} would renew every ${durWords(period)} for good. For a real ${w.one}, choose 1 month.` : "";
+  show("lockWarn", short);
+}
+["input", "change"].forEach((ev) => $("launch").addEventListener(ev, () => { renderLock(); disarmLaunch(); }));
+
+// The create button needs a second press, for every new plan: the first press sends nothing to
+// Kaspire, the second opens it (Kaspire's own approval is the third check).
+function disarmLaunch() {
+  const b = $("lGo");
+  if (b.dataset.armed !== "1") return;
+  clearTimeout(disarmLaunch.t);
+  b.dataset.armed = "0"; b.textContent = b.dataset.was || b.textContent;
+}
+$("lGo").addEventListener("click", (e) => {
+  const b = $("lGo");
+  if (b.dataset.armed === "1") { disarmLaunch(); return; }
+  e.stopImmediatePropagation();
+  renderLock();
+  b.dataset.was = b.textContent; b.dataset.armed = "1";
+  b.textContent = "Press again: these can't be changed later";
+  $("lockBox").scrollIntoView({ block: "nearest" });
+  disarmLaunch.t = setTimeout(disarmLaunch, 6000);
+});
+$("lGo").addEventListener("click", () => runPaid({
   url: "/v1/launch/prepare",
   body: {
     period_minutes: minutesOf("lPeriod"), trial_minutes: minutesOf("lTrial"), max_ahead_minutes: minutesOf("lAhead"),
@@ -1678,13 +1726,16 @@ $("lGo").onclick = () => runPaid({
     const tech = `<details class="adv"><summary>Technical details</summary><p class="small">Plan ID: <span class="mono">${escHtml(out.card.covenant_id)}</span><br>Transaction: <span class="mono">${escHtml(out.txid)}</span><br>Saved on this site as <code>${escHtml(out.card_file)}</code>.</p>${address === card.creator_address ? "" : `<p class="small">To run your own site: <code>membership-cli serve --card ${escHtml(out.card_file)}</code>.</p>`}</details>`;
     box.innerHTML = (creator ? `<b>Your new ${escHtml(w.one)}${nm ? `, ${escHtml(nm)},` : ""} is created.</b>` : `<b>Your new ${escHtml(w.one)} is created.</b>`) +
       (address === card.creator_address
-        ? `<p class="small">Put it on sale next to your other ${escHtml(w.many)}. Saving takes about a minute, and your page doesn't load during that minute.</p><div class="row"><button id="lAdd">Put it on sale</button><button id="lSwitch" class="ghost">Sell only this one</button></div><div id="lSwStatus" class="small hidden" style="margin-top:10px"></div><div class="err hidden" id="lSwErr"></div>`
+        ? card.placeholder
+          // A first plan: one button, since "next to your other plans" and "only this one" are the same thing (101, WK100 W13).
+          ? `<p class="small">Put it on sale to show it on your page. That takes about a minute, and your page is away during that minute.</p><div class="row"><button id="lAdd">Put it on sale</button></div><div id="lSwStatus" class="small hidden" style="margin-top:10px"></div><div class="err hidden" id="lSwErr"></div>`
+          : `<p class="small">Put it on sale next to your other ${escHtml(w.many)}. Saving takes about a minute, and your page doesn't load during that minute.</p><div class="row"><button id="lAdd">Put it on sale</button><button id="lSwitch" class="ghost">Sell only this one</button></div><div id="lSwStatus" class="small hidden" style="margin-top:10px"></div><div class="err hidden" id="lSwErr"></div>`
         : `<p class="small">This site sells another creator's plans. To sell yours, ask the site's owner to switch to it.</p>`) + tech;
     $("lStatus").append(box);
     show("lStatus", true);
     if (creator) { $("lName").value = ""; $("lPerks").value = ""; lAbout.set(""); }
-    if ($("lSwitch")) {
-      $("lSwitch").onclick = () => switchTier(out.card_file, $("lSwitch"), "lSwStatus", "lSwErr");
+    if ($("lAdd")) {
+      if ($("lSwitch")) $("lSwitch").onclick = () => switchTier(out.card_file, $("lSwitch"), "lSwStatus", "lSwErr");
       $("lAdd").onclick = () => {
         // What's on sale now, from the server (not unsaved ticks in the table).
         const now = cardList.filter((c) => c.on_sale).sort((a, b) => a.rank - b.rank).map((c) => c.file);
@@ -1692,9 +1743,35 @@ $("lGo").onclick = () => runPaid({
       };
       cardOrder = null; onSale = null;
       renderCards();
+      if (card.placeholder) { PENDING = { file: out.card_file, covenant_id: out.card.covenant_id, name: nm }; walkTick(); }
     }
   },
-});
+}));
+
+// A new site whose first plan is created but not on sale yet (a reload between "created" and
+// "on sale"): the server lists it with yours: true, on_sale: false. Show one "Put it on sale"
+// button instead of the create form, so the plan isn't lost or made twice (101, WK100 W13).
+let PENDING = null;
+async function loadPending() {
+  try {
+    const r = await fetch("/v1/creator/cards?session=" + encodeURIComponent(session));
+    if (!r.ok) return;
+    const { cards } = await r.json();
+    cardList = cards;
+    const mine = cards.filter((c) => c.yours && !c.on_sale).sort((a, b) => (b.saved_ms || 0) - (a.saved_ms || 0));
+    PENDING = mine[0] ? { file: mine[0].file, covenant_id: mine[0].covenant_id, name: mine[0].name || "" } : null;
+  } catch { return; }
+  // The green box from this visit already offers it.
+  if (!PENDING || $("lAdd")) return;
+  show("lBody", false); show("lIntro", false); show("lFeeNote", false); show("lNeedRecord", false);
+  $("launchTitle").textContent = "Step 3. Put your plan on sale";
+  const box = document.createElement("div");
+  box.className = "ok-box"; box.id = "lResume";
+  box.innerHTML = `<div><b>Your plan${PENDING.name ? `, ${escHtml(PENDING.name)},` : ""} is created. One thing left: put it on sale.</b><p class="small">Put it on sale to show it on your page. That takes about a minute, and your page is away during that minute.</p><div class="row"><button id="lAdd">Put it on sale</button></div><div id="lSwStatus" class="small hidden" style="margin-top:10px"></div><div class="err hidden" id="lSwErr"></div></div>`;
+  $("lStatus").replaceChildren(box);
+  show("lStatus", true);
+  $("lAdd").onclick = () => saveLevels([PENDING.file], $("lAdd"), "lSwStatus", "lSwErr");
+}
 
 
 // ---- A small formatting editor: bold, italic, headings, lists, quotes, links ----
@@ -1945,11 +2022,16 @@ addTips();
   // Mainnet is the normal case and carries no badge; a test network is the one to point out.
   $("net").textContent = $("netPh").textContent = card.network === "testnet-10" ? "Testnet-10" : card.network;
   $("net").hidden = $("netPh").hidden = card.network === "mainnet";
-  // The create form starts from sensible settings: a month, no trial, renew up to a week ahead on
-  // mainnet; short test periods (minutes) on a test network so renewals can be watched.
-  if (card.network === "mainnet") { setDur("lPeriod", 30 * 86400000); $("lTrialU").value = "0"; setDur("lAhead", 7 * 86400000); }
-  else $("lTrialU").value = "1";
+  // The create form starts from real settings on every network: a month, no trial, renew up to a
+  // week ahead (update 101, WK100 W20). A test network offers a quick-test button for 10-minute
+  // periods, so a renewal can be watched; the locked-in list warns about any length under a day.
+  setDur("lPeriod", 30 * 86400000); $("lTrialU").value = "0"; setDur("lAhead", 7 * 86400000);
   syncTrial();
+  show("lQuickBox", card.network !== "mainnet");
+  // Address boxes show the site's own prefix (the server refuses any other).
+  const pre = card.network === "mainnet" ? "kaspa:…" : "kaspatest:…";
+  for (const id of ["recRecovery", "hoOwner", "hoRecovery"]) $(id).placeholder = pre;
+  renderLock();
   if (card.network === "mainnet") {
     $("netNote").textContent = "New software. The code is public and has not had an outside security review.";
     $("gTo").placeholder = $("gTo").placeholder.replace("kaspatest:", "kaspa:");

@@ -1303,6 +1303,7 @@ const ASSETS: &[(&str, &str, &[u8])] = &[
     // bundled with esbuild. Loaded only when someone presses "Use Kaspire mobile".
     ("walletconnect.js", "text/javascript; charset=utf-8", include_bytes!("../web/walletconnect.js")),
     ("dashboard.js", "text/javascript; charset=utf-8", include_bytes!("../web/dashboard.js")),
+    ("walk.js", "text/javascript; charset=utf-8", include_bytes!("../web/walk.js")),
     // The creator dashboard's themes: the saved colours painted before the page shows, then the picker.
     ("dash-theme-boot.js", "text/javascript; charset=utf-8", include_bytes!("../web/dash-theme-boot.js")),
     ("stream.js", "text/javascript; charset=utf-8", include_bytes!("../web/stream.js")),

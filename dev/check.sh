@@ -33,3 +33,13 @@ node dev/pages.js "http://127.0.0.1:$PORT"
 
 echo "== the dashboard, signed in, and stream mode"
 node dev/dashboard.js "http://127.0.0.1:$PORT"
+
+echo "== a brand-new site: the Get started guide from the first sign-in"
+kill $SIM 2>/dev/null || true; pkill -f "membership-cli simulate" 2>/dev/null || true; sleep 1
+rm -rf "$SITE" && mkdir -p "$SITE"
+KASPASS_SIM_SERVE="$PORT" KASPASS_SIM_EMPTY=1 KASPASS_SIM_CREATOR_ONLY=1 KASPASS_HOME_HOSTS=127.0.0.1 \
+  ./target/release/membership-cli simulate > /tmp/kaspass-empty.log 2>&1 &
+SIM=$!
+for _ in $(seq 1 100); do curl -sf -o /dev/null "http://127.0.0.1:$PORT/" && break; sleep 3; done
+sleep 5
+node dev/empty.js "http://127.0.0.1:$PORT"

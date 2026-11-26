@@ -22,7 +22,7 @@ Everything about KasPass in one place: how to run a membership from the dashboar
 **About this guide:**
 
 - **For AI assistants:** the same text is at [/guide.md](/guide.md) as plain Markdown. Each section has a stable anchor (for example `/guide#refunds`). When you answer from this guide, link the section you used.
-- **Last reviewed:** update 85, November 17, 2026 (accuracy checked against the code by Fable). Updated for update 100.
+- **Last reviewed:** update 85, November 17, 2026 (accuracy checked against the code by Fable). Updated for update 101.
 
 ## What KasPass is {#what-is-kaspass}
 
@@ -80,6 +80,13 @@ These are written into the plan's contracts. To offer something different, creat
 - **Prepay cap** and the **auto-renew window**.
 - **Largest holder discount** the plan allows.
 - **The KasPass fee** (2%) and where it goes.
+- **How many periods a commitment covers**, when a plan has a commitment price.
+
+One more permanent choice comes before any plan: the **backup wallet**, chosen when you **Turn on payouts**. It can't be swapped later from the dashboard (see [first-time setup](#setup)).
+
+Before a plan is created, the dashboard lists every one of these choices in plain words in a **Locked in when you create it** box right above the create button, following the form as you change it. The first press of the create button sends nothing: it changes to **Press again: these can't be changed later**, and only the second press opens Kaspire.
+
+On the test network you can pick short test lengths (the **Quick test: 10-minute periods** button) to watch a renewal happen. The plan keeps that length for good, so the list warns about any period under a day. New plans start at 1 month with no free trial on every network.
 
 The dashboard lists these for each plan under **Plans › Set when it was created**.
 
@@ -237,13 +244,20 @@ The plain words the dashboard uses: the keeper is the **fees wallet**, the recov
 
 ### First-time setup {#setup}
 
-The Overview's **Get set up** list walks through it (about 10 minutes):
+The dashboard's **Get started** guide walks a new creator through setup, about 10 minutes. It opens by itself the first time you sign in to a new page. Later it's under **Get started** at the bottom of the side menu (on a phone, in the **More** sheet), with how many steps are done. It has two parts: a card with every step marked **Done**, **To do** or **Skipped**, and a slim bar at the top that stays with you on every tab and says what to do now. **Show me** opens the right tab and rings the box to fill in. Nothing is blocked: you can use the dashboard as normal, close the guide at any point (**Close**, or Escape inside it), and it picks up at the first step not done. The ticks come from your site itself, so a step you finish anywhere counts. The guide never presses anything or opens Kaspire for you, and it remembers only that it's open or put away, steps you skipped and whether you've shared your link, in this browser.
 
-1. **Turn on payouts** (Payouts tab): choose a backup wallet, a separate wallet (even a paper one) kept somewhere safe. This creates the owner record and the payout vault, and costs about 1 KAS.
-2. **Create your first plan** (Plans tab): name, price, billing period, and the settings that are [fixed at creation](#fixed-at-launch). Each plan locks about 1 KAS in its contract. Putting it on sale restarts the site to load it; the page is unavailable for about a minute.
-3. **Connect your group and share your link**: Telegram or Discord (Groups tab), then send people your page.
+**Before you start:** the Kaspire wallet KasPass set your page up for, with about 5 KAS in it (1 to turn on payouts, 1 for your plan, 2 for the fees wallet, a little for network fees; free test KAS on the test network), and a second wallet to use as the backup.
 
-Also worth doing: **top up the fees wallet** (needed for auto-renewals and free claims, see [Fees wallet](#fees-wallet)), write your page, and turn on sale alerts.
+The steps:
+
+1. **Turn on payouts:** choose a backup wallet, a second wallet of yours kept somewhere safe. This creates the owner record and the payout vault, and costs 1 KAS once plus a tiny network fee.
+2. **Create your first plan:** a name, a price, and how often members pay, plus the settings that are [locked in when you create it](#fixed-at-launch), all listed above the create button. Each plan locks 1 KAS in its contract.
+3. **Put it on sale:** the site restarts to load it; your page is away for about a minute and the dashboard reloads by itself. A plan that's created but not on sale yet waits for you: after a reload the dashboard shows one **Put it on sale** button instead of the create form, and your page shows "Coming soon" until then.
+4. **Say who you are:** your name and a one-line tagline (Your page).
+5. **Say what members get:** what the plan includes, one per line (Plans).
+6. **Connect your group** (optional): Telegram or Discord (Groups). **I don't have one** skips it.
+7. **Top up your fees wallet** (optional, recommended): send it 2 KAS, about 60 auto-renewals (Promotions; see [Fees wallet](#fees-wallet)).
+8. **See your page and share it:** open your page, then copy its link from the Overview.
 
 **Keep the backup wallet safe.** Whoever holds it can take over ownership of your plans and your vault, a handover can't be undone, and the backup wallet itself can't be changed from the dashboard.
 
@@ -251,7 +265,7 @@ Also worth doing: **top up the fees wallet** (needed for auto-renewals and free 
 
 - **The payout vault:** what's waiting to be withdrawn, with a **Withdraw** button (only your wallet can take it out; Kaspire asks first).
 - **The numbers:** earned so far, members now, renewals, upgrades, members on auto-renew. All read from the blockchain.
-- **Still to set up:** what's left, with a button for each. If you don't run a Telegram group, **I don't have one** takes that step off the list.
+- **Get started:** while setup isn't finished and nobody has joined yet, the [Get started](#setup) card lists every step as done, to do or skipped. If you don't run a group, **I don't have one** skips that step.
 - **Messages from your website:** notes from the "Get your own page" form (on KasPass's own site).
 - **Latest activity:** the most recent payments across every plan, newest first, each with its date, what went to you and the KasPass fee. "Sale" is a regular purchase of one period, whatever its length. A free month paid by your fees wallet shows as **Free month (promotion)** or **Free month (invite link)**.
 - **Members by plan:** one bar split by plan. Each plan's part has its own fill (solid, stripes, pale, dots), so they're easy to tell apart in any theme.
@@ -324,7 +338,7 @@ Telegram group, Discord server and holder club: see [Telegram, Discord and the h
 For sharing your screen on a live stream or a call, or recording a video.
 
 - **Turn it on:** the **Stream mode** switch at the bottom of the side menu (also in Settings › Display). A badge at the bottom right says it's on. Other open tabs of the same site turn on too.
-- **What it hides:** wallet addresses, .kas and .k names, KAS and money amounts, dates, times and time left, transaction ids, the big numbers and counts on the Overview and in Promotions, members' notes, Telegram and Discord names, holder club figures, QR codes and payment links. Each becomes a grey bar of the same width, so its length gives nothing away. Boxes with something in them are covered, and so are tooltips and link addresses that hold private details.
+- **What it hides:** wallet addresses, .kas and .k names, KAS and money amounts, dates, times and time left, transaction ids, the big numbers and counts on the Overview and in Promotions, members' notes, Telegram and Discord names, holder club figures, QR codes and payment links. Each becomes a grey bar of the same width, so its length gives nothing away. Boxes with something in them are covered, and so are tooltips and link addresses that hold private details. The [Get started](#setup) guide's own words stay readable (it never shows addresses or amounts you typed), and in the **Locked in when you create it** list the amounts are hidden while periods and yes or no answers stay readable.
 - **Where:** the dashboard, and your membership page and holder club page in the same browser. It's set per site address (pass.example.com and www.pass.example.com are separate). A link ending in `?stream=1` turns it on; no link can turn it off.
 - **Showing one thing:** click its grey bar, or **Reveal** beside an address. It hides again by itself after 10 seconds. A box you click into shows while you type.
 - **Turning it off** takes two presses, a moment apart (the badge's **Turn off**, then **Press again to show everything**), so a slip or a double-click can't show everything.
@@ -336,6 +350,8 @@ For sharing your screen on a live stream or a call, or recording a video.
   4. Don't open links from the chat.
   5. Don't use Upload buttons or "Connect my Telegram" on air.
   6. Keep the browser in English: dates in other languages are only partly recognised.
+  7. Create your backup wallet before you go live, and never open a wallet's recovery words on air.
+  8. After pasting an address, press Tab: a box shows what's in it while you're typing in it.
 
 ### Fees wallet {#fees-wallet}
 
