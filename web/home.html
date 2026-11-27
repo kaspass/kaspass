@@ -13,10 +13,10 @@
 <meta property="og:title" content="KasPass: sell memberships, get paid in KAS">
 <meta property="og:description" content="Members pay from their own Kaspa wallet, and the money lands in a vault only you can open.">
 <meta property="og:url" content="https://kaspass.app/">
-<meta property="og:image" content="https://kaspass.app/assets/og.png?v=2">
+<meta property="og:image" content="https://kaspass.app/assets/og.png?v=3">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="A KasPass membership pass sitting in a wallet">
+<meta property="og:image:alt" content="A KasPass membership pass: a coin the member owns on Kaspa's L1">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="/assets/favicon.svg?v=2" type="image/svg+xml">
 <link rel="icon" href="/assets/favicon-32.png?v=2" sizes="32x32" type="image/png">
@@ -29,7 +29,7 @@
  {"@type":"Organization","@id":"https://kaspass.app/#org","name":"KasPass","url":"https://kaspass.app/","logo":"https://kaspass.app/assets/apple-touch-icon.png?v=2","sameAs":["https://github.com/kaspass/kaspass","https://x.com/Kas_Pass"]},
  {"@type":"WebSite","url":"https://kaspass.app/","name":"KasPass","publisher":{"@id":"https://kaspass.app/#org"}},
  {"@type":"FAQPage","mainEntity":[
-  {"@type":"Question","name":"What is a membership on KasPass?","acceptedAnswer":{"@type":"Answer","text":"A small digital pass in the member's Kaspa wallet that records which plan they have and until when. Your site checks it to let them in."}},
+  {"@type":"Question","name":"What is a membership on KasPass?","acceptedAnswer":{"@type":"Answer","text":"A small coin on Kaspa's L1, owned by the member, that records which plan they have and until when. Your site checks it to let them in."}},
   {"@type":"Question","name":"Can members cancel?","acceptedAnswer":{"@type":"Answer","text":"Yes, any time. Nothing renews unless they've set KAS aside for it, and whatever isn't used goes back to their wallet."}},
   {"@type":"Question","name":"How do I get my money, and turn it into dollars?","acceptedAnswer":{"@type":"Answer","text":"Press Withdraw in your dashboard and approve it in Kaspire: everything in your vault moves to your wallet. To turn it into dollars, send it to an exchange that trades KAS and sell it there."}},
   {"@type":"Question","name":"What if KasPass shuts down?","acceptedAnswer":{"@type":"Answer","text":"Your vault and your members' memberships are on the Kaspa blockchain, not on our server, so they stay. The code is public, so anyone can run the same site from it."}}
@@ -89,7 +89,7 @@
         <div class="stamp">Paid<br>in KAS</div>
       </div>
       <div class="pocket" aria-hidden="true">
-        <span><svg viewBox="0 0 24 24"><path d="M4 7.5A2.5 2.5 0 0 1 6.5 5H18v3" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><rect x="4" y="8" width="16" height="11" rx="2.5" fill="none" stroke-width="1.8"/><circle cx="16" cy="13.5" r="1.3" fill="none" stroke-width="1.8"/></svg>In the member's own Kaspa wallet</span>
+        <span><svg viewBox="0 0 24 24"><path d="M4 7.5A2.5 2.5 0 0 1 6.5 5H18v3" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><rect x="4" y="8" width="16" height="11" rx="2.5" fill="none" stroke-width="1.8"/><circle cx="16" cy="13.5" r="1.3" fill="none" stroke-width="1.8"/></svg>A coin the member owns on Kaspa's L1</span>
       </div>
     </div>
   </div>
@@ -184,7 +184,7 @@
     <ol class="steps">
       <li><h3>Get the Kaspire wallet</h3><p>It's free: an add-on for Chrome on a computer, or an app on an Android phone. There's no iPhone app yet, so iPhone owners join from a computer.</p></li>
       <li><h3>Sign in with Kaspire</h3><p>Kaspire asks them to approve a short message, which proves the wallet is theirs. It costs nothing and moves no money.</p></li>
-      <li><h3>Pick a plan and approve</h3><p>Kaspire shows the exact amount before they say yes. The membership is in their wallet a few seconds later.</p></li>
+      <li><h3>Pick a plan and approve</h3><p>Kaspire shows the exact amount before they say yes. The membership is theirs a few seconds later.</p></li>
     </ol>
   </div>
 </section>
@@ -216,7 +216,7 @@
     <div class="faq">
       <details open><summary>Is it ready, and is it safe?</summary><p>KasPass is new. It's live on Kaspa's main network for our own app, Kaspa Vision, and new creators are set up with us, by hand. Your earnings and your members' memberships are on the Kaspa blockchain, not on our servers. The code is public on GitHub and has had AI security reviews, but not yet an outside audit.</p></details>
       <details><summary>What do I have to trust KasPass with?</summary><p>Never your money: payments go from the member's wallet to your vault, and only your wallet can take them out. You do rely on our server for three things: showing your page, working out today's KAS amount for a price in dollars (up to a limit fixed when the plan is made), and running auto-renewals and group access. The full list is in <a href="https://github.com/kaspass/kaspass/blob/main/SECURITY.md" rel="noopener">SECURITY.md</a>.</p></details>
-      <details><summary>What is a membership on KasPass?</summary><p>A small digital pass in the member's Kaspa wallet that records which plan they have and until when. Your site checks it to let them in. Because it's in their wallet, nobody can take it away, and there's no account to lose.</p></details>
+      <details><summary>What is a membership on KasPass?</summary><p>A small coin on Kaspa's L1, owned by the member, that records which plan they have and until when. Your site checks it to let them in. Because it's theirs, nobody can take it away, and there's no account to lose.</p></details>
       <details><summary>Do my members need to know about crypto?</summary><p>They need the free Kaspire wallet and some KAS. The membership page walks them through it, and our help page explains each step in plain words. Buying KAS for the first time is the slowest part: an exchange can take a day or two to open an account.</p></details>
       <details><summary>Can members cancel?</summary><p>Yes, any time. Nothing renews unless they've set KAS aside for it, and whatever isn't used goes back to their wallet. Ending a membership also gives back its 1 KAS deposit.</p></details>
       <details><summary>What happens if KAS goes up or down?</summary><p>If you price in dollars or euros, members pay the KAS amount for that price on the day they pay. Your price stays steady; the KAS amount changes with the rate. If you raise a price, members who prepaid keep the old one for 30 days and are told.</p></details>

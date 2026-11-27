@@ -8,7 +8,7 @@
 <title>Creator dashboard · KasPass</title>
 <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
 <script src="/assets/dash-theme-boot.js?v=1"></script>
-<script src="/assets/stream.js?v=1"></script>
+<script src="/assets/stream.js?v=2"></script>
 <style>
 /* ==========================================================================
    KasPass creator dashboard, redesign prototype.
@@ -1124,7 +1124,7 @@ html.stream .walk-streamonly { display: block; border-left: 3px solid var(--acce
         <h2 id="tierTitle">This membership</h2>
         <label class="hidden" id="lvEditHint" style="max-width:320px;margin:6px 0 12px">Editing<select id="lvSelect"></select></label>
         <div class="grid" style="margin:var(--s3) 0">
-          <label>Name (for example Supporter, or Gold)<input id="tName" maxlength="40" placeholder="This membership"></label>
+          <label>Name (for example Supporter, or Gold)<input id="tName" maxlength="40" placeholder="This membership" data-public></label>
           <p class="small hidden muted" id="taxTip" style="margin:2px 0 8px">Tip: write <code>{tax_year}</code> in the name or what's included to show the tax year on sale (it moves on every November 1, Pacific time), or <code>{next_tax_year}</code> for the one after.</p>
         </div>
         <label>What it includes, one per line (shown on its card; up to 8)
@@ -1546,20 +1546,20 @@ html.stream .walk-streamonly { display: block; border-left: 3px solid var(--acce
       <p class="small muted" style="align-self:end;margin:0 0 12px">Fills in everything from that <span class="lw1">plan</span>: name, what it includes, price and settings. Change what you need, like the name or the free trial, then create it.</p>
     </div>
     <div class="grid" id="lNameBox" style="margin-top:var(--s4)">
-      <label>Name (for example Silver, or VIP)<input id="lName" maxlength="40" placeholder="Name it"></label>
+      <label>Name (for example Silver, or VIP)<input id="lName" maxlength="40" placeholder="Name it" data-public></label>
     </div>
     <label id="lPerksBox" style="margin:14px 0">What it includes, one per line (optional)
       <textarea id="lPerks" rows="3" placeholder="1-on-1 mentoring&#10;Portfolio reviews"></textarea></label>
     <div id="lAboutBox" style="margin:0 0 14px"><div class="edlabel" id="lAboutL">About it (optional)</div><div id="lAboutEd"></div></div>
     <div class="grid hidden" id="lV5Box">
       <label>Currency<select id="lCur"><option>CAD</option><option>USD</option><option>EUR</option><option value="KAS">KAS (a fixed KAS price)</option></select></label>
-      <label>Price each period<input id="lAmount" type="number" min="0.5" step="any" value="100"></label>
+      <label>Price each period<input id="lAmount" type="number" min="0.5" step="any" placeholder="for example 5" data-public></label>
       <details class="adv wide" id="lMorePrices"><summary><svg class="i"><use href="#i-chev"/></svg>More ways to pay (optional): lifetime, commitment, founding price</summary>
       <div>
       <div class="grid">
       <label>Lifetime price (optional)<input id="lV5Life" type="number" min="0" step="any" placeholder="not offered"></label>
       <label>Commitment price (optional)<input id="lV5Term" type="number" min="0" step="any" placeholder="not offered"></label>
-      <label>Periods the commitment covers<input id="lV5TermN" type="number" min="2" max="120" step="1" value="12"></label>
+      <label>Periods the commitment covers<input id="lV5TermN" type="number" min="2" max="120" step="1" value="12" data-public></label>
       <label>Founding price (optional)<input id="lFound" type="number" min="0" step="any" placeholder="none"></label>
       <label>Founding price ends (end of day)<input id="lFoundUntil" type="date"></label>
       </div>
@@ -1568,15 +1568,15 @@ html.stream .walk-streamonly { display: block; border-left: 3px solid var(--acce
       </details>
     </div>
     <div class="grid" style="margin-top:var(--s4)">
-      <label>Members pay every <span class="perm">Permanent</span><span class="dur"><input id="lPeriod" type="number" min="1" step="any" value="1"><select id="lPeriodU" aria-label="Members pay every (unit)"><option value="1">minutes</option><option value="60">hours</option><option value="1440">days</option><option value="10080">weeks</option><option value="43200" title="30 days" selected>months</option></select></span></label>
-      <label>Free trial length <span class="perm">Permanent</span><span class="dur"><input id="lTrial" type="number" min="0" step="any" value="7"><select id="lTrialU" aria-label="Free trial length (unit)"><option value="0" selected>no free trial</option><option value="1">minutes</option><option value="60">hours</option><option value="1440">days</option><option value="10080">weeks</option><option value="43200" title="30 days">months</option></select></span></label>
+      <label>Members pay every <span class="perm">Permanent</span><span class="dur"><input id="lPeriod" type="number" min="1" step="any" value="1" data-public><select id="lPeriodU" aria-label="Members pay every (unit)"><option value="1">minutes</option><option value="60">hours</option><option value="1440">days</option><option value="10080">weeks</option><option value="43200" title="30 days" selected>months</option></select></span></label>
+      <label>Free trial length <span class="perm">Permanent</span><span class="dur"><input id="lTrial" type="number" min="0" step="any" value="7" data-public><select id="lTrialU" aria-label="Free trial length (unit)"><option value="0" selected>no free trial</option><option value="1">minutes</option><option value="60">hours</option><option value="1440">days</option><option value="10080">weeks</option><option value="43200" title="30 days">months</option></select></span></label>
       <p class="small wide hidden" id="lQuickBox"><button class="ghost sm" type="button" id="lQuick">Quick test: 10-minute periods</button> <span class="muted">Test network only: members would pay every 10 minutes, so you can watch a renewal happen. That length is locked in for this plan.</span></p>
       <label class="check wide" id="lSelfTrialBox"><input type="checkbox" id="lSelfTrial"><span>Members can start the free trial themselves, with a "Start my free trial" button on your page <span class="perm">Permanent</span><span class="hint" style="display:block">They set aside their first month in their own membership. It's only taken if they stay after the trial, and "Cancel my trial" gives it all back. One free trial per wallet, and at most 20 new trials a day. Plans with this can't limit how many can join.</span></span></label>
     </div>
     <details class="adv" id="lAdv"><summary><svg class="i"><use href="#i-chev"/></svg>Advanced settings (most creators leave these as they are)</summary>
     <div>
     <div class="grid">
-      <label>How early members can renew <span class="perm">Permanent</span><span class="dur"><input id="lAhead" type="number" min="0" step="any" value="7"><select id="lAheadU" aria-label="How early members can renew (unit)"><option value="1">minutes</option><option value="60">hours</option><option value="1440" selected>days</option><option value="10080">weeks</option><option value="43200" title="30 days">months</option></select></span></label>
+      <label>How early members can renew <span class="perm">Permanent</span><span class="dur"><input id="lAhead" type="number" min="0" step="any" value="7" data-public><select id="lAheadU" aria-label="How early members can renew (unit)"><option value="1">minutes</option><option value="60">hours</option><option value="1440" selected>days</option><option value="10080">weeks</option><option value="43200" title="30 days">months</option></select></span></label>
       <label>Refundable deposit per member (KAS) <span class="perm">Permanent</span><input id="lBond" type="number" min="0.5" step="any" value="1"></label>
       <label>Limit how many can join <span class="perm">Permanent</span><input id="lSupply" type="number" min="0" step="1" value="" placeholder="No limit"></label>
       <label class="check" style="align-self:end;padding-bottom:12px"><input id="lResell" type="checkbox" checked><span>Members can sell or give away their membership <span class="perm">Permanent</span></span></label>
@@ -1615,7 +1615,7 @@ html.stream .walk-streamonly { display: block; border-left: 3px solid var(--acce
 
 <script src="/assets/kaspire-mobile.js?v=2"></script>
 <script src="/assets/dash-theme.js?v=1"></script>
-<script src="/assets/dashboard.js?v=82"></script>
-<script src="/assets/walk.js?v=1"></script>
+<script src="/assets/dashboard.js?v=83"></script>
+<script src="/assets/walk.js?v=2"></script>
 </body>
 </html>

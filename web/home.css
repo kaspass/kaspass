@@ -107,7 +107,7 @@ nav.main .btn { margin-left: 8px; }
   .hero .wrap { grid-template-columns: 1fr; gap: 48px; }
 }
 
-/* The pass, sitting in a wallet. */
+/* The pass card picture. */
 .stage { position: relative; width: min(100%, 440px); margin: 0 auto; aspect-ratio: 440 / 370; }
 .pocket { position: absolute; left: 0; right: 0; bottom: 0; height: 34%; border-radius: 26px; background: var(--paper-2); border: 1px solid var(--line); z-index: 2; display: flex; align-items: flex-end; padding: 0 24px 22px; }
 .pocket::before { content: ""; position: absolute; left: 22px; right: 22px; top: 16px; border-top: 2px dashed var(--line); }

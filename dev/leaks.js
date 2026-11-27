@@ -44,6 +44,8 @@ function leaks() {
   for (const i of document.querySelectorAll('input, textarea')) {
     if (!i.getClientRects().length || !i.offsetParent || ['checkbox', 'radio', 'file', 'button', 'submit', 'range', 'color', 'hidden'].includes(i.type)) continue;
     if (!i.value || document.activeElement === i || i.readOnly && !RX.some((x) => x.test(i.value))) continue;
+    // A box the page marks public (a plan's name, price and lengths in the create form) stays readable.
+    if (i.closest('[data-public]')) continue;
     const ic = getComputedStyle(i);
     if (ic.color !== 'rgba(0, 0, 0, 0)' && ic.webkitTextFillColor !== 'rgba(0, 0, 0, 0)') out.push('box: ' + i.value.slice(0, 60));
   }

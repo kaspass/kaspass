@@ -203,7 +203,11 @@ function showLaunch(open) {
   // Only the site's owner launches levels once it has an owner record (launch_open is false then).
   show("launch", creator ? open || wasOpen : LAUNCH_OPEN);
 }
-$("lvAdd").onclick = () => { showLaunch(true); fillCopyList(); $("launch").scrollIntoView({ behavior: "smooth", block: "start" }); };
+$("lvAdd").onclick = () => {
+  // A fresh form after a plan was created in this visit (102, RH101 R5).
+  if (LAUNCH_DONE) { LAUNCH_DONE = false; show("lStatus", false); $("lStatus").replaceChildren(); show("lIntro", true); show("lFeeNote", true); applyV5(SITE_V5); }
+  showLaunch(true); fillCopyList(); $("launch").scrollIntoView({ behavior: "smooth", block: "start" });
+};
 
 // "Start from one of your levels": copies a level's details into the form, so a similar level
 // (another currency, a free trial, a new price) only needs the parts that differ.
@@ -422,6 +426,7 @@ async function pickLevel(id, { scroll } = {}) {
 // "No KasPass fee" sites (serve --no-fee) say so on the launch form.
 // v5 sites (with an owner record): plans priced in a currency, paid into a vault.
 let SITE_V5 = false;
+let LAUNCH_DONE = false; // a plan was created in this visit: its form stays put away (102)
 function v5Launch() {
   const until = $("lFoundUntil").value;
   // The end of that day in the creator's own time zone.
@@ -442,7 +447,7 @@ $("lCur").addEventListener("change", () => show("lCeilBox", $("lCur").value !== 
 function applyV5(on) {
   SITE_V5 = on;
   // Every membership is v5: it needs the owner record (Payouts tab) before the first launch.
-  show("lV5Box", on); show("tabPayouts", true); show("lNeedRecord", !on); show("lBody", on); $("lGo").disabled = !on;
+  show("lV5Box", on); show("tabPayouts", true); show("lNeedRecord", !on && !LAUNCH_DONE); show("lBody", on && !LAUNCH_DONE); $("lGo").disabled = !on;
   renderSteps3();
 }
 $("lNeedGo").onclick = () => {
@@ -1408,6 +1413,27 @@ async function saveNames(msgId) {
 
 $("lvNameGo").onclick = () => saveNames("lvNameMsg");
 
+// The fees wallet's balance, read again when the creator comes back to this tab, and every 15
+// seconds while the guide is on "Top up your fees wallet" or the panel is on screen, until it holds
+// 1 KAS (102, RH101 R15: the step never ticked after a top-up without a reload).
+async function recheckKeeper() {
+  if (!session || !data || !data.v4 || !data.v4.keeper || data.v4.keeper.balance_sompi >= KAS || recheckKeeper.busy) return;
+  recheckKeeper.busy = true;
+  try {
+    const r = await fetch(L("/v1/creator?session=" + encodeURIComponent(session)));
+    if (!r.ok) return;
+    const j = await r.json();
+    if (j.v4 && data) { data.v4 = j.v4; renderV4(); walkTick(); }
+  } catch {} finally { recheckKeeper.busy = false; }
+}
+window.addEventListener("focus", recheckKeeper);
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") recheckKeeper(); });
+setInterval(() => {
+  if (document.visibilityState !== "visible") return;
+  const onStep = typeof window.walkStep === "function" && window.walkStep() === "keeper";
+  if (onStep || ($("v4Panel") && $("v4Panel").offsetParent)) recheckKeeper();
+}, 15000);
+
 function renderV4() {
   const v4 = data.v4, s = card.settings;
   show("v4Panel", !!v4);
@@ -1694,12 +1720,30 @@ $("lGo").addEventListener("click", (e) => {
   const b = $("lGo");
   if (b.dataset.armed === "1") { disarmLaunch(); return; }
   e.stopImmediatePropagation();
+  const top0 = b.getBoundingClientRect().top;
+  // No price, no plan: the box starts empty (102, RH101 R1), so say so instead of arming.
+  if (!$("lV5Box").classList.contains("hidden") && !(Number($("lAmount").value) > 0)) {
+    say("lErr", "Type the price members pay each period first.");
+    $("lAmount").focus();
+    return;
+  }
   renderLock();
+  // The button stays under the pointer (102, RH101 R3): the old scroll to the locked-in list moved
+  // it about 90 px on a 720-tall screen, so the second click landed on text. If the longer words
+  // move it anyway, scroll the page back by the same amount. Nothing above or below it is shown
+  // or hidden by this press (at the bottom of the page, that would shift it too).
   b.dataset.was = b.textContent; b.dataset.armed = "1";
   b.textContent = "Press again: these can't be changed later";
-  $("lockBox").scrollIntoView({ block: "nearest" });
-  disarmLaunch.t = setTimeout(disarmLaunch, 6000);
+  const moved = b.getBoundingClientRect().top - top0;
+  if (Math.abs(moved) > 0.5) window.scrollBy(0, moved);
+  // 15 seconds (was 6), long enough to explain the locked-in list on air (102, RH101 R4).
+  disarmLaunch.t = setTimeout(disarmLaunch, 15000);
 });
+// The price box: one click selects what's in it, so typing replaces it instead of adding to it
+// (102, RH101 R1: typing 5 into a hidden "100" made 1005).
+$("lAmount").addEventListener("input", () => { if (/^Type the price/.test($("lErr").textContent)) say("lErr", ""); });
+$("lAmount").addEventListener("focus", (e) => { e.target.select(); $("lAmount").dataset.sel = "1"; });
+$("lAmount").addEventListener("mouseup", (e) => { if ($("lAmount").dataset.sel === "1") { e.preventDefault(); $("lAmount").dataset.sel = ""; } });
 $("lGo").addEventListener("click", () => runPaid({
   url: "/v1/launch/prepare",
   body: {
@@ -1710,8 +1754,17 @@ $("lGo").addEventListener("click", () => runPaid({
     ...v5Launch(),
   },
   statusId: "lStatus", errId: "lErr", button: $("lGo"),
-  after: async (out) => {
+  after: (out) => launchDone(out),
+}));
+
+// After a plan is created: name it, show the green box, and put the form away at once (102,
+// RH101 R5: it stayed live until a reload, so another press would have made a second plan). "Add a
+// plan" in Plans brings a fresh form back.
+async function launchDone(out) {
     say("lStatus", "");
+    LAUNCH_DONE = true;
+    show("lBody", false); show("lIntro", false); show("lFeeNote", false); show("lNeedRecord", false);
+    if (card.placeholder) $("launchTitle").textContent = "Step 3. Put your plan on sale";
     const creator = address === card.creator_address;
     const nm = $("lName").value.trim();
     // A creator names the new level and lists its perks right away.
@@ -1745,8 +1798,7 @@ $("lGo").addEventListener("click", () => runPaid({
       renderCards();
       if (card.placeholder) { PENDING = { file: out.card_file, covenant_id: out.card.covenant_id, name: nm }; walkTick(); }
     }
-  },
-}));
+}
 
 // A new site whose first plan is created but not on sale yet (a reload between "created" and
 // "on sale"): the server lists it with yours: true, on_sale: false. Show one "Put it on sale"

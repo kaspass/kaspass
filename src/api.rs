@@ -84,6 +84,13 @@ fn short_id(covenant_id: &str) -> &str {
     &covenant_id[..covenant_id.len().min(12)]
 }
 
+/// A plan's two ids in `/v1/levels`: `level`, the full covenant id, and `id`, its first 12
+/// characters. Both are public API that Kaspa Vision (KasTax) relies on: never rename, remove or
+/// change either without telling them first and serving both for a while (reply 93, Nov 26).
+fn plan_ids(covenant_id: &str) -> (String, String) {
+    (covenant_id.to_string(), short_id(covenant_id).to_string())
+}
+
 #[derive(Clone)]
 struct AppState {
     /// Every level on sale, lowest first. `card`, `snap` and `shop` below are the selected one.
@@ -1915,9 +1922,10 @@ async fn levels_info(State(s): State<AppState>) -> Json<serde_json::Value> {
             early_until_ms: offer.as_ref().and_then(|o| o.get("founding")).and_then(|f| f["until_ms"].as_u64()),
             early_tz_min: offer.as_ref().and_then(|o| o.get("founding")).and_then(|f| f["tz_min"].as_i64()).map(|m| m as i32),
         });
+        let (level_id, short) = plan_ids(&l.card.covenant_id);
         out.push(serde_json::json!({
-            "level": l.card.covenant_id,
-            "id": short_id(&l.card.covenant_id),
+            "level": level_id,
+            "id": short,
             "rank": i,
             "access_rank": ar[i],
             "vault": vault_of(&ls),
@@ -4776,6 +4784,34 @@ mod supervise_test {
             tokio::time::sleep(std::time::Duration::from_secs(1)).await;
         }
         assert_eq!(runs.load(Ordering::SeqCst), 2, "the job should have been started again after crashing");
+    }
+}
+
+#[cfg(test)]
+mod plan_ids_test {
+    use super::{plan_ids, short_id};
+
+    // Promised to KasTax in reply 93: every plan in /v1/levels has `level` (the full covenant id)
+    // and `id` is always its first 12 characters (102).
+    #[test]
+    fn level_is_the_full_id_and_id_its_first_12_characters() {
+        let cov = "3f9a0c1b2d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8";
+        let (level, id) = plan_ids(cov);
+        assert_eq!(level, cov);
+        assert_eq!(id, &cov[..12]);
+        assert_eq!(id, short_id(cov));
+        assert!(level.starts_with(&id));
+        assert_eq!(id.len(), 12);
+    }
+
+    // /v1/levels must build both fields from plan_ids, so the two can't drift apart.
+    #[test]
+    fn levels_info_uses_plan_ids_for_both_fields() {
+        let src = include_str!("api.rs");
+        let start = src.find("async fn levels_info(").expect("levels_info is in api.rs");
+        let body = &src[start..start + src[start..].find("\n}\n").expect("end of levels_info")];
+        assert!(body.contains("let (level_id, short) = plan_ids(&l.card.covenant_id);"), "levels_info should take both ids from plan_ids");
+        assert!(body.contains("\"level\": level_id,") && body.contains("\"id\": short,"), "levels_info should serve level and id from plan_ids");
     }
 }
 

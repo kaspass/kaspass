@@ -5,6 +5,9 @@
 // page and the holder club page of the same site. `?stream=1` in a link turns it on; no link can
 // turn it off.
 //
+// A box a page marks data-public (a plan's name, price and lengths in the create form, which end up
+// on the public page anyway) stays readable, so a creator can see what they typed on air (102, RH101).
+//
 // A hidden detail shows when it's clicked (and the Reveal button beside an address does the same),
 // and hides again by itself after 10 seconds. A box you're typing in shows while you type.
 // Turning stream mode off takes two separate presses, so one slip (or a double-click) on a live
@@ -109,8 +112,8 @@ html.stream .sx:not(.kp-shown) { display: inline-block; width: 7ch; overflow: hi
 html.stream ${HIDE}:not(.kp-shown) * { color: transparent !important; -webkit-text-fill-color: transparent !important; text-shadow: none !important; border-color: transparent !important; }
 html.stream ${HIDE}:not(.kp-shown) .sx::after { display: none; }
 html.stream ${HIDE}:not(.kp-shown) :is(img, svg, canvas) { visibility: hidden; }
-html.stream :is(${FIELDS}):not(:focus):not(:placeholder-shown):not(.kp-shown),
-html.stream :is(input[type=date], input[type=datetime-local], input[type=time], input[type=number]):not(:focus):not(.kp-shown),
+html.stream :is(${FIELDS}):not(:focus):not(:placeholder-shown):not(.kp-shown):not([data-public]),
+html.stream :is(input[type=date], input[type=datetime-local], input[type=time], input[type=number]):not(:focus):not(.kp-shown):not([data-public]),
 html.stream select.kp-sx:not(:focus),
 html.stream input.invlink { color: transparent !important; -webkit-text-fill-color: transparent !important; text-shadow: none !important; background-color: ${BAR} !important; forced-color-adjust: none; }
 html.stream :is(input[type=date], input[type=datetime-local], input[type=time], input.invlink):not(.kp-shown)::-webkit-datetime-edit { color: transparent; }

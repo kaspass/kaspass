@@ -72,7 +72,8 @@
     {
       id: "keeper", group: "Finish", title: "Top up your fees wallet", optional: true, recommended: true, tab: "promos", target: "v4Panel", focus: "keeperCopy",
       words: () => `This small wallet pays the tiny network fee each time a membership renews by itself, and pays for free months you give away. It can't touch your money or your members' money. Send it 2 ${kasWord()} from Kaspire. That covers about 60 renewals.`,
-      bar: `Copy the address, send it 2 ${testnet() ? "test KAS" : "KAS"} from Kaspire, then come back.`,
+      // A function, so it reads the network when drawn, not when the steps are built (102, RH101 R14).
+      bar: () => `Copy the address, send it 2 ${kasWord()} from Kaspire. This step ticks by itself within a few seconds of it arriving.`,
       done: () => !!(data && data.v4 && data.v4.keeper && data.v4.keeper.balance_sompi >= KAS),
       hide: () => !hasKeeper(),
     },
@@ -225,7 +226,10 @@
     if (e.target.closest("#copyPage, #copyPage2, #whoBox a[href='/']")) { if (!flags.shared) { flags.shared = true; save(); draw(); } }
   });
   window.walkUpdate = draw;
+  // The step the bar is on, while the guide is open (the dashboard re-reads the fees wallet then, 102).
+  window.walkStep = () => { const s = now(); return flags.open && !flags.dismissed && s.step ? s.step.id : null; };
   // For the browser test: point at any step, not only the current one.
   window.walkShow = (id) => showMe(id);
+  window.walkBarText = (id) => { const x = STEPS.find((y) => y.id === id); return x ? val(x.bar) : ""; };
   draw();
 })();

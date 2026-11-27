@@ -899,7 +899,7 @@ function renderInvite() {
   const b = $("invClaim");
   show("invClaim", false);
   if (INVITE.error) return t("This invite link doesn't work", plainError(INVITE.error, "Check you copied the whole link, or ask the person who sent it.").text);
-  if (INVITE.state === "mine") return t("It's yours", `Your free ${u} of ${INVITE.level_name || "this plan"} is in your wallet.`);
+  if (INVITE.state === "mine") return t("It's yours", `Your free ${u} of ${INVITE.level_name || "this plan"} is yours now.`);
   if (INVITE.state === "used") return t("This invite has already been used", "Each invite link works once. If it was yours, you're all set: sign in to see your membership.");
   if (INVITE.state === "cancelled" || INVITE.state === "ended") return t(INVITE.state === "ended" ? "This invite has expired" : "This invite was cancelled", "Ask the person who sent it for a new one.");
   if (INVITE.paused) return t("🎁 You've been invited", `${INVITE.label}: a free ${u} of ${INVITE.level_name || "this plan"}. Free passes are paused for a moment. Please try again later.`);
@@ -1595,7 +1595,7 @@ function renderWelcome() {
     if (n && !$("brandName").textContent) $("brandName").textContent = (site.club_name || n);
     renderTrust();
     renderAbout();
-    if (n) $("wLead").innerHTML = `This is <b>${escH(n)}</b>'s ${escH(pw())}. When you join, it lives in your own Kaspa wallet: nobody can take it away, and there's no card to enter.`; });
+    if (n) $("wLead").innerHTML = `This is <b>${escH(n)}</b>'s ${escH(pw())}. When you join, it's a coin you own on Kaspa's L1: yours, nobody can take it away, and there's no card to enter.`; });
   renderHolderRow();
   renderCreatorRow();
 }

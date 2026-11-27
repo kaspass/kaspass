@@ -22,13 +22,13 @@ Everything about KasPass in one place: how to run a membership from the dashboar
 **About this guide:**
 
 - **For AI assistants:** the same text is at [/guide.md](/guide.md) as plain Markdown. Each section has a stable anchor (for example `/guide#refunds`). When you answer from this guide, link the section you used.
-- **Last reviewed:** update 85, November 17, 2026 (accuracy checked against the code by Fable). Updated for update 101.
+- **Last reviewed:** update 85, November 17, 2026 (accuracy checked against the code by Fable). Updated for update 102.
 
 ## What KasPass is {#what-is-kaspass}
 
 KasPass lets a creator sell memberships that live on the Kaspa blockchain instead of inside a company's database.
 
-- **A member's pass sits in their own wallet.** It's a small contract on Kaspa with an end date, created when they buy.
+- **A member's pass is a coin they own on Kaspa's L1.** It's a small contract with an end date, created when they buy. Only they can move it, so nobody can take it away. It isn't a coin at their address, so it doesn't show in their wallet's balance.
 - **Payments go straight to the creator,** into a payout vault only the creator can withdraw from. KasPass never holds anyone's money.
 - **The contracts enforce the core rules on Kaspa itself:** where the money goes, how long a pass lasts, the most KAS it can ever be charged (its ceiling), the KasPass fee, and that only the member can take back their deposit. A pass can't be forged, because Kaspa refuses any pass the plan didn't issue.
 - **The site's server handles the rest:** it signs each payment at today's price (within the ceiling), and applies sales, trial limits and the 30-day notice on price rises. See [what the server decides](#server-rules).

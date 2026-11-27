@@ -355,7 +355,7 @@ const leaks = require('./leaks.js');
   check('payouts: the backup wallet says it can\'t be swapped later, with a kaspatest: placeholder here (W11)', form.backup && form.ph.startsWith('kaspatest:'), form);
   check('locked-in list: drawn with the period, currency and fee', /Members pay every\s*1 month/.test(form.rows) && /Priced in/.test(form.rows) && /KasPass fee/.test(form.rows), form.rows);
   await p.click('#lAdv summary'); await p.click('#lMorePrices summary');
-  await p.click('#lQuick'); await p.uncheck('#lResell'); await p.fill('#lSupply', '100'); await p.fill('#lV5Life', '500'); await p.waitForTimeout(200);
+  await p.click('#lQuick'); await p.uncheck('#lResell'); await p.fill('#lSupply', '100'); await p.fill('#lV5Life', '500'); await p.fill('#lAmount', '10'); await p.waitForTimeout(200);
   const lk = await p.evaluate(() => ({ rows: document.getElementById('lockList').textContent, warn: document.getElementById('lockWarn').textContent, warnOn: !document.getElementById('lockWarn').classList.contains('hidden') }));
   check('locked-in list: follows the form (period, resale, limit, lifetime) and warns about a test length', /10 minutes/.test(lk.rows) && /Selling or giving away\s*not allowed/.test(lk.rows) && /at most, and it can never be raised/.test(lk.rows) && /Lifetime price\s*offered/.test(lk.rows) && lk.warnOn && /test length/.test(lk.warn), lk);
   if (SHOTS) { await p.locator('#lockBox').scrollIntoViewIfNeeded(); await p.screenshot({ path: SHOTS + '/lockbox.png' }); }
@@ -390,6 +390,25 @@ const leaks = require('./leaks.js');
   await p.click('#kpStream button'); await p.waitForTimeout(1000); await p.click('#kpStream button'); await p.waitForTimeout(300);
   await p.reload(); await p.waitForSelector('#creatorArea:not(.hidden)', { timeout: 30000 }); await p.waitForTimeout(3500);
   await p.evaluate(() => showTab('overview'));
+
+  // Update 102 (RH101 R15): after topping up the fees wallet, step 7 ticks by itself when the
+  // creator comes back to the tab, with no reload. The server's answer is stubbed with a topped-up
+  // balance (the simulator's fees wallet may hold anything).
+  const hasK = await p.evaluate(() => !!(data && data.v4 && data.v4.keeper));
+  if (hasK) {
+    await p.evaluate(() => { data.v4.keeper.balance_sompi = 0; renderV4(); walkUpdate(); });
+    const k0 = await p.evaluate(() => document.querySelector('#walkList li[data-walk="keeper"] .ws').textContent);
+    const topUp = async (route) => { const r = await route.fetch(); const j = await r.json(); if (j.v4 && j.v4.keeper) j.v4.keeper.balance_sompi = 2e8; await route.fulfill({ status: r.status(), contentType: 'application/json', body: JSON.stringify(j) }); };
+    await p.route(/\/v1\/creator(\?|$)/, topUp);
+    await p.evaluate(() => window.dispatchEvent(new Event('focus'))); await p.waitForTimeout(2000);
+    const k1 = await p.evaluate(() => ({ ws: document.querySelector('#walkList li[data-walk="keeper"] .ws').textContent, bal: data.v4.keeper.balance_sompi }));
+    await p.unroute(/\/v1\/creator(\?|$)/, topUp);
+    check('fees wallet: coming back to the tab re-reads its balance and ticks step 7, no reload (102, R15)', k0 === 'To do' && k1.ws === 'Done' && k1.bal === 2e8, { k0, ...k1 });
+    const bar7 = await p.evaluate(() => ({ t: window.walkBarText('keeper'), net: card.network }));
+    check('get started: the fees wallet bar uses the network\'s word for KAS (102, R14)', bar7.net !== 'mainnet' && /2 test KAS/.test(bar7.t), bar7);
+    await p.reload(); await p.waitForSelector('#creatorArea:not(.hidden)', { timeout: 30000 }); await p.waitForTimeout(3500);
+    await p.evaluate(() => showTab('overview'));
+  } else check('fees wallet: the simulated site has a fees wallet for the step 7 check', false);
 
 
   // ---- Stream mode ----

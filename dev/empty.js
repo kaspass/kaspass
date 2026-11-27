@@ -101,6 +101,55 @@ async function signedIn(b, { record = false, pending = false } = {}) {
     const { ctx, p, errs } = await signedIn(b, { record: true });
     const st = await p.evaluate(() => ({ s1: document.querySelector('#walkList li[data-walk="payouts"] .ws').textContent, title: document.getElementById('walkTitle').textContent }));
     check('new site with payouts on: step 1 Done, the bar on Create your first plan', st.s1 === 'Done' && st.title === 'Create your first plan', st);
+    // Update 102: the rehearsal's create-form findings (claude/kaspass-rehearsal-101.md), on air:
+    // 1280 x 720, stream mode on.
+    // A site with payouts on is v5 (the server says so in /v1/levels); the stub only covers the record.
+    await p.evaluate(() => applyV5(true)); await p.waitForTimeout(200);
+    await p.click('label:has(#streamSw)'); await p.waitForTimeout(500);
+    const f0 = await p.evaluate(() => ({ amount: document.getElementById('lAmount').value, ph: document.getElementById('lAmount').placeholder, box: !document.getElementById('lV5Box').classList.contains('hidden') }));
+    check('create form: the price box starts empty, with a placeholder (102, R1)', f0.box && f0.amount === '' && /for example/.test(f0.ph), f0);
+    await p.fill('#lName', 'Supporter');
+    await p.click('#lGo'); await p.waitForTimeout(300);
+    const g0 = await p.evaluate(() => ({ err: document.getElementById('lErr').textContent, go: document.getElementById('lGo').textContent, focus: document.activeElement.id }));
+    check('create: with no price, the first press says so and arms nothing (102, R1)', /Type the price/.test(g0.err) && !/Press again/.test(g0.go) && g0.focus === 'lAmount', g0);
+    await p.fill('#lAmount', '100');
+    check('create: typing a price clears that message', (await p.textContent('#lErr')) === '');
+    await p.evaluate(() => document.activeElement && document.activeElement.blur());
+    await p.click('#lAmount'); await p.keyboard.type('5'); await p.waitForTimeout(150);
+    check('create form: one click and typing replaces the price instead of adding to it, in stream mode (102, R1)', (await p.inputValue('#lAmount')) === '5', await p.inputValue('#lAmount'));
+    await p.evaluate(() => document.activeElement && document.activeElement.blur());
+    const rd = await p.evaluate(() => Object.fromEntries(['lAmount', 'lPeriod', 'lTrial', 'lName'].map((id) => [id, getComputedStyle(document.getElementById(id)).color !== 'rgba(0, 0, 0, 0)'])));
+    check('stream mode: the create form\'s price, period, trial and name boxes stay readable (102, R1, R2)', Object.values(rd).every(Boolean), rd);
+    const l2 = await p.evaluate(leaks);
+    check('new site, stream mode: nothing private readable on the create form', l2.length === 0, l2);
+    // R3: the locked-in list's top off screen, the button low on the screen, the way it was on air.
+    // Room below the form, so the page can scroll that far (on air the menu and footer gave it).
+    await p.evaluate(() => { document.body.style.paddingBottom = '600px'; const lb = document.getElementById('lockBox').getBoundingClientRect(); window.scrollBy(0, lb.top + 60); });
+    await p.waitForTimeout(300);
+    const r0 = await p.evaluate(() => { const r = document.getElementById('lGo').getBoundingClientRect(); return { top: r.top, bottom: r.bottom, vh: innerHeight, lock: document.getElementById('lockBox').getBoundingClientRect().top }; });
+    await p.click('#lGo'); await p.waitForTimeout(500);
+    const r1 = await p.evaluate(() => ({ top: document.getElementById('lGo').getBoundingClientRect().top, text: document.getElementById('lGo').textContent }));
+    check('create: the first press leaves the button where it was at 1280 x 720 (102, R3)', r0.lock < 0 && r0.bottom <= r0.vh && Math.abs(r1.top - r0.top) < 2 && /Press again/.test(r1.text), { r0, r1 });
+    if (SHOTS) await p.screenshot({ path: SHOTS + '/empty-create-stream-1280x720.png' });
+    await p.evaluate(() => { document.body.style.paddingBottom = ''; });
+    await p.waitForTimeout(7000);
+    check('create: the second press still waits after 7 seconds (102, R4)', /Press again/.test(await p.textContent('#lGo')));
+    // R5: once the plan is created, the form goes at once (no reload) and one Put it on sale button shows.
+    await p.evaluate(() => launchDone({ card: { covenant_id: 'cd'.repeat(32) }, txid: 'ef'.repeat(32), card_file: 'card-new.json' }));
+    await p.waitForTimeout(800);
+    const r5 = await p.evaluate(() => ({
+      body: !document.getElementById('lBody').classList.contains('hidden'),
+      go: !!document.getElementById('lGo').offsetParent,
+      add: document.querySelectorAll('#lStatus #lAdd').length,
+      title: document.getElementById('launchTitle').textContent,
+      bar: document.getElementById('walkTitle').textContent,
+    }));
+    check('create: once created, the form is put away at once and one Put it on sale button shows (102, R5)', !r5.body && !r5.go && r5.add === 1 && /Step 3/.test(r5.title), r5);
+    check('create: once created, the guide moves to Put it on sale without a reload (102, R5)', r5.bar === 'Put it on sale', r5);
+    await p.evaluate(() => document.activeElement && document.activeElement.blur());
+    const l3 = await p.evaluate(leaks);
+    check('new site, stream mode: nothing private readable after creating', l3.length === 0, l3);
+    if (SHOTS) await p.screenshot({ path: SHOTS + '/empty-created-stream-1280x720.png' });
     allErrs.push(...errs); await ctx.close();
   }
 

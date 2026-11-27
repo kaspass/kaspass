@@ -23,6 +23,22 @@ const text = (u, h = {}) => new Promise((resolve, reject) => {
   check('home: the first question is "Is it ready, and is it safe?"', /<div class="faq">\s*<details open><summary>Is it ready, and is it safe\?/.test(home));
   check('home: the contact from contact.json', home.includes('@example_handle on Telegram'));
   check('home: no em dashes', !home.includes('—'));
+  // Promised to KasTax in reply 93 (102): every plan in /v1/levels has its full id as `level`,
+  // and `id` is its first 12 characters.
+  {
+    const lv = JSON.parse((await text('/v1/levels')).body).levels || [];
+    const bad = lv.filter((l) => !/^[0-9a-f]{64}$/.test(l.level || '') || l.id !== l.level.slice(0, 12));
+    check('/v1/levels: every plan has level (64 hex) and id is its first 12 characters (102)', lv.length > 0 && bad.length === 0, bad);
+  }
+  // Update 102 (RH101 R18): a pass is a coin the member owns, not something in their wallet's balance
+  // (reply 81's wording), and the share card is fetched again under a new version.
+  {
+    const old = /(?:lives|sits|sitting) in (?:your|their|a|the member's)(?: own)?(?: Kaspa)? wallet|In the member's own Kaspa wallet|is in their wallet a few seconds|pass in the member's Kaspa wallet/;
+    const bodies = await Promise.all(['/', '/creators', '/help', '/guide.md', '/assets/index.js', '/demo/podcast'].map(async (u) => [u, (await text(u)).body]));
+    const bad = bodies.filter(([, b]) => old.test(b)).map(([u, b]) => u + ': ' + b.match(old)[0]);
+    check('pages: no "lives in your own Kaspa wallet" wording left (102, R18)', bad.length === 0, bad);
+    check('home and creators: the new share card, og.png?v=3, with matching alt text (102, R18)', ['/', '/creators'].every((u) => { const b = bodies.find(([x]) => x === u)[1]; return b.includes('og.png?v=3') && b.includes("a coin the member owns on Kaspa's L1"); }));
+  }
   for (const u of ['/', '/creators', '/privacy', '/terms']) {
     const b = (await text(u)).body;
     check(u + ': one footer, with the X page', b.includes('<a href="https://x.com/Kas_Pass" rel="noopener">X (Twitter)</a>') && b.includes('>Security</a>'));
